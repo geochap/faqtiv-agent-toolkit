@@ -1,0 +1,9 @@
+.DS_Store
+*.log
+node_modules/
+yarn.lock
+package-lock.json
+tests/
+
+# Do not store the .env file on the git repository
+.env

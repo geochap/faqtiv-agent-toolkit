@@ -1,0 +1,10 @@
+runtime: javascript
+auto_add_examples: true
+modules:
+  - name: axios
+    alias: axios
+  - name: exceljs
+    alias: ExcelJS
+task_examples:
+  - bank-excel-report
+  - bank-simple-report

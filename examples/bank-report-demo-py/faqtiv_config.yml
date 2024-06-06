@@ -1,0 +1,10 @@
+runtime: python
+auto_add_examples: true
+modules:
+  - name: openpyxl
+    alias: openpyxl
+  - name: requests
+    alias: requests
+task_examples:
+  - bank-simple-report
+  - bank-excel-report
