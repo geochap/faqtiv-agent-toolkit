@@ -1,14 +1,18 @@
 {
-  "name": "faqtiv-agent-toolkit",
-  "version": "0.9.0",
+  "name": "@intellidimension/faqtiv-agent-toolkit",
+  "version": "0.9.3",
   "type": "module",
   "description": "A command line tool for code generation",
   "main": "cli.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "",
-  "license": "MIT",
+  "author": "intellidimension",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/geochap/faqtiv-agent-toolkit"
+  },
+  "license": "Apache-2.0",
   "dependencies": {
     "@babel/core": "^7.24.5",
     "@babel/parser": "^7.24.5",
