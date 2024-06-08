@@ -1,13 +1,36 @@
-# FAQtiv Agent Toolkit User Guide
+# FAQtiv Agent Toolkit
 
 ## Introduction
-FAQtiv Agent Toolkit is a command line toolkit designed to help users generate code using a Large Language Model (LLM) from task text descriptions. 
+FAQtiv Agent Toolkit uses genAI to write python or javascript code against a set of domain specific functions to perform tasks described in natural language. The functions, task descriptions, and a set of general instructions are all packaged into a project and a command line tool performs actions against that project to perform tasks. 
 
-It supports Node.js and Python 3 runtimes and relies on user-provided functions located in the `./functions` directory to generate the code.
+The core ideas behind the tool are that code generation is a powerful mechansim for leveraging LLMs to perform actions that require multiple steps, and that by providing a set of domain specific functions for them to target, we greatly increase the reliability of the generated code by constraining the LLMs to a particular limited view of the world. 
+
+Task descriptions are compiled by the tool to produce runnable tasks. The tasks can perform data retrieval, create file outputs, perform tasks against apis, etc. and can be parameterized to support greater reuse. Adding tasks to a project can be thought of training an agent since the tasks both define capabilities of the agent as well as provide few shot examples for subsequent task generation. In fact, though the tool has value as a standalone utility, it is ultimately intended to simplify the creation of intelligent tools/agents that be in used by higher level conversational AIs.
 
 ## Requirements
 
-To use it the your environment where you create a FAQtiv project needs to support your chosen environment so either `node` or `python3` must be available.
+You will need node.js to install and run the toolkit and optionally `python3` if you are writing a python agent (unnecessary if you're writing a node.js/javascript agent).
+
+## Installation
+
+You can install the toolkit from npm or install from source. 
+
+To install from the npm:
+
+```
+npm install -g @intellidimension/faqtiv-agent-toolkit
+```
+
+To install from source, clone this repository locally and:
+
+```
+npm install 
+```
+When installing from source, it's often useful to use npm link so that you can use the command line directly to perform tasks:
+
+```
+npm link
+```
 
 ## Usage
 
