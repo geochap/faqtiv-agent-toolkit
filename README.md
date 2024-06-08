@@ -5,7 +5,9 @@ FAQtiv Agent Toolkit uses genAI to write python or javascript code against a set
 
 The core ideas behind the tool are that code generation is a powerful mechansim for leveraging LLMs to perform actions that require multiple steps, and that by providing a set of domain specific functions for them to target, we greatly increase the reliability of the generated code by constraining the LLMs to a particular limited view of the world. 
 
-Task descriptions are compiled by the tool to produce runnable tasks. The tasks can perform data retrieval, create file outputs, perform tasks against apis, etc. and can be parameterized to support greater reuse. Adding tasks to a project can be thought of training an agent since the tasks both define capabilities of the agent as well as provide few shot examples for subsequent task generation. In fact, though the tool has value as a standalone utility, it is ultimately intended to simplify the creation of intelligent tools/agents that be in used by higher level conversational AIs.
+Task descriptions are compiled by the tool to produce runnable tasks. The tasks can perform data retrieval, create file outputs, perform tasks against apis, etc. and can be parameterized to support greater reuse. Adding tasks to a project can be thought of as training an agent since the tasks both define specific capabilities of the agent as well as provide few shot examples for subsequent generation of new tasks. In fact, though the tool has value as a standalone utility, it is ultimately intended to simplify the creation of intelligent tools/agents that be in used by higher level conversational AIs.
+
+The name FAQtiv derives from an old side project that involved creating "Active FAQs" -- i.e. frequently asked questions that were answered by live interaction with external systems. 
 
 ## Requirements
 
