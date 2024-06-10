@@ -16,6 +16,7 @@ LOG_DEBUG_AI=false
 const gitIgnore = `
 outputs/*
 .faqtiv/tmp/*
+.env
 `;
 const runtimeGitIgnore = {
   javascript: 'node_modules/',
@@ -79,7 +80,7 @@ task_examples: []`;
 
     // Create files
     fs.writeFileSync(`${baseDir}/faqtiv_config.yml`, faqtivConfig);
-    fs.writeFileSync(`${baseDir}/.env`, defaultEnvFile);
+    fs.writeFileSync(`${baseDir}/.env.example`, defaultEnvFile);
     fs.writeFileSync(`${baseDir}/instructions.txt`, defaultInstructions);
     fs.writeFileSync(`${baseDir}/.gitignore`, `${gitIgnore}\n${runtimeGitIgnore[projectRuntime]}`);
 
