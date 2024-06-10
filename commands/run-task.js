@@ -3,7 +3,7 @@ import path from 'path';
 import yaml from 'js-yaml';
 import { execFile } from 'child_process';
 import { v4 as uuidv4 } from 'uuid';
-import { mkdirp } from 'mkdirp';
+import { mkdirpSync } from 'mkdirp';
 import * as config from '../config.js';
 import { extractFunctionCode, getFunctionParameters } from '../lib/parse-utils.js';
 
@@ -16,10 +16,6 @@ const codeDir = path.join('code');
 const outputsDir = path.join('outputs');
 const { codeFileExtension, runtimeName } = config.project.runtime;
 const modules = config.project.modules;
-
-if (!fs.existsSync(tmpdir)) {
-  await mkdirp(tmpdir);
-}
 
 function getParametrizedCode(code, parameters) {
   let modulesImports = '';
@@ -161,6 +157,7 @@ export default function(taskName, ...args) {
   }
 
   fs.mkdirSync(defaultOutputDir, { recursive: true });
+  if (!fs.existsSync(tmpdir)) mkdirpSync(tmpdir);
 
   console.warn(`\nRun process initiated for ${taskName} (${runParameters.join(', ')})...\n`);
   if (outputFilePath) console.warn(`Result will be stored in ${outputFilePath}`);
