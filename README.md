@@ -3,11 +3,11 @@
 ## Introduction
 FAQtiv Agent Toolkit uses genAI to write python or javascript code against a set of domain specific functions to perform tasks described in natural language. The functions, task descriptions, and a set of general instructions are all packaged into a project and a command line tool performs actions against that project to perform tasks. 
 
-The core ideas behind the tool are that code generation is a powerful mechansim for leveraging LLMs to perform actions that require multiple steps, and that by providing a set of domain specific functions for them to target, we greatly increase the reliability of the generated code by constraining the LLMs to a particular limited view of the world. 
+The core idea behind the tool is that code generation is a powerful mechansim for leveraging LLMs to perform actions that require multiple steps, and that by providing a set of domain specific functions for them to target, we greatly increase the reliability of the generated code by constraining the LLMs to a particular limited view of the world. 
 
-Task descriptions are compiled by the tool to produce runnable tasks. The tasks can perform data retrieval, create file outputs, perform tasks against apis, etc. and can be parameterized to support greater reuse. Adding tasks to a project can be thought of as training an agent since the tasks both define specific capabilities of the agent as well as provide few shot examples for subsequent generation of new tasks. In fact, though the tool has value as a standalone utility, it is ultimately intended to simplify the creation of intelligent tools/agents that be in used by higher level conversational AIs.
+Task descriptions are compiled into code by the tool to produce runnable tasks. The tasks can perform data retrieval, create file outputs, perform tasks against apis, etc. and can be parameterized to support greater reuse. Adding tasks to a project can be thought of as training an agent since the tasks both define specific capabilities of the agent as well as provide few shot examples for subsequent generation of new tasks. In fact, though the tool has value as a standalone utility, it is primarily intended to simplify the creation of intelligent tools/agents that be in used by higher level conversational AIs.
 
-The name FAQtiv derives from an old side project that involved creating "Active FAQs" -- i.e. frequently asked questions that were answered by live interaction with external systems. 
+The name FAQtiv derives from an old side project that involved creating "Active FAQs" -- i.e. frequently asked questions that were answered by scripted live interaction with external systems. 
 
 ## Requirements
 
@@ -50,7 +50,7 @@ Make sure to update the project `.env` with your OpenAI API credentials.
 
 ### Getting started
 
-Start by adding some functions and libs to your project, functions will be provided to the LLM to use for code generation while libs are private dependencies that your functions may use but the LLM won't.
+Start by adding some functions and libs to your project. Functions will be provided to the LLM to use for code generation while libs are private dependencies that your functions may use but the LLM won't use directly. Be verbose in your function and argumaent naming and supply code docs as necessary to make clear to the LLM what the function does.
 
 Note that the function code should not include library imports or requires, for that you can use the `add-module` command which will inject the dependencies for you.
 
@@ -62,6 +62,7 @@ faqtiv update-headers
 ```
 
 ### Managing Tasks
+Tasks are stored as text files that live within the "tasks" folder of a project. You can add, edit, or delete files in that folder manually or you can use the commands below to do the same. The task name is the file name without the .txt extension. 
 
 #### Adding a Task
 To add a new task, use the `add-task` command:
@@ -138,6 +139,7 @@ faqtiv list-tasks
 ```
 
 ### Managing Modules
+Modules are external javascript or pythn libraries that are required by your function libraries.
 
 #### Adding a Module
 To add a new module, use the `add-module` command:
