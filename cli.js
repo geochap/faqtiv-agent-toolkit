@@ -67,6 +67,7 @@ program
 
 program
   .command('list-tasks')
+  .option('--json', 'output to json')
   .description('Shows a list of the existing tasks')
   .action(listTasks);
 

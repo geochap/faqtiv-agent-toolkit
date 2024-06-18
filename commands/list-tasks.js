@@ -9,7 +9,8 @@ const faqtivCodeMetadataDir = path.join('.faqtiv', 'code');
 const codeDir = path.join('code');
 const codeFileExtension = config.project.runtime.codeFileExtension;
 
-export default function() {
+export default function(options) {
+  const jsonOutput = options.json;
   const taskFiles = getAllFiles(tasksDir, '.txt');
   const uncompiled = [];
   const compiled = [];
@@ -32,13 +33,19 @@ export default function() {
     compiled.push(`${taskName}(${taskParameters.join(', ')})`);
   }
 
-  if (compiled.length > 0) {
-    console.log('Compiled tasks:');
-    console.log(compiled.join('\n'));
-  }
-
-  if (uncompiled.length > 0) {
-    console.log('\nUncompiled tasks:');
-    console.log(uncompiled.join('\n'));
+  if (!jsonOutput) {
+    if (compiled.length > 0) {
+      console.log('Compiled tasks:');
+      console.log(compiled.join('\n'));
+    }
+    if (uncompiled.length > 0) {
+      console.log('\nUncompiled tasks:');
+      console.log(uncompiled.join('\n'));
+    }
+  } else {
+    console.log(JSON.stringify({
+      compiled,
+      uncompiled
+    }));
   }
 }
