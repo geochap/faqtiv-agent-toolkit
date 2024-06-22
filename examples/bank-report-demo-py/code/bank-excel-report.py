@@ -98,35 +98,38 @@ def add_table_header(worksheet, row, col, column_names):
 ##
 
 def doTask(bank_name: str):
-    import os
-    import json
-
+    # Fetch bank ID
     bank_id = get_bank_id_by_name(bank_name)
+    
+    # Retrieve bank branches and financials
     bank_branches = get_bank_branches(bank_id)
     bank_financials = get_bank_financials(bank_id)
-
+    
+    # Create a new workbook
     workbook = create_workbook()
-
-    # Adding branches information to a new worksheet
+    
+    # Add bank branches worksheet
     branches_sheet = add_worksheet(workbook, "Branches")
-    add_table_header(branches_sheet, 1, 1, bank_branches[0].keys())
+    add_table_header(branches_sheet, 1, 1, list(bank_branches[0].keys()))
     add_table_rows(branches_sheet, 2, 1, [list(branch.values()) for branch in bank_branches])
     auto_size_column_width(branches_sheet)
-
-    # Adding financial information to a new worksheet
+    
+    # Add bank financials worksheet
     financials_sheet = add_worksheet(workbook, "Financials")
-    add_table_header(financials_sheet, 1, 1, bank_financials[0].keys())
+    add_table_header(financials_sheet, 1, 1, list(bank_financials[0].keys()))
     add_table_rows(financials_sheet, 2, 1, [list(financial.values()) for financial in bank_financials])
     auto_size_column_width(financials_sheet)
-
-    # Save the workbook to a file
-    file_name = f"{bank_name.replace(' ', '_')}_Financial_Report.xlsx"
+    
+    # Saving the workbook
+    file_name = f"{bank_name}_financial_report.xlsx"
     workbook.save(file_name)
-    absolute_file_path = os.path.abspath(file_name)
-
+    
+    # Prepare result JSON for stdout
     result = {
-        "result": "Financial report generated successfully.",
-        "files": [absolute_file_path]
+        "result": {
+            "message": "Financial report generated successfully."
+        },
+        "files": [os.getcwd() + "/" + file_name]
     }
     
     print(json.dumps(result, indent=2))

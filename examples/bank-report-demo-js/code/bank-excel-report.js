@@ -106,23 +106,29 @@ async function getBankIdByName(name) {
  */
 
 async function doTask(bankName) {
+    const path = require('path');
+
     const bankId = await getBankIdByName(bankName);
     const financials = await getBankFinancials(bankId);
 
     const workbook = createWorkbook();
-    const worksheet = addWorksheet(workbook, `${bankName} Financials`);
+    const sheetName = 'Financial Report';
+    const worksheet = addWorksheet(workbook, sheetName);
 
-    const headerRow = Object.keys(financials[0]);
-    addTableHeader(worksheet, 1, 1, headerRow);
+    const headers = Object.keys(financials[0]);
+    addTableHeader(worksheet, 1, 1, headers);
 
-    const dataRows = financials.map(Object.values);
-    addTableRows(worksheet, 2, 1, dataRows);
+    const rows = financials.map(item => headers.map(header => item[header]));
+    addTableRows(worksheet, 2, 1, rows);
 
     autoSizeColumnWidth(worksheet);
 
-    const fileName = `${bankName.replace(/\s+/g, '_')}_Financial_Report.xlsx`;
-    const absolutePath = path.resolve(__dirname, fileName);
-    await workbook.xlsx.writeFile(absolutePath);
+    const fileName = 'financial_report.xlsx';
+    const filePath = path.resolve(process.cwd(), fileName);
+    await workbook.xlsx.writeFile(filePath);
 
-    console.log({ result: 'Financial report generated', files: [absolutePath] });
+    console.log(JSON.stringify({
+        result: { bankName: bankName, message: 'Financial report generated successfully.' },
+        files: [filePath]
+    }));
 }
