@@ -20,11 +20,20 @@ const runtimes = {
   'python': 'python'
 };
 const defaultModules = {
-  'javascript': [],
+  'javascript': [
+    {
+      name: 'path',
+      alias: 'path'
+    }
+  ],
   'python': [
     {
       name: 'json',
       alias: 'json'
+    },
+    {
+      name: 'os',
+      alias: 'os'
     }
   ]
 }

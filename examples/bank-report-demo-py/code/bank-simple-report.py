@@ -98,16 +98,16 @@ def add_table_header(worksheet, row, col, column_names):
 ##
 
 def doTask(bank_name: str):
+    import json
+
     bank_id = get_bank_id_by_name(bank_name)
     bank_branches = get_bank_branches(bank_id)
     bank_financials = get_bank_financials(bank_id)
 
     result = {
         "bank_name": bank_name,
-        "bank_id": bank_id,
         "branches": bank_branches,
         "financials": bank_financials
     }
-
-    import json
+    
     print(json.dumps(result, indent=2))

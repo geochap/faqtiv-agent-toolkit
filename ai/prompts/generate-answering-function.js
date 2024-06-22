@@ -19,7 +19,7 @@ In a codeblock at the top of your response write a ${runtimeName} function calle
 - Do not catch errors, let exceptions propagate.
 - If there are no errors doTask must always finish by writing its result as JSON to stdout.
 - If doTask does not create any files then it writes its result to stdout directly.
-- If doTask does create any files then it must write a JSON to stdout with following format: result:object (any generated text/json results), files:string[] (file paths of any generated files by doTask). 
+- If doTask does create any files then it must write a JSON to stdout with following format: result:object (any generated text/json results), files:string[] (absolute file paths of any generated files by doTask). 
 - Never output anything else to stdout, any messages if needed should be included in the resulting JSON.
 - The function code block should only include the function code without any example calls to it.
 
