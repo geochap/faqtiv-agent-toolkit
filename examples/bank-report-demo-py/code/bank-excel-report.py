@@ -1,4 +1,11 @@
+##
+# DEPENDENCIES
+# Warning: these are extracted from your function files, if you need to make changes edit the function file and recompile this task.
+##
 
+import requests
+import openpyxl
+    
 ##
 # LIBRARY FUNCTIONS
 # Warning: these are common functions, if you need to make changes edit the function file and recompile this task.
@@ -98,38 +105,49 @@ def add_table_header(worksheet, row, col, column_names):
 ##
 
 def doTask(bank_name: str):
+    import os
+    import json
+
     # Fetch bank ID
     bank_id = get_bank_id_by_name(bank_name)
     
     # Retrieve bank branches and financials
     bank_branches = get_bank_branches(bank_id)
     bank_financials = get_bank_financials(bank_id)
-    
-    # Create a new workbook
+
+    # Create a new workbook and worksheets
     workbook = create_workbook()
-    
-    # Add bank branches worksheet
-    branches_sheet = add_worksheet(workbook, "Branches")
-    add_table_header(branches_sheet, 1, 1, list(bank_branches[0].keys()))
-    add_table_rows(branches_sheet, 2, 1, [list(branch.values()) for branch in bank_branches])
-    auto_size_column_width(branches_sheet)
-    
-    # Add bank financials worksheet
-    financials_sheet = add_worksheet(workbook, "Financials")
-    add_table_header(financials_sheet, 1, 1, list(bank_financials[0].keys()))
-    add_table_rows(financials_sheet, 2, 1, [list(financial.values()) for financial in bank_financials])
-    auto_size_column_width(financials_sheet)
-    
-    # Saving the workbook
+    branches_worksheet = add_worksheet(workbook, "Branches")
+    financials_worksheet = add_worksheet(workbook, "Financials")
+
+    # Add headers and data for branches
+    if bank_branches:
+        branch_headers = list(bank_branches[0].keys())
+        add_table_header(branches_worksheet, 1, 1, branch_headers)
+        branch_rows = [list(branch.values()) for branch in bank_branches]
+        add_table_rows(branches_worksheet, 2, 1, branch_rows)
+        auto_size_column_width(branches_worksheet)
+
+    # Add headers and data for financials
+    if bank_financials:
+        financial_headers = list(bank_financials[0].keys())
+        add_table_header(financials_worksheet, 1, 1, financial_headers)
+        financial_rows = [list(financial.values()) for financial in bank_financials]
+        add_table_rows(financials_worksheet, 2, 1, financial_rows)
+        auto_size_column_width(financials_worksheet)
+
+    # Define the file path
     file_name = f"{bank_name}_financial_report.xlsx"
-    workbook.save(file_name)
+    file_path = os.path.join(os.getcwd(), file_name)
     
-    # Prepare result JSON for stdout
+    # Save the workbook
+    workbook.save(file_path)
+    
+    # Prepare the result JSON
     result = {
-        "result": {
-            "message": "Financial report generated successfully."
-        },
-        "files": [os.getcwd() + "/" + file_name]
+        "result":  "Financial report generated successfully.",
+        "files": [file_path]
     }
     
+    # Output the result as JSON to stdout
     print(json.dumps(result, indent=2))

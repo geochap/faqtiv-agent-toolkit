@@ -1,4 +1,11 @@
+##
+# DEPENDENCIES
+# Warning: these are extracted from your function files, if you need to make changes edit the function file and recompile this task.
+##
 
+import requests
+import openpyxl
+    
 ##
 # LIBRARY FUNCTIONS
 # Warning: these are common functions, if you need to make changes edit the function file and recompile this task.
@@ -100,14 +107,19 @@ def add_table_header(worksheet, row, col, column_names):
 def doTask(bank_name: str):
     import json
 
+    # Fetch bank ID
     bank_id = get_bank_id_by_name(bank_name)
+    
+    # Retrieve bank branches and financials
     bank_branches = get_bank_branches(bank_id)
     bank_financials = get_bank_financials(bank_id)
 
+    # Prepare the result data
     result = {
         "bank_name": bank_name,
         "branches": bank_branches,
         "financials": bank_financials
     }
     
+    # Output the result as JSON to stdout
     print(json.dumps(result, indent=2))

@@ -55,8 +55,35 @@ const commentTokenByRuntime = {
 
 function formatCode(libs, functions, code) {
   const { opening, middle, closing } = commentTokenByRuntime[config.project.runtime.runtimeName];
+  
+  // gather all dependency imports and remove duplicates
+  const seen = new Set();
+  const imports = [
+    ...functions.map(f => f.imports),
+    ...libs.map(l => l.imports)
+  ]
+  .flat()
+  .filter(imp => {
+    // naive approach of just replacing all whitespace and comparing import lines
+    const normalized = imp.replace(/\s+/g, '');
+    if (seen.has(normalized)) {
+      return false;
+    }
+    seen.add(normalized);
+    return true;
+  });
 
   let formattedCode = '';
+
+  if (libs.length > 0 || functions.length > 0) {
+    formattedCode += `${opening}
+${middle} DEPENDENCIES
+${middle} Warning: these are extracted from your function files, if you need to make changes edit the function file and recompile this task.
+${closing}
+
+${imports.join('\n')}
+    `;
+  }
 
   if (libs.length > 0) {
     formattedCode += `

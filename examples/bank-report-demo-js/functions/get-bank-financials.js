@@ -1,3 +1,5 @@
+const axios = require('axios');
+
 /**
  * Retrieves financial data for a specific bank ID from the FDIC API.
  *

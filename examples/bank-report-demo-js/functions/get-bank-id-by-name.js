@@ -1,3 +1,5 @@
+const axios = require('axios');
+
 /**
  * Retrieves the bank ID for a given bank name by querying the FDIC API.
  * This function logs and returns the ID of the first bank found with a matching name.

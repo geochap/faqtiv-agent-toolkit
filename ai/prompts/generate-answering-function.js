@@ -18,7 +18,7 @@ In a codeblock at the top of your response write a ${runtimeName} function calle
 
 - When calling the functions only use parameters included in the function definition.
 - Your answer is limited to a single function that only calls the public functions described above, do not use any other functions not included in this set but you don't need to use all of them.
-- Do not import or require any libraries even if it breaks the code.
+- Do not import or require any dependencies for the public functions, if you need any libraries for your doTask code always do so inside the doTask function.
 - Parametrize doTask using your best judgment, it should take parameters if possible to reuse the function for different cases.
 - If doTask will generate files do not require the path or filename to be supplied as an argument, define a reasonable file name that will be written to the current working directory.
 - Do not catch errors, let exceptions propagate.

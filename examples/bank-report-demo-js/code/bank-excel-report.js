@@ -1,4 +1,11 @@
+/**
+* DEPENDENCIES
+* Warning: these are extracted from your function files, if you need to make changes edit the function file and recompile this task.
+ */
 
+const ExcelJS = require('exceljs');
+const axios = require('axios');
+    
 /**
 * LIBRARY FUNCTIONS
 * Warning: these are common functions, if you need to make changes edit the function file and recompile this task.
@@ -106,29 +113,28 @@ async function getBankIdByName(name) {
  */
 
 async function doTask(bankName) {
-    const path = require('path');
-
     const bankId = await getBankIdByName(bankName);
     const financials = await getBankFinancials(bankId);
 
     const workbook = createWorkbook();
-    const sheetName = 'Financial Report';
+    const sheetName = `${bankName} Financial Report`;
     const worksheet = addWorksheet(workbook, sheetName);
 
     const headers = Object.keys(financials[0]);
     addTableHeader(worksheet, 1, 1, headers);
-
-    const rows = financials.map(item => headers.map(header => item[header]));
-    addTableRows(worksheet, 2, 1, rows);
+    addTableRows(worksheet, 2, 1, financials.map(row => Object.values(row)));
 
     autoSizeColumnWidth(worksheet);
 
-    const fileName = 'financial_report.xlsx';
+    const fileName = `${bankName.replace(/\s+/g, '_')}_Financial_Report.xlsx`;
     const filePath = path.resolve(process.cwd(), fileName);
+    
     await workbook.xlsx.writeFile(filePath);
 
-    console.log(JSON.stringify({
-        result: { bankName: bankName, message: 'Financial report generated successfully.' },
+    const result = {
+        result: "Financial report generated successfully.",
         files: [filePath]
-    }));
+    };
+
+    console.log(JSON.stringify(result));
 }

@@ -1,3 +1,5 @@
+const axios = require('axios');
+
 /**
  * Fetches and logs branch data for a given bank ID from the FDIC API.
  *
