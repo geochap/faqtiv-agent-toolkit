@@ -114,12 +114,12 @@ def doTask(bank_name: str):
     bank_branches = get_bank_branches(bank_id)
     bank_financials = get_bank_financials(bank_id)
 
-    # Prepare the result data
-    result = {
+    # Collect data for output
+    report_data = {
         "bank_name": bank_name,
-        "branches": bank_branches,
-        "financials": bank_financials
+        "bank_branches": bank_branches,
+        "bank_financials": bank_financials
     }
     
     # Output the result as JSON to stdout
-    print(json.dumps(result, indent=2))
+    print(json.dumps(report_data, indent=2))

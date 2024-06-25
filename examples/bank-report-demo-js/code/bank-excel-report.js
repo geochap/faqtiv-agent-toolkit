@@ -117,24 +117,26 @@ async function doTask(bankName) {
     const financials = await getBankFinancials(bankId);
 
     const workbook = createWorkbook();
-    const sheetName = `${bankName} Financial Report`;
+    const sheetName = `${bankName}_Financial_Report`;
     const worksheet = addWorksheet(workbook, sheetName);
 
     const headers = Object.keys(financials[0]);
     addTableHeader(worksheet, 1, 1, headers);
-    addTableRows(worksheet, 2, 1, financials.map(row => Object.values(row)));
+
+    const rows = financials.map(Object.values);
+    addTableRows(worksheet, 2, 1, rows);
 
     autoSizeColumnWidth(worksheet);
 
-    const fileName = `${bankName.replace(/\s+/g, '_')}_Financial_Report.xlsx`;
+    const fileName = `${sheetName}.xlsx`;
     const filePath = path.resolve(process.cwd(), fileName);
     
     await workbook.xlsx.writeFile(filePath);
 
     const result = {
-        result: "Financial report generated successfully.",
+        result: `Financial report for ${bankName} has been generated.`,
         files: [filePath]
     };
-
+    
     console.log(JSON.stringify(result));
 }
