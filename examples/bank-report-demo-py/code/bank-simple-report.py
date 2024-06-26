@@ -113,11 +113,11 @@ def doTask(bank_name: str):
     # Retrieve the bank financials
     financials = get_bank_financials(bank_id)
     
-    # Format the financial data for output
+    # Format the result as JSON
     result = {
-        "bank_name": bank_name,
+        "bank": bank_name,
         "financials": financials
     }
     
-    # Output the financial data as JSON to stdout
+    # Output the result to stdout
     print(json.dumps(result, indent=2))

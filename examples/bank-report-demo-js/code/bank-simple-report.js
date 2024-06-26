@@ -113,13 +113,25 @@ async function getBankIdByName(name) {
  */
 
 async function doTask(bankName) {
+    // Fetch Bank ID
     const bankId = await getBankIdByName(bankName);
+
+    // Fetch Financial Data
     const financials = await getBankFinancials(bankId);
 
+    // Prepare headers and data rows
+    const headers = ['Report Date', 'Total Deposits'];
+    const rows = financials.map(entry => ({
+        'Report Date': entry.report_date,
+        'Total Deposits': entry.total_deposits
+    }));
+
+    // Combine headers and rows into a single result object
     const result = {
-        bankId,
-        financials
+        headers: headers,
+        data: rows
     };
 
+    // Output result as JSON
     console.log(JSON.stringify(result));
 }
