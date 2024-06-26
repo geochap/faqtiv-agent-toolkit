@@ -115,11 +115,11 @@ async function getBankIdByName(name) {
 async function doTask(bankName) {
     const bankId = await getBankIdByName(bankName);
     const financials = await getBankFinancials(bankId);
-    
+
     const result = {
-        bank: bankName,
-        financialData: financials
+        bankId,
+        financials
     };
-    
+
     console.log(JSON.stringify(result));
 }

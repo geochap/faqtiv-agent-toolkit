@@ -139,12 +139,15 @@ function updateMetadata(codeFile) {
 }
 
 async function processTask(vectorStore, task) {
-  const response = await generateResponse(vectorStore, [
-    {
-      message: task.content,
-      role: 'user'
-    }
-  ]);
+  const response = await generateResponse(
+    vectorStore,
+      [
+      {
+        message: task.content,
+        role: 'user'
+      }
+    ]
+  );
 
   return response;
 }

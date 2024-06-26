@@ -3,7 +3,8 @@ import { AI } from './ai.js';
 import {
   getFunctionDependencies as stepFunctionDependencies,
   generateAnsweringFunction as stepGenerateAnsweringFunction,
-  improveFunctionSignatures as stepImproveFunctionSignatures
+  improveFunctionSignatures as stepImproveFunctionSignatures,
+  generateAnswerDescription as stepGenerateAnswerDescription
 } from './steps.js';
 import { extractFunctionNames } from '../lib/parse-utils.js';
 
@@ -27,10 +28,12 @@ export default class AIAgent {
     const code = await stepGenerateAnsweringFunction(this.ai, promptMessages, this.instructions, this.functionsSignatures, examples);
     const usedFunctions = extractFunctionNames(code);
     const functions = stepFunctionDependencies(this.ai, usedFunctions, this.functions);
+    const description = await stepGenerateAnswerDescription(this.ai);
 
     return {
       code,
       functions,
+      description,
       token_usage_logs: this.ai.getTokenUsageLogs()
     };
   }

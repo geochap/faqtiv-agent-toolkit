@@ -127,5 +127,10 @@ export async function generateResponse(vectorStore, conversation) {
 
   response.code = formatCode(libs, functions, response.code); 
 
-  return { id: uuidv4(), output: response, embedding, functions_embedding: functionsHeader.embedding };
+  return { 
+    id: uuidv4(),
+    output: response,
+    embedding, 
+    functions_embedding: functionsHeader.embedding 
+  };
 }

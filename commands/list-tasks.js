@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { getAllFiles } from '../lib/file-utils.js';
-import { extractFunctionCode, getFunctionParameters } from '../lib/parse-utils.js';
+import yaml from 'js-yaml';
 import * as config from '../config.js';
 
 const tasksDir = path.join('tasks');
@@ -26,11 +26,9 @@ export default function(options) {
       continue;
     }
     
-    const code = fs.readFileSync(jsFilePath, 'utf8');
-    const doTask = extractFunctionCode(code, 'doTask');
-    const taskParameters = getFunctionParameters(doTask);
+    const metadata = yaml.load(fs.readFileSync(metdataFilePath, 'utf8'));
 
-    compiled.push(`${taskName}(${taskParameters.join(', ')})`);
+    compiled.push(`${taskName}${metadata.output.description}`);
   }
 
   if (!jsonOutput) {

@@ -1,7 +1,7 @@
 import { HumanMessage, AIMessage } from '@langchain/core/messages';
-import * as config from '../config.js';
 
 import { generateAnsweringFunctionPrompt } from './prompts/generate-answering-function.js';
+import { generateAnswerDescriptionPrompt } from './prompts/generate-answer-description.js';
 import { extractFunctionCode } from '../lib/parse-utils.js';
 import { improveFunctionSignaturesPrompt } from './prompts/improve-function-signatures.js';
 
@@ -25,10 +25,20 @@ export async function generateAnsweringFunction(ai, promptMessages, instructions
   });
 
   const preprompt = generateAnsweringFunctionPrompt(instructions, functionsSignatures);
-  const messages = await ai.start(preprompt, promptMessages, examples, config.openai.model, 'generate-answering-function');
+  const messages = await ai.start(preprompt, promptMessages, examples, 'generate-answering-function');
   const response = messages[messages.length - 1].content.trim();
 
   return codeResponse(response);
+}
+
+export async function generateAnswerDescription(ai) {
+  const prompt = [
+    new HumanMessage(generateAnswerDescriptionPrompt())
+  ];
+  const messages = await ai.next(prompt, [], 'generate-answer-description');
+  const response = messages[messages.length - 1].content.trim();
+
+  return response;
 }
 
 export function getFunctionDependencies(ai, functionNames, functions) {
@@ -60,7 +70,7 @@ export async function improveFunctionSignatures(ai, functionsCode, signatures, e
   });
 
   const promptMessages = [new HumanMessage(improveFunctionSignaturesPrompt(functionsCode, signatures))];
-  const messages = await ai.start(null, promptMessages, examples, config.openai.model, 'improve-function-signatures');
+  const messages = await ai.start(null, promptMessages, examples, 'improve-function-signatures');
   const response = messages[messages.length - 1].content.trim();
 
   return response;
