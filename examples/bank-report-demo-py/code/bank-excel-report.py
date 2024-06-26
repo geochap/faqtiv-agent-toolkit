@@ -115,36 +115,36 @@ def doTask(bank_name: str):
     # Retrieve the bank financials
     financials = get_bank_financials(bank_id)
     
-    # Create a new workbook and add a financials worksheet
+    # Create a new workbook
     workbook = create_workbook()
-    financials_sheet = add_worksheet(workbook, "Financials")
     
-    # Define headers based on financials data keys
-    headers = list(financials[0].keys()) if financials else []
+    # Add a worksheet for financials
+    financials_worksheet = add_worksheet(workbook, "Financials")
     
-    # Add headers to the worksheet
-    add_table_header(financials_sheet, 1, 1, headers)
+    # Add table headers
+    header = ["Report Date", "Total Deposits"]
+    add_table_header(financials_worksheet, 1, 1, header)
     
-    # Prepare data rows
-    rows = [[record[key] for key in headers] for record in financials]
+    # Prepare financial records for rows
+    rows = []
+    for record in financials:
+        rows.append([record["report_date"], record["total_deposits"]])
     
-    # Add data rows to the worksheet
-    add_table_rows(financials_sheet, 2, 1, rows)
+    # Add financial records to the worksheet
+    add_table_rows(financials_worksheet, 2, 1, rows)
     
-    # Auto-size columns
-    auto_size_column_width(financials_sheet)
+    # Auto-size the column widths
+    auto_size_column_width(financials_worksheet)
     
-    # Define the file name and path
-    file_name = f"{bank_name}_financial_report.xlsx"
-    file_path = os.getcwd() + '/' + file_name
+    # Define the filename and save the workbook
+    filename = os.path.join(os.getcwd(), f"{bank_name}_financial_report.xlsx")
+    workbook.save(filename)
     
-    # Save the workbook to the defined file path
-    workbook.save(file_path)
-    
-    # Output the file path as JSON to stdout
+    # Prepare the result JSON
     result = {
-        "result": {},
-        "files": [file_path]
+        "result": "Financial report generated successfully.",
+        "files": [filename]
     }
     
+    # Output result as JSON to stdout
     print(json.dumps(result, indent=2))
