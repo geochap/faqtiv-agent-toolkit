@@ -6,6 +6,7 @@ import * as config from '../config.js';
 
 const { runtimeName: defaultRuntime } = config.project.runtime; // defaults to javascript
 const defaultInstructions = ``;
+const defaultDesktopInstructions = ``;
 const runtimes = ['javascript', 'python'];
 
 const defaultEnvFile = `OPENAI_ORGANIZATION=<your_org>
@@ -82,6 +83,7 @@ task_examples: []`;
     fs.writeFileSync(`${baseDir}/faqtiv_config.yml`, faqtivConfig);
     fs.writeFileSync(`${baseDir}/.env.example`, defaultEnvFile);
     fs.writeFileSync(`${baseDir}/instructions.txt`, defaultInstructions);
+    fs.writeFileSync(`${baseDir}/desktop_instructions.txt`, defaultDesktopInstructions);
     fs.writeFileSync(`${baseDir}/.gitignore`, `${gitIgnore}\n${runtimeGitIgnore[projectRuntime]}`);
 
     // Initialize interpreter environment

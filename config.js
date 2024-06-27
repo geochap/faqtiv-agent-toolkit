@@ -104,13 +104,20 @@ if (isInitCommand || isHelpCommand) {
     functionsHeader = yaml.load(fs.readFileSync(path.join('.faqtiv', 'functions-header.yml'), 'utf8'));
     functionsHeader.embedding = decodeBase64(functionsHeader.embedding);
   } catch(e) {}
+
   let instructions = '';
   try {
     instructions = fs.readFileSync(path.join('instructions.txt'), 'utf8');
   } catch(e) {}
 
+  let desktopInstructions = '';
+  try {
+    desktopInstructions = fs.readFileSync(path.join('desktop_instructions.txt'), 'utf8');
+  } catch(e) {}
+
   projectConfig = {
     instructions,
+    desktopInstructions,
     functionsHeader,
     functions,
     libs,
