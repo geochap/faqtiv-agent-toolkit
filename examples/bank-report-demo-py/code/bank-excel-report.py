@@ -105,46 +105,39 @@ def add_table_header(worksheet, row, col, column_names):
 ##
 
 def doTask(bank_name: str):
-    import json
     import os
-    from openpyxl import Workbook
+    import json
+    import openpyxl
 
-    # Retrieve the bank id using the bank name provided
+    # Get the bank ID based on the given bank name
     bank_id = get_bank_id_by_name(bank_name)
-    
-    # Retrieve the bank financials
+
+    # Retrieve financial records for the selected bank
     financials = get_bank_financials(bank_id)
-    
-    # Create a new workbook
+
+    # Create a workbook and add a worksheet for financial data
     workbook = create_workbook()
-    
-    # Add a worksheet for financials
-    financials_worksheet = add_worksheet(workbook, "Financials")
-    
-    # Add table headers
-    header = ["Report Date", "Total Deposits"]
-    add_table_header(financials_worksheet, 1, 1, header)
-    
-    # Prepare financial records for rows
-    rows = []
-    for record in financials:
-        rows.append([record["report_date"], record["total_deposits"]])
-    
-    # Add financial records to the worksheet
-    add_table_rows(financials_worksheet, 2, 1, rows)
-    
+    sheet = add_worksheet(workbook, "Financial Report")
+
+    # Define the header and add it to the worksheet
+    headers = ["Report Date", "Total Deposits"]
+    add_table_header(sheet, row=1, col=1, column_names=headers)
+
+    # Prepare the rows of data
+    rows = [[record["report_date"], record["total_deposits"]] for record in financials]
+
+    # Add the rows to the worksheet
+    add_table_rows(sheet, start_row=2, start_col=1, rows=rows)
+
     # Auto-size the column widths
-    auto_size_column_width(financials_worksheet)
-    
-    # Define the filename and save the workbook
-    filename = os.path.join(os.getcwd(), f"{bank_name}_financial_report.xlsx")
-    workbook.save(filename)
-    
-    # Prepare the result JSON
-    result = {
-        "result": "Financial report generated successfully.",
-        "files": [filename]
-    }
-    
-    # Output result as JSON to stdout
-    print(json.dumps(result, indent=2))
+    auto_size_column_width(sheet)
+
+    # Define the output file path
+    output_file_name = f"{bank_name.replace(' ', '_')}_Financial_Report.xlsx"
+    output_file_path = os.getcwd() + "/" + output_file_name
+
+    # Save the workbook
+    workbook.save(output_file_path)
+
+    # Output the result
+    print(json.dumps({"result": "Financial report generated successfully", "files": [output_file_path]}))

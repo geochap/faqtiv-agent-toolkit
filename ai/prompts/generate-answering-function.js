@@ -18,7 +18,7 @@ In a codeblock at the top of your response write a ${runtimeName} function calle
 
 - When calling the functions only use parameters included in the function definition and be careful to use await only if the function is async.
 - Your answer is limited to a single function that only calls the public functions described above, do not use any other functions not included in this set but you don't need to use all of them.
-- Do not import or require any dependencies for the public functions, if you need any libraries for your doTask code always do so inside the doTask function.
+- If you need to import any dependencies for your doTask code always do so inside the doTask function.
 - Parametrize doTask using your best judgment, it should take parameters if possible to reuse the function for different cases.
 - Do not catch errors, let exceptions propagate.
 - If there are no errors doTask must always finish by writing its result as JSON to stdout.

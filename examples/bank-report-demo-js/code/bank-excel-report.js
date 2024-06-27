@@ -115,40 +115,21 @@ async function getBankIdByName(name) {
 async function doTask(bankName) {
     const path = require('path');
 
-    // Fetch Bank ID
     const bankId = await getBankIdByName(bankName);
-
-    // Fetch Financial Data
     const financials = await getBankFinancials(bankId);
-
-    // Create Workbook and Worksheet
+    
     const workbook = createWorkbook();
-    const worksheet = addWorksheet(workbook, 'Financial Report');
-
-    // Define Headers and Add them to Worksheet
+    const sheet = addWorksheet(workbook, 'Financial Report');
+    
     const headers = ['Report Date', 'Total Deposits'];
-    addTableHeader(worksheet, 1, 1, headers);
+    addTableHeader(sheet, 1, 1, headers);
 
-    // Prepare rows from financial data
-    const rows = financials.map(entry => [entry.report_date, entry.total_deposits]);
+    const rows = financials.map(record => [record.report_date, record.total_deposits]);
+    addTableRows(sheet, 2, 1, rows, ['date', 'currency']);
+    autoSizeColumnWidth(sheet);
 
-    // Add Rows to Worksheet
-    addTableRows(worksheet, 2, 1, rows, ['string', 'number']);
-
-    // Auto-size Column Widths
-    autoSizeColumnWidth(worksheet);
-
-    // Define Output Path
-    const outputPath = path.resolve(process.cwd(), `${bankName.replace(/\s+/g, '_')}_Financial_Report.xlsx`);
-
-    // Save Workbook to file
-    await workbook.xlsx.writeFile(outputPath);
-
-    // Output result as JSON
-    const result = {
-        result: `Financial report generated for ${bankName}`,
-        files: [outputPath]
-    };
-
-    console.log(JSON.stringify(result));
+    const filePath = path.resolve(process.cwd(), 'financial_report.xlsx');
+    await workbook.xlsx.writeFile(filePath);
+    
+    console.log(JSON.stringify({ result: 'Generated financial report for bank ' + bankName, files: [filePath] }));
 }

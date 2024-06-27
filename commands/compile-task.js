@@ -140,6 +140,7 @@ function updateMetadata(codeFile) {
 
 async function processTask(vectorStore, task) {
   const response = await generateResponse(
+    task.name,
     vectorStore,
       [
       {

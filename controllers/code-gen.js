@@ -116,14 +116,14 @@ ${code}`;
   return formattedCode;
 }
 
-export async function generateResponse(vectorStore, conversation) {
+export async function generateResponse(taskName, vectorStore, conversation) {
   const { instructions, functions, libs, functionsHeader } = config.project;
   // generate embedding of latest user message and do a similarity search for examples
   const embedding = await getTaskEmbedding(conversation[conversation.length - 1].message);
   const examples = await getNearestExamples(vectorStore, embedding, functionsHeader.embedding);
 
   const aiAgent = new AIAgent('code-gen-demo', instructions, functions, functionsHeader.signatures, config.openai);
-  const response = await aiAgent.generateResponse(conversation, examples);
+  const response = await aiAgent.generateResponse(taskName, conversation, examples);
 
   response.code = formatCode(libs, functions, response.code); 
 

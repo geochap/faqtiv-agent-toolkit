@@ -31,9 +31,9 @@ export async function generateAnsweringFunction(ai, promptMessages, instructions
   return codeResponse(response);
 }
 
-export async function generateAnswerDescription(ai) {
+export async function generateAnswerDescription(ai, taskName) {
   const prompt = [
-    new HumanMessage(generateAnswerDescriptionPrompt())
+    new HumanMessage(generateAnswerDescriptionPrompt(taskName))
   ];
   const messages = await ai.next(prompt, [], 'generate-answer-description');
   const response = messages[messages.length - 1].content.trim();

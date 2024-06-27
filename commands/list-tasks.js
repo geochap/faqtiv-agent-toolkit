@@ -1,7 +1,8 @@
 import fs from 'fs';
 import path from 'path';
-import { getAllFiles } from '../lib/file-utils.js';
 import yaml from 'js-yaml';
+import { getAllFiles } from '../lib/file-utils.js';
+import { extractFunctionCode, getFunctionParameters } from '../lib/parse-utils.js';
 import * as config from '../config.js';
 
 const tasksDir = path.join('tasks');
@@ -15,6 +16,29 @@ export default function(options) {
   const uncompiled = [];
   const compiled = [];
 
+  if (jsonOutput) {
+    for (const file of taskFiles) {
+      const taskName = file.relativePath.replace('.txt', '');
+  
+      const jsFilePath = path.join(codeDir, `${taskName}${codeFileExtension}`);
+      const metdataFilePath = path.join(faqtivCodeMetadataDir, `${taskName}.yml`);
+  
+      if (!fs.existsSync(jsFilePath) || !fs.existsSync(metdataFilePath)) {
+        uncompiled.push(taskName);
+        continue;
+      }
+      
+      const metadata = yaml.load(fs.readFileSync(metdataFilePath, 'utf8'));
+  
+      compiled.push(metadata.output.task_schema);
+    }
+
+    return console.log(JSON.stringify({
+      compiled,
+      uncompiled
+    }));
+  }
+
   for (const file of taskFiles) {
     const taskName = file.relativePath.replace('.txt', '');
 
@@ -26,24 +50,19 @@ export default function(options) {
       continue;
     }
     
-    const metadata = yaml.load(fs.readFileSync(metdataFilePath, 'utf8'));
+    const code = fs.readFileSync(jsFilePath, 'utf8');
+    const doTask = extractFunctionCode(code, 'doTask');
+    const taskParameters = getFunctionParameters(doTask);
 
-    compiled.push(`${taskName}${metadata.output.description}`);
+    compiled.push(`${taskName}(${taskParameters.join(', ')})`);
   }
 
-  if (!jsonOutput) {
-    if (compiled.length > 0) {
-      console.log('Compiled tasks:');
-      console.log(compiled.join('\n'));
-    }
-    if (uncompiled.length > 0) {
-      console.log('\nUncompiled tasks:');
-      console.log(uncompiled.join('\n'));
-    }
-  } else {
-    console.log(JSON.stringify({
-      compiled,
-      uncompiled
-    }));
+  if (compiled.length > 0) {
+    console.log('Compiled tasks:');
+    console.log(compiled.join('\n'));
+  }
+  if (uncompiled.length > 0) {
+    console.log('\nUncompiled tasks:');
+    console.log(uncompiled.join('\n'));
   }
 }
