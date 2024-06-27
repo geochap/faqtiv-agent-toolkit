@@ -6,5 +6,5 @@ modules:
   - name: exceljs
     alias: ExcelJS
 task_examples:
-  - bank-simple-report
   - bank-excel-report
+  - bank-simple-report

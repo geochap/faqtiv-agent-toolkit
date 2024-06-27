@@ -17,7 +17,7 @@ export default class AIAgent {
     this.functionsSignatures = functionsSignatures;
   }
 
-  async generateResponse(taskName, conversation, examples) {
+  async generateResponse(conversation, examples) {
     const promptMessages = conversation.map((m) => {
       if (m.role === 'user') {
         return new HumanMessage(m.message);
@@ -28,14 +28,18 @@ export default class AIAgent {
     const code = await stepGenerateAnsweringFunction(this.ai, promptMessages, this.instructions, this.functionsSignatures, examples);
     const usedFunctions = extractFunctionNames(code);
     const functions = stepFunctionDependencies(this.ai, usedFunctions, this.functions);
-    const taskSchema = await stepGenerateAnswerDescription(this.ai, taskName);
 
     return {
       code,
       functions,
-      task_schema: taskSchema,
       token_usage_logs: this.ai.getTokenUsageLogs()
     };
+  }
+
+  async generateTaskSchema(taskName, code) {
+    const taskSchema = await stepGenerateAnswerDescription(this.ai, taskName, code);
+
+    return taskSchema;
   }
 
   async improveFunctionSignatures(functionsCode, signatures) {

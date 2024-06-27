@@ -102,16 +102,16 @@ output:
   task_schema: |-
     {
         "schema": {
-            "bankName": {
+            "bank_name": {
                 "type": "string",
                 "description": "The name of the bank to generate the financial report for"
             }
         },
-        "name": "bank-excel-report",
-        "description": "Generates a financial report for a specific bank and writes it to an .xlsx workbook file",
-        "returns": "{ result: { report_date: string; total_deposits: number; }[], files: string[] }",
+        "name": "doTask",
+        "description": "Generates a financial Excel report for a given bank.",
+        "returns": "{ result: string; files: { path: string; }[] }",
         "requiredParams": [
-            "bankName"
+            "bank_name"
         ]
     }
   token_usage_logs:

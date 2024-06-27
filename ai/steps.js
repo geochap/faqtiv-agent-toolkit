@@ -31,11 +31,11 @@ export async function generateAnsweringFunction(ai, promptMessages, instructions
   return codeResponse(response);
 }
 
-export async function generateAnswerDescription(ai, taskName) {
+export async function generateAnswerDescription(ai, taskName, code) {
   const prompt = [
-    new HumanMessage(generateAnswerDescriptionPrompt(taskName))
+    new HumanMessage(generateAnswerDescriptionPrompt(taskName, code))
   ];
-  const messages = await ai.next(prompt, [], 'generate-answer-description');
+  const messages = await ai.start(null, prompt, [], 'generate-task-schema');
   const response = messages[messages.length - 1].content.trim();
 
   return response;

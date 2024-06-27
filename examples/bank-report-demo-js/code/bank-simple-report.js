@@ -115,6 +115,11 @@ async function getBankIdByName(name) {
 async function doTask(bankName) {
     const bankId = await getBankIdByName(bankName);
     const financials = await getBankFinancials(bankId);
-
-    console.log(financials);
+    
+    const report = financials.map(record => ({
+        report_date: record.report_date,
+        total_deposits: record.total_deposits
+    }));
+    
+    console.log(JSON.stringify(report));
 }

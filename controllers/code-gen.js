@@ -122,10 +122,12 @@ export async function generateResponse(taskName, vectorStore, conversation) {
   const embedding = await getTaskEmbedding(conversation[conversation.length - 1].message);
   const examples = await getNearestExamples(vectorStore, embedding, functionsHeader.embedding);
 
-  const aiAgent = new AIAgent('code-gen-demo', instructions, functions, functionsHeader.signatures, config.openai);
-  const response = await aiAgent.generateResponse(taskName, conversation, examples);
+  const aiAgent = new AIAgent('code-gen', instructions, functions, functionsHeader.signatures, config.openai);
+  const response = await aiAgent.generateResponse(conversation, examples);
+  const taskSchema = await aiAgent.generateTaskSchema(taskName, response.code);
 
-  response.code = formatCode(libs, functions, response.code); 
+  response.code = formatCode(libs, functions, response.code);
+  response.task_schema = taskSchema;
 
   return { 
     id: uuidv4(),
@@ -133,4 +135,13 @@ export async function generateResponse(taskName, vectorStore, conversation) {
     embedding, 
     functions_embedding: functionsHeader.embedding 
   };
+}
+
+export async function generateTaskSchema(doTaskCode, taskName) {
+  const { instructions, functions, functionsHeader } = config.project;
+  const aiAgent = new AIAgent('code-gen', instructions, functions, functionsHeader.signatures, config.openai);
+  
+  const response = await aiAgent.generateTaskSchema(taskName, doTaskCode);
+
+  return response;
 }
