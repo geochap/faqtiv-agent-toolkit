@@ -15,24 +15,9 @@ const tasksDir = path.join('tasks');
 const codeDir = path.join('code');
 const outputsDir = path.join('outputs');
 const { codeFileExtension, runtimeName } = config.project.runtime;
-const modules = config.project.modules;
 
 function getParametrizedCode(code, parameters) {
-  let modulesImports = '';
-
-  if (modules.length > 0) {
-    if (runtimeName == 'javascript') {
-      modulesImports = config.project.modules.map(module => 
-        `const ${module.alias} = require('${module.name}');`
-      ).join('\n');
-    } else if (runtimeName == 'python') {
-      modulesImports = config.project.modules.map(module => 
-        `import ${module.name}`
-      ).join('\n');
-    }
-  }
-
-  return `${modulesImports}\n${code}\ndoTask('${parameters.join("', '")}');`;
+  return `${code}\ndoTask('${parameters.join("', '")}');`;
 }
 
 function getRunnableCode(code, runParameters) {

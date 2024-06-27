@@ -1,4 +1,11 @@
+/**
+* DEPENDENCIES
+* Warning: these are extracted from your function files, if you need to make changes edit the function file and recompile this task.
+ */
 
+const ExcelJS = require('exceljs');
+const axios = require('axios');
+    
 /**
 * LIBRARY FUNCTIONS
 * Warning: these are common functions, if you need to make changes edit the function file and recompile this task.
@@ -108,5 +115,6 @@ async function getBankIdByName(name) {
 async function doTask(bankName) {
     const bankId = await getBankIdByName(bankName);
     const financials = await getBankFinancials(bankId);
-    console.log({ result: financials });
+
+    console.log(financials);
 }

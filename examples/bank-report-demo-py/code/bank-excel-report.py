@@ -1,4 +1,11 @@
+##
+# DEPENDENCIES
+# Warning: these are extracted from your function files, if you need to make changes edit the function file and recompile this task.
+##
 
+import requests
+import openpyxl
+    
 ##
 # LIBRARY FUNCTIONS
 # Warning: these are common functions, if you need to make changes edit the function file and recompile this task.
@@ -98,45 +105,39 @@ def add_table_header(worksheet, row, col, column_names):
 ##
 
 def doTask(bank_name: str):
+    import os
+    import json
+    import openpyxl
+
+    # Get the bank ID based on the given bank name
     bank_id = get_bank_id_by_name(bank_name)
-    bank_branches = get_bank_branches(bank_id)
-    bank_financials = get_bank_financials(bank_id)
-    
-    # Create a new workbook and worksheets
+
+    # Retrieve financial records for the selected bank
+    financials = get_bank_financials(bank_id)
+
+    # Create a workbook and add a worksheet for financial data
     workbook = create_workbook()
-    branches_sheet = add_worksheet(workbook, "Branches")
-    financials_sheet = add_worksheet(workbook, "Financials")
-    
-    # Add headers for bank branches
-    branch_headers = ['Branch ID', 'Branch Name', 'Address', 'City', 'State', 'Zip Code']
-    add_table_header(branches_sheet, 1, 1, branch_headers)
-    
-    # Add branch data rows
-    branch_rows = [[branch['branch_id'], branch['branch_name'], branch['address'], branch['city'], branch['state'], branch['zip_code']] for branch in bank_branches]
-    add_table_rows(branches_sheet, 2, 1, branch_rows)
-    
-    # Auto-size columns in the branches sheet
-    auto_size_column_width(branches_sheet)
-    
-    # Add headers for bank financials
-    financial_headers = ['Year', 'Total Assets', 'Total Liabilities', 'Net Income']
-    add_table_header(financials_sheet, 1, 1, financial_headers)
-    
-    # Add financial data rows
-    financial_rows = [[financial['year'], financial['total_assets'], financial['total_liabilities'], financial['net_income']] for financial in bank_financials]
-    add_table_rows(financials_sheet, 2, 1, financial_rows)
-    
-    # Auto-size columns in the financials sheet
-    auto_size_column_width(financials_sheet)
-    
+    sheet = add_worksheet(workbook, "Financial Report")
+
+    # Define the header and add it to the worksheet
+    headers = ["Report Date", "Total Deposits"]
+    add_table_header(sheet, row=1, col=1, column_names=headers)
+
+    # Prepare the rows of data
+    rows = [[record["report_date"], record["total_deposits"]] for record in financials]
+
+    # Add the rows to the worksheet
+    add_table_rows(sheet, start_row=2, start_col=1, rows=rows)
+
+    # Auto-size the column widths
+    auto_size_column_width(sheet)
+
+    # Define the output file path
+    output_file_name = f"{bank_name.replace(' ', '_')}_Financial_Report.xlsx"
+    output_file_path = os.getcwd() + "/" + output_file_name
+
     # Save the workbook
-    file_name = f"{bank_name.replace(' ', '_')}_Financial_Report.xlsx"
-    workbook.save(file_name)
-    
-    # Output JSON result
-    result = {
-        "result": "Financial report generated successfully.",
-        "files": [file_name]
-    }
-    
-    print(json.dumps(result, indent=2))
+    workbook.save(output_file_path)
+
+    # Output the result
+    print(json.dumps({"result": "Financial report generated successfully", "files": [output_file_path]}))
