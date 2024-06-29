@@ -113,23 +113,32 @@ async function getBankIdByName(name) {
  */
 
 async function doTask(bankName) {
+    const ExcelJS = require('exceljs');
     const path = require('path');
-
+    
     const bankId = await getBankIdByName(bankName);
     const financials = await getBankFinancials(bankId);
     
     const workbook = createWorkbook();
     const sheet = addWorksheet(workbook, 'Financial Report');
     
-    const headers = ['Report Date', 'Total Deposits'];
-    addTableHeader(sheet, 1, 1, headers);
-
+    addTableHeader(sheet, 1, 1, ['Report Date', 'Total Deposits']);
+    
     const rows = financials.map(record => [record.report_date, record.total_deposits]);
-    addTableRows(sheet, 2, 1, rows, ['date', 'currency']);
+    
+    addTableRows(sheet, 2, 1, rows, ['string', 'number']);
     autoSizeColumnWidth(sheet);
-
-    const filePath = path.resolve(process.cwd(), 'financial_report.xlsx');
+    
+    const fileName = `${bankName.replace(/\s+/g, '_')}_Financial_Report.xlsx`;
+    const filePath = path.resolve(process.cwd(), fileName);
+    
     await workbook.xlsx.writeFile(filePath);
     
-    console.log(JSON.stringify({ result: 'Generated financial report for bank ' + bankName, files: [filePath] }));
+    console.log(JSON.stringify({ 
+        result: 'Financial report generated successfully',
+        files: [{
+            path: filePath,
+            mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        }]
+    }));
 }
