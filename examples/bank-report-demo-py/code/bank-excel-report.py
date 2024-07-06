@@ -105,9 +105,9 @@ def add_table_header(worksheet, row, col, column_names):
 ##
 
 def doTask(bank_name: str):
-    import os
     import json
-    import openpyxl
+    import os
+    from openpyxl import Workbook
 
     # Get the bank ID based on the given bank name
     bank_id = get_bank_id_by_name(bank_name)
@@ -115,29 +115,31 @@ def doTask(bank_name: str):
     # Retrieve financial records for the selected bank
     financials = get_bank_financials(bank_id)
 
-    # Create a workbook and add a worksheet for financial data
+    # Create a new workbook and add a worksheet
     workbook = create_workbook()
-    sheet = add_worksheet(workbook, "Financial Report")
+    sheet_name = f"{bank_name} Financials"
+    worksheet = add_worksheet(workbook, sheet_name)
 
-    # Define the header and add it to the worksheet
+    # Define header and rows for the financial data
     headers = ["Report Date", "Total Deposits"]
-    add_table_header(sheet, row=1, col=1, column_names=headers)
-
-    # Prepare the rows of data
     rows = [[record["report_date"], record["total_deposits"]] for record in financials]
 
-    # Add the rows to the worksheet
-    add_table_rows(sheet, start_row=2, start_col=1, rows=rows)
+    # Add header and rows to the worksheet
+    add_table_header(worksheet, 1, 1, headers)
+    add_table_rows(worksheet, 2, 1, rows)
 
-    # Auto-size the column widths
-    auto_size_column_width(sheet)
+    # Auto size column widths
+    auto_size_column_width(worksheet)
 
-    # Define the output file path
-    output_file_name = f"{bank_name.replace(' ', '_')}_Financial_Report.xlsx"
-    output_file_path = os.getcwd() + "/" + output_file_name
+    # Define the file path
+    file_name = f"/{bank_name.replace(' ', '_')}_Financials.xlsx"
+    file_path = os.getcwd() + file_name
 
-    # Save the workbook
-    workbook.save(output_file_path)
+    # Save the workbook to a file
+    workbook.save(file_path)
 
-    # Output the result
-    print(json.dumps({"result": "Financial report generated successfully", "files": [output_file_path]}))
+    # Output the file information in JSON format
+    file_info = {"path": file_path, "mimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}
+    result = {"result": {}, "files": [file_info]}
+
+    print(json.dumps(result))

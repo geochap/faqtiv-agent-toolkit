@@ -112,6 +112,9 @@ def doTask(bank_name: str):
 
     # Retrieve financial records for the selected bank
     financials = get_bank_financials(bank_id)
-    
-    # Output the financial data as JSON
-    print(json.dumps(financials))
+
+    # Prepare the final result in JSON format
+    result = [{"Report Date": record["report_date"], "Total Deposits": record["total_deposits"]} for record in financials]
+
+    # Output the result
+    print(json.dumps(result))
