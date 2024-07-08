@@ -24,19 +24,15 @@ export default function(options) {
       const metdataFilePath = path.join(faqtivCodeMetadataDir, `${taskName}.yml`);
   
       if (!fs.existsSync(jsFilePath) || !fs.existsSync(metdataFilePath)) {
-        uncompiled.push(taskName);
         continue;
       }
       
       const metadata = yaml.load(fs.readFileSync(metdataFilePath, 'utf8'));
   
-      compiled.push(metadata.output.task_schema);
+      compiled.push(JSON.parse(metadata.output.task_schema));
     }
 
-    return console.log(JSON.stringify({
-      compiled,
-      uncompiled
-    }));
+    return console.log(JSON.stringify(compiled, null, 2));
   }
 
   for (const file of taskFiles) {
