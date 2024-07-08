@@ -8,3 +8,4 @@ modules:
 task_examples:
   - bank-simple-report
   - bank-excel-report
+  - bank-report-by-year
