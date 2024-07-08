@@ -73,8 +73,15 @@ function findUnprocessedTasks(taskFiles, codeDir) {
   return taskFiles.filter(taskFile => {
     const taskStat = fs.statSync(taskFile.fullPath);
     const jsPath = path.join(codeDir, taskFile.relativePath.replace('.txt', codeFileExtension));
+
+    if (!fs.existsSync(jsPath)) {
+      return true;
+    }
+    
     const jsStat = fs.statSync(jsPath);
-    return !fs.existsSync(jsPath) || jsStat.mtime < taskStat.mtime;
+    if (jsStat.mtime < taskStat.mtime) {
+      return true;
+    }
   });
 }
 
