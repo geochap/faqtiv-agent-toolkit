@@ -7,42 +7,40 @@ import * as config from '../config.js';
 export class AI {
   constructor(modelConfig = { model, organization, apiKey }, agentId) {
     this.model = new ChatOpenAI({ model: modelConfig.model });
+    this.modelName = modelConfig.model;
     this.chain = this.model.pipe(new StringOutputParser());
     this.tokenUsageLog = new TokenUsageLog(agentId);
+    this.messages = [new SystemMessage('You are a useful technical assistant.')];
   }
 
-  async start(systemPrompt, promptMessages, examples, modelName, stepName) {
-    const messages = [
-      new SystemMessage('You are a useful technical assistant.')
-    ];
-    if (systemPrompt) messages.push(new AIMessage(systemPrompt));
-  
-    return await this.next(messages, promptMessages, examples, modelName, stepName);
+  async start(systemPrompt, promptMessages, examples, stepName, modelName = this.modelName) {
+    if (systemPrompt) this.messages.push(new AIMessage(systemPrompt));
+    return await this.next(promptMessages, examples, stepName, modelName);
   }
 
-  async next(messages, promptMessages, examples, modelName, stepName) {
+  async next(promptMessages, examples, stepName, modelName = this.modelName) {
     if (examples) {
-      messages.push(...examples);
+      this.messages.push(...examples);
     }
     if (promptMessages) {
-      messages.push(...promptMessages);
+      this.messages.push(...promptMessages);
     }
 
     if (config.logging.LOG_DEBUG_AI) {
-      console.log(`Creating a new chat completion: ${messages.map(m => JSON.stringify(m, null, 2)).join('\n\n')}`);
+      console.log(`Creating a new chat completion: ${this.messages.map(m => JSON.stringify(m, null, 2)).join('\n\n')}`);
     }
 
-    const response = await this.backoffInference(messages);
-    await this.tokenUsageLog.updateLog(messages, response, modelName, stepName);
-    messages.push(new AIMessage(response));
+    const response = await this.backoffInference(this.messages);
+    await this.tokenUsageLog.updateLog(this.messages, response, modelName, stepName);
+    this.messages.push(new AIMessage(response));
     
     if (config.logging.LOG_DEBUG_AI) {
-      console.log(`Chat completion finished: ${messages.map(m => JSON.stringify(m, null, 2)).join('\n\n')}`);
+      console.log(`Chat completion finished: ${this.messages.map(m => JSON.stringify(m, null, 2)).join('\n\n')}`);
       console.log('Token usage metrics:');
       console.log(JSON.stringify(this.getTokenUsageLogs(), null, 2));
     }
 
-    return messages;
+    return this.messages;
   }
 
   getTokenUsageLogs() {

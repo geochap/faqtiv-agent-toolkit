@@ -112,11 +112,14 @@ async function getBankIdByName(name) {
 * This function is the generated code: it's safe to edit.
  */
 
-async function doTask(bankName) {
+async function doTask(bankName, yearList) {
     const bankId = await getBankIdByName(bankName);
     const financials = await getBankFinancials(bankId);
     
-    const report = financials.map(record => ({
+    const years = yearList.split('|').map(Number);
+    const filteredFinancials = financials.filter(record => years.includes(new Date(record.report_date).getFullYear()));
+    
+    const report = filteredFinancials.map(record => ({
         report_date: record.report_date,
         total_deposits: record.total_deposits
     }));

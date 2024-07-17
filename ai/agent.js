@@ -3,7 +3,8 @@ import { AI } from './ai.js';
 import {
   getFunctionDependencies as stepFunctionDependencies,
   generateAnsweringFunction as stepGenerateAnsweringFunction,
-  improveFunctionSignatures as stepImproveFunctionSignatures
+  improveFunctionSignatures as stepImproveFunctionSignatures,
+  generateAnswerDescription as stepGenerateAnswerDescription
 } from './steps.js';
 import { extractFunctionNames } from '../lib/parse-utils.js';
 
@@ -33,6 +34,12 @@ export default class AIAgent {
       functions,
       token_usage_logs: this.ai.getTokenUsageLogs()
     };
+  }
+
+  async generateTaskSchema(taskName, code) {
+    const taskSchema = await stepGenerateAnswerDescription(this.ai, taskName, code);
+
+    return taskSchema;
   }
 
   async improveFunctionSignatures(functionsCode, signatures) {

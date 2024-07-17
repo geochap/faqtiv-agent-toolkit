@@ -15,6 +15,7 @@ import removeExample from './commands/remove-example.js';
 import listExamples from './commands/list-examples.js';
 import removeModule from './commands/remove-module.js';
 import listModules from './commands/list-modules.js';
+import printDesktopInstructions from './commands/print-desktop-instructions.js';
 
 program
   .version(config.version)
@@ -67,6 +68,7 @@ program
 
 program
   .command('list-tasks')
+  .option('--json', 'output to json')
   .description('Shows a list of the existing tasks')
   .action(listTasks);
 
@@ -106,6 +108,11 @@ program
   .command('list-examples')
   .description('List existing examples')
   .action(listExamples);
+
+program
+  .command('print-desktop-instructions')
+  .description('Prints FAQtiv desktop instructions')
+  .action(printDesktopInstructions);
 
 program
   .on('--help', () => {

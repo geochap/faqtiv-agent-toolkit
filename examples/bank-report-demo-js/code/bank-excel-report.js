@@ -1,4 +1,11 @@
+/**
+* DEPENDENCIES
+* Warning: these are extracted from your function files, if you need to make changes edit the function file and recompile this task.
+ */
 
+const ExcelJS = require('exceljs');
+const axios = require('axios');
+    
 /**
 * LIBRARY FUNCTIONS
 * Warning: these are common functions, if you need to make changes edit the function file and recompile this task.
@@ -106,36 +113,32 @@ async function getBankIdByName(name) {
  */
 
 async function doTask(bankName) {
-    // Get the bank ID by name
+    const ExcelJS = require('exceljs');
+    const path = require('path');
+    
     const bankId = await getBankIdByName(bankName);
+    const financials = await getBankFinancials(bankId);
     
-    // Fetch financial data for the bank
-    const financialData = await getBankFinancials(bankId);
-    
-    // Create a new workbook and worksheet
     const workbook = createWorkbook();
-    const worksheet = addWorksheet(workbook, `${bankName} Financial Report`);
+    const sheet = addWorksheet(workbook, 'Financial Report');
     
-    // Define the header for the financial data
-    const financialHeader = Object.keys(financialData[0]);
+    addTableHeader(sheet, 1, 1, ['Report Date', 'Total Deposits']);
     
-    // Add the header row
-    addTableHeader(worksheet, 1, 1, financialHeader);
+    const rows = financials.map(record => [record.report_date, record.total_deposits]);
     
-    // Add the financial data rows
-    const formats = new Array(financialHeader.length).fill('');
-    addTableRows(worksheet, 2, 1, financialData, formats);
+    addTableRows(sheet, 2, 1, rows, ['string', 'number']);
+    autoSizeColumnWidth(sheet);
     
-    // Auto-size the column widths based on content
-    autoSizeColumnWidth(worksheet);
+    const fileName = `${bankName.replace(/\s+/g, '_')}_Financial_Report.xlsx`;
+    const filePath = path.resolve(process.cwd(), fileName);
     
-    // Write the workbook to a file
-    const fileName = `${bankName}_Financial_Report.xlsx`;
-    await workbook.xlsx.writeFile(fileName);
+    await workbook.xlsx.writeFile(filePath);
     
-    // Output the result to stdout
-    console.log(JSON.stringify({
-        result: { message: "Financial report generated successfully" },
-        files: [fileName]
+    console.log(JSON.stringify({ 
+        result: 'Financial report generated successfully',
+        files: [{
+            path: filePath,
+            mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        }]
     }));
 }

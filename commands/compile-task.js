@@ -3,7 +3,7 @@ import path from 'path';
 import yaml from 'js-yaml';
 import VectorStore from '../lib/vector-store.js';
 import { extractFunctionCode, extractFunctionNames } from '../lib/parse-utils.js';
-import { generateResponse } from '../controllers/code-gen.js';
+import { generateResponse, generateTaskSchema } from '../controllers/code-gen.js';
 import { headersUpToDate } from './update-headers.js';
 import { getAllFiles } from '../lib/file-utils.js';
 import migrateDry, { getOutdatedItems } from './migrate-dry.js';
@@ -73,8 +73,15 @@ function findUnprocessedTasks(taskFiles, codeDir) {
   return taskFiles.filter(taskFile => {
     const taskStat = fs.statSync(taskFile.fullPath);
     const jsPath = path.join(codeDir, taskFile.relativePath.replace('.txt', codeFileExtension));
+
+    if (!fs.existsSync(jsPath)) {
+      return true;
+    }
+    
     const jsStat = fs.statSync(jsPath);
-    return !fs.existsSync(jsPath) || jsStat.mtime < taskStat.mtime;
+    if (jsStat.mtime < taskStat.mtime) {
+      return true;
+    }
   });
 }
 
@@ -125,7 +132,7 @@ function cleanUpOrphans() {
   });
 }
 
-function updateMetadata(codeFile) {
+async function updateMetadata(taskName, codeFile) {
   const code = fs.readFileSync(codeFile.fullPath, 'utf8');
   const doTaskCode = extractFunctionCode(code, 'doTask');
   const metadataFilePath = path.join(metadataDir, codeFile.relativePath.replace(codeFileExtension, '.yml'));
@@ -133,18 +140,24 @@ function updateMetadata(codeFile) {
 
   const usedFunctions = extractFunctionNames(doTaskCode);
   const functionDependencies = getFunctionDependencies(null, usedFunctions, config.project.functions);
+  const taskSchema = await generateTaskSchema(taskName, doTaskCode);
 
   metadata.output.functions = functionDependencies;
+  metadata.output.task_schema = taskSchema;
   fs.writeFileSync(metadataFilePath, yaml.dump(metadata), 'utf8');
 }
 
 async function processTask(vectorStore, task) {
-  const response = await generateResponse(vectorStore, [
-    {
-      message: task.content,
-      role: 'user'
-    }
-  ]);
+  const response = await generateResponse(
+    task.name,
+    vectorStore,
+      [
+      {
+        message: task.content,
+        role: 'user'
+      }
+    ]
+  );
 
   return response;
 }
@@ -194,7 +207,7 @@ export async function migrateTask(options) {
 
   // First update metadata as these could include examples used for compilation
   for (let t of needToUpdateMetadata) {
-    updateMetadata(t.file);
+    await updateMetadata(t.taskName, t.file);
   }
   if (needToUpdateMetadata.length > 0) console.log(`Updated metadata for ${needToUpdateMetadata.length} tasks`);
 

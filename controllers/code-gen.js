@@ -55,8 +55,35 @@ const commentTokenByRuntime = {
 
 function formatCode(libs, functions, code) {
   const { opening, middle, closing } = commentTokenByRuntime[config.project.runtime.runtimeName];
+  
+  // gather all dependency imports and remove duplicates
+  const seen = new Set();
+  const imports = [
+    ...functions.map(f => f.imports),
+    ...libs.map(l => l.imports)
+  ]
+  .flat()
+  .filter(imp => {
+    // naive approach of just replacing all whitespace and comparing import lines
+    const normalized = imp.replace(/\s+/g, '');
+    if (seen.has(normalized)) {
+      return false;
+    }
+    seen.add(normalized);
+    return true;
+  });
 
   let formattedCode = '';
+
+  if (libs.length > 0 || functions.length > 0) {
+    formattedCode += `${opening}
+${middle} DEPENDENCIES
+${middle} Warning: these are extracted from your function files, if you need to make changes edit the function file and recompile this task.
+${closing}
+
+${imports.join('\n')}
+    `;
+  }
 
   if (libs.length > 0) {
     formattedCode += `
@@ -89,16 +116,32 @@ ${code}`;
   return formattedCode;
 }
 
-export async function generateResponse(vectorStore, conversation) {
+export async function generateResponse(taskName, vectorStore, conversation) {
   const { instructions, functions, libs, functionsHeader } = config.project;
   // generate embedding of latest user message and do a similarity search for examples
   const embedding = await getTaskEmbedding(conversation[conversation.length - 1].message);
   const examples = await getNearestExamples(vectorStore, embedding, functionsHeader.embedding);
 
-  const aiAgent = new AIAgent('code-gen-demo', instructions, functions, functionsHeader.signatures, config.openai);
+  const aiAgent = new AIAgent('code-gen', instructions, functions, functionsHeader.signatures, config.openai);
   const response = await aiAgent.generateResponse(conversation, examples);
+  const taskSchema = await aiAgent.generateTaskSchema(taskName, response.code);
 
-  response.code = formatCode(libs, functions, response.code); 
+  response.code = formatCode(libs, functions, response.code);
+  response.task_schema = taskSchema;
 
-  return { id: uuidv4(), output: response, embedding, functions_embedding: functionsHeader.embedding };
+  return { 
+    id: uuidv4(),
+    output: response,
+    embedding, 
+    functions_embedding: functionsHeader.embedding 
+  };
+}
+
+export async function generateTaskSchema(doTaskCode, taskName) {
+  const { instructions, functions, functionsHeader } = config.project;
+  const aiAgent = new AIAgent('code-gen', instructions, functions, functionsHeader.signatures, config.openai);
+  
+  const response = await aiAgent.generateTaskSchema(taskName, doTaskCode);
+
+  return response;
 }

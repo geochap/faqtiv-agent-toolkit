@@ -21,12 +21,7 @@ const runtimes = {
 };
 const defaultModules = {
   'javascript': [],
-  'python': [
-    {
-      name: 'json',
-      alias: 'json'
-    }
-  ]
+  'python': []
 }
 
 let projectConfig = {};
@@ -84,9 +79,13 @@ if (isInitCommand || isHelpCommand) {
       functionFiles.forEach(file => {
         const filePath = path.join(functionsDir, file);
         const code = fs.readFileSync(filePath, 'utf8');
-        let functions = readFunctionFile(code, runtime.runtimeName);
+        let { functions, imports } = readFunctionFile(code, runtime.runtimeName);
 
-        functions = functions.map((f) => ({ ...f, lastModified: fs.statSync(filePath).mtime}));
+        functions = functions.map((f) => ({
+          ...f,
+          lastModified: fs.statSync(filePath).mtime,
+          imports
+        }));
         allFunctions = allFunctions.concat(functions);
       });
   
@@ -105,13 +104,20 @@ if (isInitCommand || isHelpCommand) {
     functionsHeader = yaml.load(fs.readFileSync(path.join('.faqtiv', 'functions-header.yml'), 'utf8'));
     functionsHeader.embedding = decodeBase64(functionsHeader.embedding);
   } catch(e) {}
+
   let instructions = '';
   try {
     instructions = fs.readFileSync(path.join('instructions.txt'), 'utf8');
   } catch(e) {}
 
+  let desktopInstructions = '';
+  try {
+    desktopInstructions = fs.readFileSync(path.join('desktop_instructions.txt'), 'utf8');
+  } catch(e) {}
+
   projectConfig = {
     instructions,
+    desktopInstructions,
     functionsHeader,
     functions,
     libs,

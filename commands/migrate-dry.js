@@ -61,6 +61,15 @@ function isOutdated(jsFile, ymlFile, taskFile, functions, libs) {
   return { message, reasons };
 }
 
+function getTaskName(file) {
+  const fullPath = file.fullPath;
+  const lastSlashIndex = fullPath.lastIndexOf('/');
+  const fileName = fullPath.substring(lastSlashIndex + 1);
+  const lastDotIndex = fileName.lastIndexOf('.');
+  if (lastDotIndex === -1) return fileName; // No extension found
+  return fileName.substring(0, lastDotIndex);
+}
+
 export function getOutdatedItems() {
   const libs = config.project.libs;
   const functions = config.project.functions;
@@ -80,6 +89,7 @@ export function getOutdatedItems() {
 
     return {
       file,
+      taskName: getTaskName(file),
       ...outdatedInfo
     };
   }).filter(i => i.message);
