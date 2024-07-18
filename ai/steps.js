@@ -2,21 +2,22 @@ import { HumanMessage, AIMessage } from '@langchain/core/messages';
 
 import { generateAnsweringFunctionPrompt } from './prompts/generate-answering-function.js';
 import { generateAnswerDescriptionPrompt } from './prompts/generate-answer-description.js';
-import { extractFunctionCode } from '../lib/parse-utils.js';
+import { extractFunctionCall, extractFunctionCode } from '../lib/parse-utils.js';
 import { improveFunctionSignaturesPrompt } from './prompts/improve-function-signatures.js';
 
 function codeResponse(response) {
   const code = extractFunctionCode(response, 'doTask');
+  const call = extractFunctionCall(response, 'doTask');
 
   if (!code) {
     console.log('Could not generate an answer from AI response');
     throw new Error('AI message: ' + response);
   }
   
-  return code;
+  return { code, call };
 }
 
-export async function generateAnsweringFunction(ai, promptMessages, instructions, functionsSignatures, examples = []) {
+export async function generateAnsweringFunction(ai, promptMessages, instructions, functionsSignatures, examples = [], adHoc = false) {
   examples = examples.flatMap(e => {
     return [
       new HumanMessage(e.task),
@@ -24,7 +25,7 @@ export async function generateAnsweringFunction(ai, promptMessages, instructions
     ];
   });
 
-  const preprompt = generateAnsweringFunctionPrompt(instructions, functionsSignatures);
+  const preprompt = generateAnsweringFunctionPrompt(instructions, functionsSignatures, adHoc);
   const messages = await ai.start(preprompt, promptMessages, examples, 'generate-answering-function');
   const response = messages[messages.length - 1].content.trim();
 

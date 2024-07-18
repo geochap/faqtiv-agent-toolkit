@@ -7,6 +7,7 @@ import updateHeaders from './commands/update-headers.js';
 import compileTask, { migrateTask } from './commands/compile-task.js';
 import runTask from './commands/run-task.js';
 import addTask from './commands/add-task.js';
+import runAdHocTask from './commands/run-ad-hoc-task.js';
 import addModule from './commands/add-module.js';
 import reinstallModule from './commands/reinstall-module.js';
 import listTasks from './commands/list-tasks.js';
@@ -59,6 +60,11 @@ program
   .option('--error <file>', 'Error log file path, defaults to /outputs/{task}/{timestamp}/err.log')
   .description('Run a task')
   .action(runTask);
+
+program
+  .command('run-ad-hoc-task <description>')
+  .description('Compile and run an ad hoc task')
+  .action(runAdHocTask);
 
 program
   .command('migrate-tasks')

@@ -124,7 +124,14 @@ if (isInitCommand || isHelpCommand) {
     runtime,
     modules,
     taskExamples: faqtivConfig.task_examples || [],
-    autoAddExamples: faqtivConfig.auto_add_examples != undefined ? faqtivConfig.auto_add_examples : false
+    autoAddExamples: faqtivConfig.auto_add_examples != undefined ? faqtivConfig.auto_add_examples : false,
+    metadataDir: path.join('.faqtiv', 'code'),
+    tasksDir: path.join('tasks'),
+    codeDir: path.join('code'),
+    outputsDir: path.join('outputs'),
+    functionsDir: path.join('functions'),
+    headerPath: path.join('.faqtiv', 'functions-header.yml'),
+    tmpDir: path.join('.faqtiv', 'tmp')
   };
 }
 

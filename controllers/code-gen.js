@@ -116,15 +116,16 @@ ${code}`;
   return formattedCode;
 }
 
-export async function generateResponse(taskName, vectorStore, conversation) {
+// adhoc means the code should be self executing with hardcoded params
+export async function generateResponse(taskName, vectorStore, conversation, adHoc=false) {
   const { instructions, functions, libs, functionsHeader } = config.project;
   // generate embedding of latest user message and do a similarity search for examples
   const embedding = await getTaskEmbedding(conversation[conversation.length - 1].message);
   const examples = await getNearestExamples(vectorStore, embedding, functionsHeader.embedding);
 
   const aiAgent = new AIAgent('code-gen', instructions, functions, functionsHeader.signatures, config.openai);
-  const response = await aiAgent.generateResponse(conversation, examples);
-  const taskSchema = await aiAgent.generateTaskSchema(taskName, response.code);
+  const response = await aiAgent.generateResponse(conversation, examples, adHoc);
+  const taskSchema = !adHoc ? await aiAgent.generateTaskSchema(taskName, response.code) : undefined;
 
   response.code = formatCode(libs, functions, response.code);
   response.task_schema = taskSchema;
