@@ -5,9 +5,9 @@ import * as yaml from 'js-yaml';
 import { getAllFiles } from '../lib/file-utils.js';
 import * as config from '../config.js';
 
-const metadataDir = './.faqtiv/code';
-const codeDir = './code/';
-const tasksDir = './tasks/';
+const metadataDir = config.project.metadataDir;
+const codeDir = config.project.codeDir;
+const tasksDir = config.project.tasksDir;
 const codeFileExtension = config.project.runtime.codeFileExtension;
 
 function findCorrespondingMetadata(ymlFiles, jsFile) {

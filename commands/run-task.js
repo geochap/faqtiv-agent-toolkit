@@ -7,13 +7,11 @@ import { mkdirpSync } from 'mkdirp';
 import * as config from '../config.js';
 import { extractFunctionCode, getFunctionParameters } from '../lib/parse-utils.js';
 
-const baseDir = process.cwd();
-const tmpdir = path.resolve(baseDir, '.faqtiv', 'tmp');
-
-const faqtivCodeMetadataDir = path.join('.faqtiv', 'code');
-const tasksDir = path.join('tasks');
-const codeDir = path.join('code');
-const outputsDir = path.join('outputs');
+const tmpdir = config.project.tmpDir;
+const faqtivCodeMetadataDir = config.project.metadataDir;
+const tasksDir = config.project.tasksDir;
+const codeDir = config.project.codeDir;
+const outputsDir = config.project.outputsDir;
 const { codeFileExtension, runtimeName } = config.project.runtime;
 
 function getParametrizedCode(code, parameters) {

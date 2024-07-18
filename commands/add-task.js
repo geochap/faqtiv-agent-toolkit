@@ -1,7 +1,8 @@
 import fs from 'fs';
 import path from 'path';
+import * as config from '../config.js';
 
-const tasksDir = path.join('tasks');
+const tasksDir = config.project.tasksDir;
 
 export default async function(name, description) {
   try {
