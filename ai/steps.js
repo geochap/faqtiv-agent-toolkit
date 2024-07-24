@@ -6,15 +6,21 @@ import { extractFunctionCall, extractFunctionCode } from '../lib/parse-utils.js'
 import { improveFunctionSignaturesPrompt } from './prompts/improve-function-signatures.js';
 
 function codeResponse(response) {
-  const code = extractFunctionCode(response, 'doTask');
-  const call = extractFunctionCall(response, 'doTask');
+  try {
+    const code = extractFunctionCode(response, 'doTask');
+    const call = extractFunctionCall(response, 'doTask');
 
   if (!code) {
-    console.log('Could not generate an answer from AI response');
+    console.warn('Could not generate an answer from AI response');
     throw new Error('AI message: ' + response);
   }
   
-  return { code, call };
+    return { code, call };
+  } catch (e) {
+    console.warn('Could not generate an answer from AI response');
+    console.warn('AI response: ' + response);
+    throw e;
+  }
 }
 
 export async function generateAnsweringFunction(ai, promptMessages, instructions, functionsSignatures, examples = [], adHoc = false) {
