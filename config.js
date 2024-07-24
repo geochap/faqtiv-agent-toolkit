@@ -125,13 +125,13 @@ if (isInitCommand || isHelpCommand) {
     modules,
     taskExamples: faqtivConfig.task_examples || [],
     autoAddExamples: faqtivConfig.auto_add_examples != undefined ? faqtivConfig.auto_add_examples : false,
-    metadataDir: path.join('.faqtiv', 'code'),
-    tasksDir: path.join('tasks'),
-    codeDir: path.join('code'),
-    outputsDir: path.join('outputs'),
-    functionsDir: path.join('functions'),
-    headerPath: path.join('.faqtiv', 'functions-header.yml'),
-    tmpDir: path.join('.faqtiv', 'tmp')
+    metadataDir: path.join(process.cwd(), '.faqtiv', 'code'),
+    tasksDir: path.join(process.cwd(), 'tasks'),
+    codeDir: path.join(process.cwd(), 'code'),
+    outputsDir: path.join(process.cwd(), 'outputs'),
+    functionsDir: path.join(process.cwd(), 'functions'),
+    headerPath: path.join(process.cwd(), '.faqtiv', 'functions-header.yml'),
+    tmpDir: path.join(process.cwd(), '.faqtiv', 'tmp')
   };
 }
 
