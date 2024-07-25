@@ -80,7 +80,6 @@ export default async function runAdHocTask(description) {
         previousCode
       );
     
-      console.log(response.output.code);
       const { stdout, stderr } = await executeCode(response.output.code);
       
       if (stdout) {
