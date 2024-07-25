@@ -33,6 +33,7 @@ In a codeblock at the top of your response write a ${runtimeName} function calle
 - If there are no errors doTask must always finish by writing its result as JSON to stdout.
 - Never output anything else to stdout, any messages if needed should be included in the resulting JSON.
 - Do not include any comments or documentation in your code, only the code is needed.
+- If the user's request can not be generated using the available functions provide this plain text error with no additional formatting: "The request cannot be fulfilled using the available functions".
 ${adHoc ? 
 `- Your code must call the doTask function with the parameters inferred from the user request.
 - Never generate files, write the data as JSON to stdout as-is.

@@ -7,13 +7,17 @@ import { improveFunctionSignaturesPrompt } from './prompts/improve-function-sign
 
 function codeResponse(response) {
   try {
+    if (response.includes('The request cannot be fulfilled using the available functions')) {
+      throw new Error('AI response: ' + response);
+    }
+
     const code = extractFunctionCode(response, 'doTask');
     const call = extractFunctionCall(response, 'doTask');
 
-  if (!code) {
-    console.warn('Could not generate an answer from AI response');
-    throw new Error('AI message: ' + response);
-  }
+    if (!code) {
+      console.warn('Could not generate an answer from AI response');
+      throw new Error('AI response: ' + response);
+    }
   
     return { code, call };
   } catch (e) {
