@@ -6,17 +6,31 @@ import { extractFunctionCode } from '../lib/parse-utils.js';
 import { improveFunctionSignaturesPrompt } from './prompts/improve-function-signatures.js';
 
 function codeResponse(response) {
-  const code = extractFunctionCode(response, 'doTask');
+  try {
+    if (response.includes('The request cannot be fulfilled using the available functions')) {
+      throw new Error('AI error: ' + response);
+    }
 
-  if (!code) {
-    console.log('Could not generate an answer from AI response');
-    throw new Error('AI message: ' + response);
-  }
+    const code = extractFunctionCode(response, 'doTask');
+    // const call = extractFunctionCall(response, 'doTask');
+    // note: this is only needed for ad hoc and values are hardcoded as of the latest prompt instructions
+    //       may need to change to support more languages or parametrized calls
+    const call = 'doTask()';
+
+    if (!code) {
+      console.warn('Could not generate an answer from AI response');
+      throw new Error('AI response: ' + response);
+    }
   
-  return code;
+    return { code, call };
+  } catch (e) {
+    console.warn('Could not generate an answer from AI response');
+    console.warn('AI response: ' + response);
+    throw e;
+  }
 }
 
-export async function generateAnsweringFunction(ai, promptMessages, instructions, functionsSignatures, examples = []) {
+export async function generateAnsweringFunction(ai, promptMessages, instructions, functionsSignatures, examples = [], adHoc = false) {
   examples = examples.flatMap(e => {
     return [
       new HumanMessage(e.task),
@@ -24,7 +38,7 @@ export async function generateAnsweringFunction(ai, promptMessages, instructions
     ];
   });
 
-  const preprompt = generateAnsweringFunctionPrompt(instructions, functionsSignatures);
+  const preprompt = generateAnsweringFunctionPrompt(instructions, functionsSignatures, adHoc);
   const messages = await ai.start(preprompt, promptMessages, examples, 'generate-answering-function');
   const response = messages[messages.length - 1].content.trim();
 

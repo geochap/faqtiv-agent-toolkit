@@ -7,9 +7,8 @@ import { getTaskEmbedding } from '../controllers/code-gen.js';
 import { encodeBase64 } from '../lib/base64.js';
 import AIAgent from '../ai/agent.js';
 
-const functionsDir = path.join('functions');
-const faqtivDir = path.join('.faqtiv');
-const headerPath = path.join(faqtivDir, 'functions-header.yml');
+const functionsDir = config.project.functionsDir;
+const headerPath = config.project.headerPath;
 const { runtimeName, codeFileExtension } = config.project.runtime;
 
 export default async function() {

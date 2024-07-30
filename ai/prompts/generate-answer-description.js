@@ -28,7 +28,7 @@ This is an example of a valid schema:
     },
     "name": "getItems",
     "description": "Retrieves a list of items for a given user",
-    "returns": "{ items: { id: string; name: string; }[] }",
+    "returns": "{ id: string; name: string; }[]",
     "requiredParams": [
         "user_id"
     ]

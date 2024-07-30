@@ -1,12 +1,12 @@
 import fs from 'fs';
 import path from 'path';
 import yaml from 'js-yaml';
-
 import * as config from '../config.js';
+
 const configPath = path.join('faqtiv_config.yml');
-const faqtivCodeMetadataDir = '.faqtiv/code';
-const tasksDir = 'tasks';
-const codeDir = 'code';
+const faqtivCodeMetadataDir = config.project.metadataDir;
+const tasksDir = config.project.tasksDir;
+const codeDir = config.project.codeDir;
 const codeFileExtension = config.project.runtime.codeFileExtension;
 
 export default function addExample(taskName, options) {

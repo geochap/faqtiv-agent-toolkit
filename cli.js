@@ -7,6 +7,7 @@ import updateHeaders from './commands/update-headers.js';
 import compileTask, { migrateTask } from './commands/compile-task.js';
 import runTask from './commands/run-task.js';
 import addTask from './commands/add-task.js';
+import runAdHocTask from './commands/run-ad-hoc-task.js';
 import addModule from './commands/add-module.js';
 import reinstallModule from './commands/reinstall-module.js';
 import listTasks from './commands/list-tasks.js';
@@ -16,6 +17,7 @@ import listExamples from './commands/list-examples.js';
 import removeModule from './commands/remove-module.js';
 import listModules from './commands/list-modules.js';
 import printDesktopInstructions from './commands/print-desktop-instructions.js';
+import setupInterpreter from './commands/setup-interpreter.js';
 
 program
   .version(config.version)
@@ -59,6 +61,11 @@ program
   .option('--error <file>', 'Error log file path, defaults to /outputs/{task}/{timestamp}/err.log')
   .description('Run a task')
   .action(runTask);
+
+program
+  .command('run-ad-hoc-task <description>')
+  .description('Compile and run an ad hoc task')
+  .action(runAdHocTask);
 
 program
   .command('migrate-tasks')
@@ -113,6 +120,11 @@ program
   .command('print-desktop-instructions')
   .description('Prints FAQtiv desktop instructions')
   .action(printDesktopInstructions);
+
+program
+  .command('setup-interpreter')
+  .description('Setup interpreter')
+  .action(setupInterpreter);
 
 program
   .on('--help', () => {

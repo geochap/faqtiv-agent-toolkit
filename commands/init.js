@@ -7,7 +7,6 @@ import * as config from '../config.js';
 const { runtimeName: defaultRuntime } = config.project.runtime; // defaults to javascript
 const defaultInstructions = ``;
 const defaultDesktopInstructions = ``;
-const runtimes = ['javascript', 'python'];
 
 const defaultEnvFile = `OPENAI_ORGANIZATION=<your_org>
 OPENAI_API_KEY=<your_api_key>
@@ -24,7 +23,7 @@ const runtimeGitIgnore = {
   python: 'venv/'
 };
 
-function initJS(baseDir) {
+export function initJS(runtimeCommand, baseDir) {
   // Create package.json for npm project
   execSync('npm init -y', { cwd: baseDir, stdio: 'ignore' });
     
@@ -32,12 +31,12 @@ function initJS(baseDir) {
   // execSync('npm install <package_name>', { cwd: baseDir, stdio: 'ignore' });
 }
 
-function initPython(baseDir) {
+export function initPython(runtimeCommand, baseDir) {
   // Create a requirements.txt file
   fs.writeFileSync(`${baseDir}/requirements.txt`, '');
           
   // Setup virtual environment
-  execSync('python3 -m venv venv', { cwd: baseDir, stdio: 'ignore' });
+  execSync(`${runtimeCommand} -m venv venv`, { cwd: baseDir, stdio: 'ignore' });
 }
 
 export default async function(projectRoot, options) {
@@ -52,8 +51,8 @@ export default async function(projectRoot, options) {
 
   const projectRuntime = options.runtime || defaultRuntime;
 
-  if (!runtimes.includes(projectRuntime)) {
-    console.error(`Unknown runtime "${projectRuntime}", valid runtimes are: ${runtimes.join(', ')}`);
+  if (!config.runtimeCommands[projectRuntime]) {
+    console.error(`Unknown runtime "${projectRuntime}", valid runtimes are: ${Object.keys(config.runtimeCommands).join(', ')}`);
     return;
   }
 
@@ -97,7 +96,7 @@ task_examples: []`;
       console.log(`Skipping interpreter environment setup for runtime ${projectRuntime}`);
       process.exit(0);
     }
-    initFn(baseDir);
+    initFn(config.runtimeCommands[projectRuntime], baseDir);
 
     console.log('Project successfully created in:', projectRoot);
   } catch (error) {

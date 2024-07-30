@@ -7,7 +7,7 @@ import { readFunctionFile } from './lib/parse-utils.js';
 
 dotenv.config();
 
-const projectWorkdir = path.join('.faqtiv');
+const projectWorkdir = path.join(process.cwd(), '.faqtiv');
 const isInProjectDir = fs.existsSync(projectWorkdir);
 const isInitCommand = process.argv.includes('init');
 const isHelpCommand = process.argv.includes('help') || process.argv.length === 2;
@@ -19,10 +19,14 @@ const runtimes = {
   'javascript': 'javascript',
   'python': 'python'
 };
+export const runtimeCommands = {
+  'javascript': process.env.JS_CMD || 'node',
+  'python': process.env.PYTHON_CMD || 'python'
+};
 const defaultModules = {
   'javascript': [],
   'python': []
-}
+};
 
 let projectConfig = {};
 let openaiConfig = {
@@ -43,6 +47,7 @@ if (isInitCommand || isHelpCommand) {
     runtime: {
       codeFileExtension: codeExtensions['javascript'],
       runtimeName: runtimes['javascript'],
+      command: runtimeCommands['javascript']
     },
     modules: [],
     task_examples: [],
@@ -62,7 +67,8 @@ if (isInitCommand || isHelpCommand) {
   const runtime = {
     codeFileExtension: codeExtensions[faqtivConfig.runtime],
     runtimeName: runtimes[faqtivConfig.runtime],
-    defaultModules: defaultModules[faqtivConfig.runtime]
+    defaultModules: defaultModules[faqtivConfig.runtime],
+    command: runtimeCommands[faqtivConfig.runtime]
   };
 
   const loadFunctions = (dir) => {
@@ -124,7 +130,14 @@ if (isInitCommand || isHelpCommand) {
     runtime,
     modules,
     taskExamples: faqtivConfig.task_examples || [],
-    autoAddExamples: faqtivConfig.auto_add_examples != undefined ? faqtivConfig.auto_add_examples : false
+    autoAddExamples: faqtivConfig.auto_add_examples != undefined ? faqtivConfig.auto_add_examples : false,
+    metadataDir: path.join(projectWorkdir, 'code'),
+    tasksDir: path.join(process.cwd(), 'tasks'),
+    codeDir: path.join(process.cwd(), 'code'),
+    outputsDir: path.join(process.cwd(), 'outputs'),
+    functionsDir: path.join(process.cwd(), 'functions'),
+    headerPath: path.join(projectWorkdir, 'functions-header.yml'),
+    tmpDir: path.join(projectWorkdir, 'tmp')
   };
 }
 

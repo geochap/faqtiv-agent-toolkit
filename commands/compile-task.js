@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import yaml from 'js-yaml';
-import VectorStore from '../lib/vector-store.js';
+import { initializeVectorStore } from '../lib/vector-store.js';
 import { extractFunctionCode, extractFunctionNames } from '../lib/parse-utils.js';
 import { generateResponse, generateTaskSchema } from '../controllers/code-gen.js';
 import { headersUpToDate } from './update-headers.js';
@@ -9,64 +9,13 @@ import { getAllFiles } from '../lib/file-utils.js';
 import migrateDry, { getOutdatedItems } from './migrate-dry.js';
 import * as config from '../config.js';
 import { getFunctionDependencies } from '../ai/steps.js';
-import { decodeBase64, encodeBase64 } from '../lib/base64.js';
+import { encodeBase64 } from '../lib/base64.js';
 import addExample from './add-example.js';
 
-const metadataDir = path.join('.faqtiv', 'code');
-const tasksDir = path.join('tasks');
-const codeDir = path.join('code');
+const metadataDir = config.project.metadataDir;
+const tasksDir = config.project.tasksDir;
+const codeDir = config.project.codeDir;
 const codeFileExtension = config.project.runtime.codeFileExtension;
-
-async function initializeVectorStore( omitTaskNames = [] ) {
-  const examples = config.project.taskExamples;
-  const vectorStore = new VectorStore();
-
-  console.log('Initializing vector store...');
-  const vectors = [];
-
-  for (const name of examples) {
-    if (omitTaskNames.includes(name)) continue;
-
-    const ymlFilePath = path.join(metadataDir, `${name}.yml`);
-    const txtFilePath = path.join(tasksDir, `${name}.txt`);
-    const jsFilePath = path.join(codeDir, `${name}${codeFileExtension}`);
-
-    if (!fs.existsSync(ymlFilePath)) {
-      throw new Error(`Example task "${name}" metadata is missing, please run: faqtiv compile-task ${name}`);
-    }
-    if (!fs.existsSync(txtFilePath)) {
-      throw new Error(`Example task "${name}" description is missing`);
-    }
-    if (!fs.existsSync(jsFilePath)) {
-      throw new Error(`Example task "${name}" code is missing, please run: faqtiv compile-task ${name}`);
-    }
-
-    const yamlContent = yaml.load(fs.readFileSync(ymlFilePath, 'utf8'));
-    const taskText = fs.readFileSync(txtFilePath, 'utf8');
-    const jsFileContent = fs.readFileSync(jsFilePath, 'utf8');
-    const doTaskCodeString = extractFunctionCode(jsFileContent, 'doTask');
-
-    vectors.push({
-      taskEmbedding: decodeBase64(yamlContent.embedding),
-      functionsEmbedding: decodeBase64(yamlContent.functions_embedding),
-      document: {
-        id: yamlContent.id,
-        task: taskText,
-        code: doTaskCodeString
-      }
-    });
-  }
-
-  if (vectors.length > 0) {
-    await vectorStore.addTaskVectors(vectors.map((v) => ({ embedding: v.taskEmbedding, ...v.document })));
-    await vectorStore.addFunctionsHeaderVector(vectors.map((v) => ({ embedding: v.functionsEmbedding, ...v.document })));
-  }
-
-  console.log(`${vectors.length} examples loaded into the vector store...`);
-  console.log('Vector store initialized successfully');
-
-  return vectorStore;
-}
 
 // any task files without a corresponding code file or if code is older
 function findUnprocessedTasks(taskFiles, codeDir) {

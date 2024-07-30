@@ -116,6 +116,7 @@ ${code}`;
   return formattedCode;
 }
 
+// adhoc means the code should be self executing with hardcoded params
 export async function generateResponse(taskName, vectorStore, conversation) {
   const { instructions, functions, libs, functionsHeader } = config.project;
   // generate embedding of latest user message and do a similarity search for examples
@@ -128,6 +129,46 @@ export async function generateResponse(taskName, vectorStore, conversation) {
 
   response.code = formatCode(libs, functions, response.code);
   response.task_schema = taskSchema;
+
+  return { 
+    id: uuidv4(),
+    output: response,
+    embedding, 
+    functions_embedding: functionsHeader.embedding 
+  };
+}
+
+export async function generateAdHocResponse(vectorStore, conversation, retryCount = 0, retryErrors = [], previousCode = null) {
+  const { instructions, functions, libs, functionsHeader } = config.project;
+  const embedding = await getTaskEmbedding(conversation[conversation.length - 1].message);
+  const examples = await getNearestExamples(vectorStore, embedding, functionsHeader.embedding);
+
+  const aiAgent = new AIAgent('code-gen', instructions, functions, functionsHeader.signatures, config.openai);
+  
+  if (retryCount > 0) {
+    let retryMessage = `
+      This is retry attempt ${retryCount}.
+      Previous errors: ${retryErrors.join('\n\n')}.
+    `;
+
+    if (previousCode) {
+      retryMessage += `
+      Previous code:
+      \`\`\`
+      ${previousCode}
+      \`\`\`
+      `;
+    }
+
+    retryMessage += `
+      Please address these issues in your response and improve upon the previous code if provided.
+    `;
+
+    conversation.push({ role: 'system', message: retryMessage });
+  }
+
+  const response = await aiAgent.generateResponse(conversation, examples, true);
+  response.code = formatCode(libs, functions, response.code);
 
   return { 
     id: uuidv4(),

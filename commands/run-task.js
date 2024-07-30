@@ -1,23 +1,21 @@
 import fs from 'fs';
 import path from 'path';
 import yaml from 'js-yaml';
-import { execFile } from 'child_process';
+import { execFile, exec } from 'child_process';
 import { v4 as uuidv4 } from 'uuid';
 import { mkdirpSync } from 'mkdirp';
 import * as config from '../config.js';
 import { extractFunctionCode, getFunctionParameters } from '../lib/parse-utils.js';
 
-const baseDir = process.cwd();
-const tmpdir = path.resolve(baseDir, '.faqtiv', 'tmp');
-
-const faqtivCodeMetadataDir = path.join('.faqtiv', 'code');
-const tasksDir = path.join('tasks');
-const codeDir = path.join('code');
-const outputsDir = path.join('outputs');
+const tmpdir = config.project.tmpDir;
+const faqtivCodeMetadataDir = config.project.metadataDir;
+const tasksDir = config.project.tasksDir;
+const codeDir = config.project.codeDir;
+const outputsDir = config.project.outputsDir;
 const { codeFileExtension, runtimeName } = config.project.runtime;
 
 function getParametrizedCode(code, parameters) {
-  return `${code}\ndoTask('${parameters.join("', '")}');`;
+  return `${code}\ndoTask(${parameters.length > 0 ? "'" + parameters.join("', '") + "'" : ''});`;
 }
 
 function getRunnableCode(code, runParameters) {
@@ -39,27 +37,25 @@ function saveMetadata(metadataDir, metadata) {
 }
 
 function executeJS(taskName, code, runParameters, outputFilePath, errorFilePath, metadataDir) {
-  const tempFileName = path.join(tmpdir, `faqtiv-${uuidv4()}.js`);
+  const tempFileName = path.join(tmpdir, `${uuidv4()}.js`);
   fs.writeFileSync(tempFileName, code);
 
   execFile(
-    'node', [tempFileName], 
+    config.project.runtime.command, [tempFileName], 
     { cwd: metadataDir, encoding: 'buffer' }, 
     getExecutionHandler(taskName, runParameters, tempFileName, outputFilePath, errorFilePath, metadataDir)
   );
 }
 
 function executePython(taskName, code, runParameters, outputFilePath, errorFilePath, metadataDir) {
-  const tempFileName = path.join(tmpdir, `faqtiv-${uuidv4()}.py`);
+  const tempFileName = path.join(tmpdir, `${uuidv4()}.py`);
   fs.writeFileSync(tempFileName, code);
+  const activateCommand = process.platform === 'win32' ?
+    `venv\\Scripts\\activate && cd ${metadataDir} && ${config.project.runtime.command} ${tempFileName}` :
+    `source venv/bin/activate && cd ${metadataDir} && ${config.project.runtime.command} ${tempFileName}`;
 
-  const activateCommand = process.platform === 'win32' ? 
-    `venv\\Scripts\\activate && cd ${metadataDir} && python3 ${tempFileName}` : 
-    `source venv/bin/activate && cd ${metadataDir} && python3 ${tempFileName}`;
-
-  execFile(
-    'bash', ['-c', activateCommand], 
-    { encoding: 'buffer' }, 
+  exec(
+    activateCommand,
     getExecutionHandler(taskName, runParameters, tempFileName, outputFilePath, errorFilePath, metadataDir)
   );
 }
@@ -89,8 +85,11 @@ function getExecutionHandler(taskName, runParameters, tempFileName, outputFilePa
     }
 
     if (error || (stderr && stderr.length > 0)) {
-      let errorDetails = `Execution error: ${error ? error.stack || error.message : ''}`;
-      fs.appendFileSync(path.join(errorFilePath), errorDetails + "\n" + stderr);
+      const errorDetails = `Execution error: ${error ? error.stack || error.message : ''}`;
+      const errorMessage = errorDetails + "\n" + stderr;
+      
+      process.stderr.write(errorMessage);
+      fs.appendFileSync(path.join(errorFilePath), errorMessage);
     }
 
     fs.unlinkSync(tempFileName);

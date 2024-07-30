@@ -5,9 +5,9 @@ import { getAllFiles } from '../lib/file-utils.js';
 import { extractFunctionCode, getFunctionParameters } from '../lib/parse-utils.js';
 import * as config from '../config.js';
 
-const tasksDir = path.join('tasks');
-const faqtivCodeMetadataDir = path.join('.faqtiv', 'code');
-const codeDir = path.join('code');
+const tasksDir = config.project.tasksDir;
+const faqtivCodeMetadataDir = config.project.metadataDir;
+const codeDir = config.project.codeDir;
 const codeFileExtension = config.project.runtime.codeFileExtension;
 
 export default function(options) {

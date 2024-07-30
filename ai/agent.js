@@ -17,7 +17,7 @@ export default class AIAgent {
     this.functionsSignatures = functionsSignatures;
   }
 
-  async generateResponse(conversation, examples) {
+  async generateResponse(conversation, examples, adHoc=false) {
     const promptMessages = conversation.map((m) => {
       if (m.role === 'user') {
         return new HumanMessage(m.message);
@@ -25,9 +25,11 @@ export default class AIAgent {
       return new AIMessage(m.message);
     });
 
-    const code = await stepGenerateAnsweringFunction(this.ai, promptMessages, this.instructions, this.functionsSignatures, examples);
+    let { code, call } = await stepGenerateAnsweringFunction(this.ai, promptMessages, this.instructions, this.functionsSignatures, examples, adHoc);
     const usedFunctions = extractFunctionNames(code);
     const functions = stepFunctionDependencies(this.ai, usedFunctions, this.functions);
+
+    if (adHoc) code = code + '\n' + call
 
     return {
       code,
