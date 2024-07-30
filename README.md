@@ -11,7 +11,7 @@ The name FAQtiv derives from an old side project that involved creating "Active 
 
 ## Requirements
 
-You will need node.js to install and run the toolkit and optionally `python3` if you are writing a python agent (unnecessary if you're writing a node.js/javascript agent).
+You will need node.js to install and run the toolkit and optionally `python` if you are writing a python agent (unnecessary if you're writing a node.js/javascript agent).
 
 ## Installation
 
@@ -47,6 +47,21 @@ faqtiv init <projectRoot> --runtime <value>
 - `--runtime <value>`: The runtime environment, either `javascript` or `python`. Defaults to `javascript`.
 
 Make sure to update the project `.env` with your OpenAI API credentials.
+
+### Configuration
+
+#### Environment Variables
+
+The toolkit uses the following environment variables:
+
+- `OPENAI_ORGANIZATION`: Your OpenAI organization ID.
+- `OPENAI_API_KEY`: Your OpenAI API key.
+- `OPENAI_MODEL`: The OpenAI model to use (defaults to 'gpt-4o' if not specified).
+- `LOG_DEBUG_AI`: Set to 'true' to enable AI debugging logs.
+- `JS_CMD`: The command to run JavaScript code (defaults to 'node' if not specified).
+- `PYTHON_CMD`: The command to run Python code (defaults to 'python' if not specified).
+
+You can set these variables in your project's `.env` file or in your system's environment.
 
 ### Getting started
 
@@ -137,6 +152,18 @@ To list all existing tasks, use the `list-tasks` command:
 ```bash
 faqtiv list-tasks
 ```
+
+### Interpreter environment
+
+#### Setup interpreter
+
+To setup the interpreter environment, use the `setup-interpreter` command:
+
+```bash
+faqtiv setup-interpreter
+```
+
+This command will install the necessary dependencies for the interpreter runtime environment.
 
 ### Managing Modules
 Modules are external javascript or pythn libraries that are required by your function libraries.
