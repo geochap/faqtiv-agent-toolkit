@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import { execFile, exec } from 'child_process';
+import { exec } from 'child_process';
 import util from 'util';
 import { mkdirpSync } from 'mkdirp';
 import * as config from '../config.js';
@@ -14,7 +14,8 @@ const { runtimeName, codeFileExtension } = config.project.runtime;
 const execAsync = util.promisify(exec);
 
 async function executeJS(tempFileName) {
-  return execAsync(config.project.runtime.command, [tempFileName], { encoding: 'buffer' });
+  const runCommand = `${config.project.runtime.command} ${tempFileName}`;
+  return execAsync(runCommand, { encoding: 'buffer' });
 }
 
 async function executePython(tempFileName) {
@@ -89,10 +90,10 @@ export default async function runAdHocTask(description) {
       const { stdout, stderr } = await executeCode(response.output.code);
       
       if (stdout) {
-        console.log(stdout.toString());
+        process.stdout.write(stdout.toString());
       }
       if (stderr && stderr.length > 0) {
-        console.error(stderr.toString());
+        process.stderr.write(stderr.toString());
         throw new Error('Execution failed');
       }
 

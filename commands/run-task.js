@@ -88,7 +88,7 @@ function getExecutionHandler(taskName, runParameters, tempFileName, outputFilePa
       const errorDetails = `Execution error: ${error ? error.stack || error.message : ''}`;
       const errorMessage = errorDetails + "\n" + stderr;
       
-      console.error(errorMessage);
+      process.stderr.write(errorMessage);
       fs.appendFileSync(path.join(errorFilePath), errorMessage);
     }
 
