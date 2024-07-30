@@ -19,7 +19,7 @@ const runtimes = {
   'javascript': 'javascript',
   'python': 'python'
 };
-const runtimeCommand = {
+export const runtimeCommands = {
   'javascript': process.env.JS_CMD || 'node',
   'python': process.env.PYTHON_CMD || 'python'
 };
@@ -47,7 +47,7 @@ if (isInitCommand || isHelpCommand) {
     runtime: {
       codeFileExtension: codeExtensions['javascript'],
       runtimeName: runtimes['javascript'],
-      command: runtimeCommand['javascript']
+      command: runtimeCommands['javascript']
     },
     modules: [],
     task_examples: [],
@@ -68,7 +68,7 @@ if (isInitCommand || isHelpCommand) {
     codeFileExtension: codeExtensions[faqtivConfig.runtime],
     runtimeName: runtimes[faqtivConfig.runtime],
     defaultModules: defaultModules[faqtivConfig.runtime],
-    command: runtimeCommand[faqtivConfig.runtime]
+    command: runtimeCommands[faqtivConfig.runtime]
   };
 
   const loadFunctions = (dir) => {
