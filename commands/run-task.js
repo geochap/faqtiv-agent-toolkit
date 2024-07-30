@@ -80,7 +80,7 @@ function getExecutionHandler(taskName, runParameters, tempFileName, outputFilePa
       if (outputFilePath) {
         fs.writeFileSync(path.join(outputFilePath), stdout);
       } else {
-        console.log(stdout);
+        process.stdout.write(stdout);
       }
     }
 

@@ -20,7 +20,7 @@ const runtimes = {
   'python': 'python'
 };
 const runtimeCommand = {
-  'javascript': process.env.JS_CMD || 'javascript',
+  'javascript': process.env.JS_CMD || 'node',
   'python': process.env.PYTHON_CMD || 'python'
 };
 const defaultModules = {
