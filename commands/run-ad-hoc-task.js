@@ -1,27 +1,28 @@
 import fs from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import { execFile } from 'child_process';
+import { execFile, exec } from 'child_process';
 import util from 'util';
+import { mkdirpSync } from 'mkdirp';
 import * as config from '../config.js';
 import { initializeVectorStore } from '../lib/vector-store.js';
 import { generateAdHocResponse } from '../controllers/code-gen.js';
 import { headersUpToDate } from './update-headers.js';
 
 const tmpdir = config.project.tmpDir;
-const { runtimeName } = config.project.runtime;
-const execFileAsync = util.promisify(execFile);
+const { runtimeName, codeFileExtension } = config.project.runtime;
+const execAsync = util.promisify(exec);
 
 async function executeJS(tempFileName) {
-  return execFileAsync('node', [tempFileName], { encoding: 'buffer' });
+  return execAsync(config.project.runtime.command, [tempFileName], { encoding: 'buffer' });
 }
 
 async function executePython(tempFileName) {
   const activateCommand = process.platform === 'win32' ? 
-    `venv\\Scripts\\activate && python3 ${tempFileName}` : 
-    `source venv/bin/activate && python3 ${tempFileName}`;
+    `venv\\Scripts\\activate && ${config.project.runtime.command} ${tempFileName}` : 
+    `source venv/bin/activate && ${config.project.runtime.command} ${tempFileName}`;
 
-  return execFileAsync('bash', ['-c', activateCommand], { encoding: 'buffer' });
+  return execAsync(activateCommand, { encoding: 'buffer' });
 }
 
 async function executeCode(code) {
@@ -35,12 +36,15 @@ async function executeCode(code) {
     throw new Error(`Unknown runtime "${runtimeName}"`);
   }
 
-  const tempFileName = path.join(tmpdir, `faqtiv-${uuidv4()}.js`);
+  const tempFileName = path.join(tmpdir, `${uuidv4()}${codeFileExtension}`);
   fs.writeFileSync(tempFileName, code);
 
   try {
     const { stdout, stderr } = await executeCodeFn(tempFileName);
     return { stdout, stderr };
+  } catch (error) {
+    console.error(error);
+    throw error;
   } finally {
     fs.unlinkSync(tempFileName);
   }
@@ -79,14 +83,16 @@ export default async function runAdHocTask(description) {
         errors,
         previousCode
       );
+
+      if (!fs.existsSync(tmpdir)) mkdirpSync(tmpdir);
     
       const { stdout, stderr } = await executeCode(response.output.code);
       
       if (stdout) {
-        process.stdout.write(stdout);
+        console.log(stdout.toString());
       }
       if (stderr && stderr.length > 0) {
-        process.stderr.write(stderr);
+        console.error(stderr.toString());
         throw new Error('Execution failed');
       }
 

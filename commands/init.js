@@ -24,7 +24,7 @@ const runtimeGitIgnore = {
   python: 'venv/'
 };
 
-function initJS(baseDir) {
+export function initJS(baseDir) {
   // Create package.json for npm project
   execSync('npm init -y', { cwd: baseDir, stdio: 'ignore' });
     
@@ -32,12 +32,12 @@ function initJS(baseDir) {
   // execSync('npm install <package_name>', { cwd: baseDir, stdio: 'ignore' });
 }
 
-function initPython(baseDir) {
+export function initPython(baseDir) {
   // Create a requirements.txt file
   fs.writeFileSync(`${baseDir}/requirements.txt`, '');
           
   // Setup virtual environment
-  execSync('python3 -m venv venv', { cwd: baseDir, stdio: 'ignore' });
+  execSync(`${config.project.runtime.command} -m venv venv`, { cwd: baseDir, stdio: 'ignore' });
 }
 
 export default async function(projectRoot, options) {
