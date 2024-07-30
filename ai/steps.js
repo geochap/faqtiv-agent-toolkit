@@ -2,17 +2,20 @@ import { HumanMessage, AIMessage } from '@langchain/core/messages';
 
 import { generateAnsweringFunctionPrompt } from './prompts/generate-answering-function.js';
 import { generateAnswerDescriptionPrompt } from './prompts/generate-answer-description.js';
-import { extractFunctionCall, extractFunctionCode } from '../lib/parse-utils.js';
+import { extractFunctionCode } from '../lib/parse-utils.js';
 import { improveFunctionSignaturesPrompt } from './prompts/improve-function-signatures.js';
 
 function codeResponse(response) {
   try {
     if (response.includes('The request cannot be fulfilled using the available functions')) {
-      throw new Error('AI response: ' + response);
+      throw new Error('AI error: ' + response);
     }
 
     const code = extractFunctionCode(response, 'doTask');
-    const call = extractFunctionCall(response, 'doTask');
+    // const call = extractFunctionCall(response, 'doTask');
+    // note: this is only needed for ad hoc and values are hardcoded as of the latest prompt instructions
+    //       may need to change to support more languages or parametrized calls
+    const call = 'doTask()';
 
     if (!code) {
       console.warn('Could not generate an answer from AI response');
