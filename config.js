@@ -10,7 +10,8 @@ dotenv.config();
 const projectWorkdir = path.join(process.cwd(), '.faqtiv');
 const isInProjectDir = fs.existsSync(projectWorkdir);
 const isInitCommand = process.argv.includes('init');
-const isHelpCommand = process.argv.includes('help') || process.argv.length === 2;
+const isHelpCommand = process.argv.includes('--help') || process.argv.length === 2;
+const isVersionCommand = process.argv.includes('--version');
 const codeExtensions = {
   'javascript': '.js',
   'python': '.py'
@@ -38,7 +39,7 @@ let loggingConfig = {
   LOG_DEBUG_AI: process.env.LOG_DEBUG_AI == 'true'
 };
 
-if (isInitCommand || isHelpCommand) {
+if (isInitCommand || isHelpCommand || isVersionCommand) {
   projectConfig = {
     customInstructions: '',
     functionsHeader: {},
