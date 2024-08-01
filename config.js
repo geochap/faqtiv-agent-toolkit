@@ -138,7 +138,8 @@ if (isInitCommand || isHelpCommand || isVersionCommand) {
     outputsDir: path.join(process.cwd(), 'outputs'),
     functionsDir: path.join(process.cwd(), 'functions'),
     headerPath: path.join(projectWorkdir, 'functions-header.yml'),
-    tmpDir: path.join(projectWorkdir, 'tmp')
+    tmpDir: path.join(projectWorkdir, 'tmp'),
+    logsDir: path.join(process.cwd(), 'logs')
   };
 }
 

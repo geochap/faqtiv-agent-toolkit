@@ -17,6 +17,7 @@ const gitIgnore = `
 outputs/*
 .faqtiv/tmp/*
 .env
+logs/
 `;
 const runtimeGitIgnore = {
   javascript: 'node_modules/',
