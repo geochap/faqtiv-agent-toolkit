@@ -14,9 +14,9 @@ OPENAI_MODEL=<openai_model>
 LOG_DEBUG_AI=false
 `;
 const gitIgnore = `
-outputs/*
 .faqtiv/tmp/*
 .env
+logs/
 `;
 const runtimeGitIgnore = {
   javascript: 'node_modules/',
@@ -62,7 +62,6 @@ export default async function(projectRoot, options) {
     `${baseDir}/.faqtiv/tmp`,
     `${baseDir}/tasks`,
     `${baseDir}/code`,
-    `${baseDir}/outputs`,
     `${baseDir}/functions`,
     `${baseDir}/libs`
   ];

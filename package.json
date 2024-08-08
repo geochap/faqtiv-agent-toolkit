@@ -26,6 +26,7 @@
     "js-yaml": "^4.1.0",
     "jsdoc-to-markdown": "^8.0.1",
     "langchain": "^0.2.0",
+    "log4js": "^6.9.1",
     "mkdirp": "^3.0.1",
     "openai": "^4.47.1",
     "python-ast": "^0.1.0",

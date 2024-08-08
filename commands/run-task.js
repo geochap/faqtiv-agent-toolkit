@@ -1,17 +1,16 @@
 import fs from 'fs';
 import path from 'path';
-import yaml from 'js-yaml';
 import { execFile, exec } from 'child_process';
 import { v4 as uuidv4 } from 'uuid';
 import { mkdirpSync } from 'mkdirp';
 import * as config from '../config.js';
 import { extractFunctionCode, getFunctionParameters } from '../lib/parse-utils.js';
+import { log, logErr } from '../lib/log4j.js';
 
 const tmpdir = config.project.tmpDir;
 const faqtivCodeMetadataDir = config.project.metadataDir;
 const tasksDir = config.project.tasksDir;
 const codeDir = config.project.codeDir;
-const outputsDir = config.project.outputsDir;
 const { codeFileExtension, runtimeName } = config.project.runtime;
 
 function getParametrizedCode(code, parameters) {
@@ -30,37 +29,31 @@ function getRunnableCode(code, runParameters) {
   return getParametrizedCode(code, runParameters);
 }
 
-function saveMetadata(metadataDir, metadata) {
-  const metadataFilePath = path.join(metadataDir, 'metadata.yaml');
-  const yamlContent = yaml.dump(metadata);
-  fs.writeFileSync(metadataFilePath, yamlContent);
-}
-
-function executeJS(taskName, code, runParameters, outputFilePath, errorFilePath, metadataDir) {
+function executeJS(taskName, code, runParameters, outputFilePath, errorFilePath, execOptions) {
   const tempFileName = path.join(tmpdir, `${uuidv4()}.js`);
   fs.writeFileSync(tempFileName, code);
 
   execFile(
     config.project.runtime.command, [tempFileName], 
-    { cwd: metadataDir, encoding: 'buffer' }, 
-    getExecutionHandler(taskName, runParameters, tempFileName, outputFilePath, errorFilePath, metadataDir)
+    execOptions, 
+    getExecutionHandler(taskName, runParameters, tempFileName, outputFilePath, errorFilePath)
   );
 }
 
-function executePython(taskName, code, runParameters, outputFilePath, errorFilePath, metadataDir) {
+function executePython(taskName, code, runParameters, outputFilePath, errorFilePath, execOptions) {
   const tempFileName = path.join(tmpdir, `${uuidv4()}.py`);
   fs.writeFileSync(tempFileName, code);
   const activateCommand = process.platform === 'win32' ?
-    `venv\\Scripts\\activate && cd ${metadataDir} && ${config.project.runtime.command} ${tempFileName}` :
-    `source venv/bin/activate && cd ${metadataDir} && ${config.project.runtime.command} ${tempFileName}`;
+    `venv\\Scripts\\activate && cd ${execOptions.cwd} && ${config.project.runtime.command} ${tempFileName}` :
+    `source venv/bin/activate && cd ${execOptions.cwd} && ${config.project.runtime.command} ${tempFileName}`;
 
   exec(
     activateCommand,
-    getExecutionHandler(taskName, runParameters, tempFileName, outputFilePath, errorFilePath, metadataDir)
+    getExecutionHandler(taskName, runParameters, tempFileName, outputFilePath, errorFilePath)
   );
 }
 
-function getExecutionHandler(taskName, runParameters, tempFileName, outputFilePath, errorFilePath, metadataDir) {
+function getExecutionHandler(taskName, runParameters, tempFileName, outputFilePath, errorFilePath) {
   const startTime = new Date();
 
   return (error, stdout, stderr) => {
@@ -73,7 +66,7 @@ function getExecutionHandler(taskName, runParameters, tempFileName, outputFilePa
       task_parameters: runParameters,
       run_time: `${runtime} seconds`,
       output_file: outputFilePath || 'stdout',
-      error_file: errorFilePath
+      error_file: errorFilePath || 'stderr'
     };
 
     if (stdout) {
@@ -87,18 +80,22 @@ function getExecutionHandler(taskName, runParameters, tempFileName, outputFilePa
     if (error || (stderr && stderr.length > 0)) {
       const errorDetails = `Execution error: ${error ? error.stack || error.message : ''}`;
       const errorMessage = errorDetails + "\n" + stderr;
-      
-      process.stderr.write(errorMessage);
-      fs.appendFileSync(path.join(errorFilePath), errorMessage);
+
+      if (errorFilePath) {
+        fs.writeFileSync(path.join(errorFilePath), errorMessage);
+      } else {
+        logErr('run-task', taskName, { task_name: taskName, task_parameters: runParameters }, error);
+        process.stderr.write(errorMessage);
+      }
+    } else {
+      log('run-task', taskName, metadata);
     }
 
     fs.unlinkSync(tempFileName);
-
-    saveMetadata(metadataDir, metadata);
   };
 }
 
-function executeCode(taskName, code, runParameters, outputFilePath, errorFilePath, metadataDir) {
+function executeCode(taskName, code, runParameters, outputFilePath, errorFilePath, execOptions) {
   const executeCodeFns = {
     javascript: executeJS,
     python: executePython
@@ -109,17 +106,15 @@ function executeCode(taskName, code, runParameters, outputFilePath, errorFilePat
     console.error(`Unknown runtime "${runtimeName}"`);
     process.exit(1);
   }
-  executeCodeFn(taskName, code, runParameters, outputFilePath, errorFilePath, metadataDir);
+  executeCodeFn(taskName, code, runParameters, outputFilePath, errorFilePath, execOptions);
 }
 
 export default function(taskName, ...args) {
   const runParameters = args[0];
   const options = args[1];
-
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const outputFilePath = options.output || null;
-  const defaultOutputDir = path.join(outputsDir, `${taskName}`, timestamp);
-  const errorFilePath = options.error || `${defaultOutputDir}/err.log`;
+  const errorFilePath = options.error || null;
+  const filesOutputDir = options.files ? path.resolve(options.files) : null;
 
   const taskFile = path.join(tasksDir, `${taskName}.txt`);
   if (!fs.existsSync(taskFile)) {
@@ -140,13 +135,18 @@ export default function(taskName, ...args) {
     process.exit(1);
   }
 
-  fs.mkdirSync(defaultOutputDir, { recursive: true });
   if (!fs.existsSync(tmpdir)) mkdirpSync(tmpdir);
+  if (filesOutputDir && !fs.existsSync(filesOutputDir)) mkdirpSync(filesOutputDir);
+
+  const execOptions = {
+    cwd: filesOutputDir || process.cwd(),
+    encoding: 'buffer'
+  };
 
   console.warn(`\nRun process initiated for ${taskName} (${runParameters.join(', ')})...\n`);
   if (outputFilePath) console.warn(`Result will be stored in ${outputFilePath}`);
-  console.warn(`Error log will be stored in ${errorFilePath}`);
-  console.warn(`Metadata will be stored in ${defaultOutputDir}/metadata.yaml`);
+  if (errorFilePath) console.warn(`Error log will be stored in ${errorFilePath}`);
+  if (filesOutputDir) console.warn(`Working directory changed to ${filesOutputDir}`);
 
-  executeCode(taskName, code, runParameters, outputFilePath, errorFilePath, defaultOutputDir);
+  executeCode(taskName, code, runParameters, outputFilePath, errorFilePath, execOptions);
 }
