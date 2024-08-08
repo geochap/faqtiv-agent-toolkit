@@ -24,6 +24,7 @@ Improve the existing signatures or add missing ones for all functions applying t
 - If a function returns an array or list of objects or dicts, you MUST specify ALL of the properties of the returned objects either in the return type or the description. List all properties. Do not list some and say etc.
 - These signatures will be later used for code generation so keep that in mind when filling in any missing signature components, all relevant information for proper function usage is needed.
 - Reply back with the list of signatures without any other additional text, leave out the functions and annotations.
+- The signatures must be plain text with the following structure: function_name(parameters) : return_type - description
 `;
 
   return prompt;

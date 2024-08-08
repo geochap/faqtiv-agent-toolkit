@@ -8,7 +8,7 @@ import { headersUpToDate } from './update-headers.js';
 import { getAllFiles } from '../lib/file-utils.js';
 import migrateDry, { getOutdatedItems } from './migrate-dry.js';
 import * as config from '../config.js';
-import { getFunctionDependencies } from '../ai/steps.js';
+import { getFunctionDependencies } from '../ai/code-agent.js';
 import { encodeBase64 } from '../lib/base64.js';
 import addExample from './add-example.js';
 

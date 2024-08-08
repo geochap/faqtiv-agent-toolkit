@@ -5,7 +5,7 @@ import jsdoc2md from 'jsdoc-to-markdown';
 import * as config from '../config.js';
 import { getTaskEmbedding } from '../controllers/code-gen.js';
 import { encodeBase64 } from '../lib/base64.js';
-import AIAgent from '../ai/agent.js';
+import CodeAgent from '../ai/code-agent.js';
 
 const functionsDir = config.project.functionsDir;
 const headerPath = config.project.headerPath;
@@ -58,7 +58,7 @@ export default async function() {
     }
 
     const { instructions, functions, functionsHeader } = config.project;
-    const aiAgent = new AIAgent('code-gen-demo', instructions, functions, functionsHeader ? functionsHeader.signatures : '', config.openai);
+    const aiAgent = new CodeAgent('code-gen-demo', instructions, functions, functionsHeader ? functionsHeader.signatures : '', config.openai);
 
     const functionsCode = fullPaths.map(file => fs.readFileSync(file, 'utf8'));
     const improvedSignatures = await aiAgent.improveFunctionSignatures(functionsCode, signatures);

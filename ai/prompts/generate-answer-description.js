@@ -1,5 +1,4 @@
 export function generateAnswerDescriptionPrompt(taskName, code) {
-  console.log(taskName)
   const prompt = `
 Given the doTask function in the following code, generate a function schema compatible with OpenAI function tool schema applying the instructions below.
 
