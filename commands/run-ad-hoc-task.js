@@ -10,6 +10,7 @@ import { generateAdHocResponse } from '../controllers/code-gen.js';
 import { headersUpToDate } from './update-headers.js';
 
 const tmpdir = config.project.tmpDir;
+const logDir = path.join(config.project.logsDir, 'adhoc-tasks');
 const { runtimeName, codeFileExtension } = config.project.runtime;
 const execAsync = util.promisify(exec);
 
@@ -51,6 +52,31 @@ async function executeCode(code) {
   }
 }
 
+function createLogFile(description, code, result, error = null) {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const logFileName = path.join(logDir, `${timestamp}${error ? '-error' : ''}.log`);
+  const delimiter = '\n\n---\n\n';
+
+  let prettyResult;
+  try {
+    const parsedResult = JSON.parse(result);
+    prettyResult = JSON.stringify(parsedResult, null, 2);
+  } catch (e) {
+    prettyResult = result;
+  }
+
+  const logContent = [
+    `Description: \n\n ${description}`,
+    delimiter,
+    `Code: \n\n ${code}`,
+    delimiter,
+    `Result: \n\n ${prettyResult}`,
+    error ? `${delimiter}Error: ${error.stack}` : ''
+  ].join('');
+
+  fs.writeFileSync(logFileName, logContent);
+}
+
 export default async function runAdHocTask(description) {
   const maxRetries = 3;
   let retryCount = 0;
@@ -86,6 +112,7 @@ export default async function runAdHocTask(description) {
       );
 
       if (!fs.existsSync(tmpdir)) mkdirpSync(tmpdir);
+      if (!fs.existsSync(logDir)) mkdirpSync(logDir);
     
       const { stdout, stderr } = await executeCode(response.output.code);
       
@@ -97,6 +124,7 @@ export default async function runAdHocTask(description) {
         throw new Error('Execution failed');
       }
 
+      createLogFile(description, response.output.code, stdout.toString());
       return;
     } catch (error) {
       console.error(`Error during execution (attempt ${retryCount + 1}):`, error);
@@ -105,6 +133,7 @@ export default async function runAdHocTask(description) {
 
       if (retryCount > maxRetries) {
         console.error(`Max retries (${maxRetries}) reached. Aborting.`);
+        createLogFile(description, response ? response.output.code : 'N/A', 'N/A', error);
         throw error;
       }
 

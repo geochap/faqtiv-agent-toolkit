@@ -135,10 +135,10 @@ if (isInitCommand || isHelpCommand || isVersionCommand) {
     metadataDir: path.join(projectWorkdir, 'code'),
     tasksDir: path.join(process.cwd(), 'tasks'),
     codeDir: path.join(process.cwd(), 'code'),
-    outputsDir: path.join(process.cwd(), 'outputs'),
     functionsDir: path.join(process.cwd(), 'functions'),
     headerPath: path.join(projectWorkdir, 'functions-header.yml'),
-    tmpDir: path.join(projectWorkdir, 'tmp')
+    tmpDir: path.join(projectWorkdir, 'tmp'),
+    logsDir: path.join(process.cwd(), 'logs')
   };
 }
 

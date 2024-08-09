@@ -1,3 +1,4 @@
 outputs/*
 .faqtiv/tmp/*
 .env
+logs/
