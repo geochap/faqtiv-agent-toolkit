@@ -20,8 +20,8 @@ Generate a python langchain tools definition script. Apply the following require
 - From SIGNATURES extract the function description to be added to the tool function body
 - From FUNCTIONS use the code to define the functions as tools
 - For any complex tool function argument types like classes from third party dependencies use "Any" as a type instead
-- Do not include any imports in the response just the function definitions
-- Make sure that every function definition has the @tool decorator
+- Make sure that every function definition has the @tool decorator and the description but do not modify the function any further
+- For dependency imports only add the imports in the function "imports" property and nothing else
 - The end result should be a valid python script where each function looks like the original but has the @tool decorator, has a description in the first line of the function body and any complex type arguments are replaced with "Any"
 - Do not wrap the response in a code block or add anything else besides the script's code
 `;
