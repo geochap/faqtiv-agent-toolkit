@@ -11,18 +11,21 @@ const functionsDir = config.project.functionsDir;
 const headerPath = config.project.headerPath;
 const { runtimeName, codeFileExtension } = config.project.runtime;
 
-export default async function() {
+export default async function(options) {
+  const force = options.force;
   try {
     if (!fs.existsSync(functionsDir) || fs.readdirSync(functionsDir).filter(file => file.endsWith(codeFileExtension)).length === 0) {
       console.log('No functions found, nothing to do');
       return;
     }
 
-    let headersUpdated = headersUpToDate();
+    if (!force) {
+      let headersUpdated = headersUpToDate();
 
-    if (headersUpdated) {
-      console.log('Functions up to date, nothing to do');
-      return;
+      if (headersUpdated) {
+        console.log('Functions up to date, nothing to do');
+        return;
+      }
     }
 
     const functionFiles = fs.readdirSync(functionsDir).filter(file => file.endsWith(codeFileExtension));
@@ -58,14 +61,19 @@ export default async function() {
     }
 
     const { instructions, functions, functionsHeader } = config.project;
-    const aiAgent = new CodeAgent('code-gen-demo', instructions, functions, functionsHeader ? functionsHeader.signatures : '', config.openai);
+    const codeAgent = new CodeAgent('code-gen-demo', instructions, functions, functionsHeader ? functionsHeader.signatures : '', config.openai);
 
     const functionsCode = fullPaths.map(file => fs.readFileSync(file, 'utf8'));
-    const improvedSignatures = await aiAgent.improveFunctionSignatures(functionsCode, signatures);
+    const improvedSignatures = await codeAgent.improveFunctionSignatures(functionsCode, signatures);
     const headersEmbedding = encodeBase64(await getTaskEmbedding(improvedSignatures));
+    const functionToolSchemas = await codeAgent.generateLangchainToolSchemas(improvedSignatures);
 
     // Write to header file
-    fs.writeFileSync(headerPath, yaml.dump({ signatures: improvedSignatures, embedding: headersEmbedding }), 'utf8');
+    fs.writeFileSync(headerPath, yaml.dump({
+      signatures: improvedSignatures,
+      embedding: headersEmbedding,
+      function_tool_schemas: functionToolSchemas
+    }), 'utf8');
     console.log('Function signatures header updated');
   } catch (error) {
     console.error('Error generating headers:', error);

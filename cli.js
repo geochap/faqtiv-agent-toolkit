@@ -32,6 +32,7 @@ program
 
 program
   .command('update-headers')
+  .option('--force', 'Force update headers')
   .description('Generate function signatures header')
   .action(updateHeaders);
 
