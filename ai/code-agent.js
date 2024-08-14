@@ -5,6 +5,7 @@ import { generateAnsweringFunctionPrompt } from './prompts/generate-answering-fu
 import { generateAnswerDescriptionPrompt } from './prompts/generate-answer-description.js';
 import { extractFunctionCode } from '../lib/parse-utils.js';
 import { improveFunctionSignaturesPrompt } from './prompts/improve-function-signatures.js';
+import { generateLangchainToolSchemasPrompt } from './prompts/generate-langchain-tool-schemas.js';
 
 function codeResponse(response) {
   try {
@@ -96,9 +97,9 @@ export default class CodeAgent {
     };
   }
 
-  async generateTaskSchema(taskName, code) {
+  async generateTaskSchema(taskName, code, functionName = 'doTask') {
     const prompt = [
-      new HumanMessage(generateAnswerDescriptionPrompt(taskName, code))
+      new HumanMessage(generateAnswerDescriptionPrompt(taskName, code, functionName))
     ];
     const messages = await this.ai.start(null, prompt, [], 'generate-task-schema');
     const response = messages[messages.length - 1].content.trim();
@@ -106,7 +107,17 @@ export default class CodeAgent {
     return response;
   }
 
-  async improveFunctionSignatures(functionsCode, signatures) {
+  async generateLangchainToolSchemas(functionSignatures) {
+    const prompt = [
+      new HumanMessage(generateLangchainToolSchemasPrompt(functionSignatures))
+    ];
+    const messages = await this.ai.start(null, prompt, [], 'generate-langchain-function-schemas');
+    const response = messages[messages.length - 1].content.trim();
+  
+    return response;
+  }
+
+  async improveFunctionSignatures(functionsCode, signatures, examples = []) {
     examples = examples.flatMap(e => {
       return [
         new HumanMessage(e.task),
