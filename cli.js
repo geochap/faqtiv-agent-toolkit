@@ -18,7 +18,7 @@ import removeModule from './commands/remove-module.js';
 import listModules from './commands/list-modules.js';
 import printDesktopInstructions from './commands/print-desktop-instructions.js';
 import setupInterpreter from './commands/setup-interpreter.js';
-import exportLangchain from './commands/export-langchain.js';
+import exportStandalone from './commands/export-standalone.js';
 
 program
   .version(config.version)
@@ -130,9 +130,9 @@ program
   .action(setupInterpreter);
 
 program
-  .command('export-langchain')
-  .description('Export to langchain agent')
-  .action(exportLangchain);
+  .command('export-standalone')
+  .description('Export to standalone agent')
+  .action(exportStandalone);
 
 program
   .on('--help', () => {
