@@ -4,24 +4,28 @@ import { getAllFiles } from '../lib/file-utils.js';
 import { extractFunctionCode } from '../lib/parse-utils.js';
 import fs from 'fs';
 import path from 'path';
+import yaml from 'js-yaml';
 
 const { runtimeName, codeFileExtension } = config.project.runtime;
-const { codeDir } = config.project;
+const { codeDir, metadataDir, tasksDir } = config.project;
 
-function agentTemplate(imports, functions, libs, tasks, tool_schemas, instructions, signatures) {
+function agentTemplate(imports, functions, libs, tasks, tool_schemas, instructions, signatures, examples) {
   return `import os
 import requests
 import argparse
 from typing import List, Dict, Union, Any, Optional
 from pydantic import create_model
 from langchain_core.tools import StructuredTool
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate, FewShotChatMessagePromptTemplate
 from langchain.agents import AgentExecutor, create_tool_calling_agent
-from langchain_openai import ChatOpenAI
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain_community.vectorstores import FAISS
 import asyncio
 import io
 import json
 from contextlib import redirect_stdout
+import base64
+import numpy as np
 
 # Agent lib and functions dependencies
 ${imports.join('\n')}
@@ -37,6 +41,67 @@ ${tasks.join('\n')}
 
 # Tool schemas
 tool_schemas = ${tool_schemas}
+
+# Examples with pre-computed embeddings
+examples_with_embeddings = ${JSON.stringify(examples, null, 2)}
+
+# Initialize embeddings
+embeddings = OpenAIEmbeddings()
+
+# Function to decode base64 embeddings
+def decode_base64_embedding(b64_string):
+    decoded_bytes = base64.b64decode(b64_string)
+    return np.frombuffer(decoded_bytes, dtype=np.float32)
+
+# Create vector store from pre-computed embeddings
+texts = [json.dumps({**example['document'], 'embedding': None}) for example in examples_with_embeddings]
+embeddings_list = [decode_base64_embedding(example['taskEmbedding']) for example in examples_with_embeddings]
+metadatas = [{}] * len(examples_with_embeddings)
+
+# Clean up embeddings
+# TODO: this is a hack to fix the issue of embeddings being too short, find why embeddings are invalid for some examples
+maxlen = max(len(e) for e in embeddings_list)
+clean_embeddings = []
+clean_texts = []
+clean_metadatas = []
+
+for i, embedding in enumerate(embeddings_list):
+    if len(embedding) == maxlen:
+        clean_embeddings.append(embedding)
+        clean_texts.append(texts[i])
+        clean_metadatas.append(metadatas[i])
+
+# Convert list of numpy arrays to 2D numpy array
+embeddings_array = np.array(clean_embeddings)
+
+vector_store = FAISS.from_embeddings(
+    text_embeddings=list(zip(clean_texts, embeddings_array)),
+    embedding=embeddings,
+    metadatas=clean_metadatas
+)
+
+def get_relevant_examples(query: str, k: int = 10) -> List[Dict]:
+    # Generate embedding for the query
+    query_embedding = embeddings.embed_query(query)
+    
+    # Ensure the query embedding has the same dimension as the stored embeddings
+    if len(query_embedding) != vector_store.index.d:
+        print(f"Warning: Query embedding dimension ({len(query_embedding)}) does not match index dimension ({vector_store.index.d})")
+        # Pad or truncate the query embedding to match the index dimension
+        query_embedding = query_embedding[:vector_store.index.d] + [0] * max(0, vector_store.index.d - len(query_embedding))
+    
+    # Perform vector search
+    results = vector_store.similarity_search_by_vector(query_embedding, k=k)
+
+    relevant_examples = []
+    for doc in results:
+        example = json.loads(doc.page_content)
+        relevant_examples.append({
+            "task": example["task"],
+            "code": example["code"]
+        })
+    
+    return relevant_examples
 
 # Create tool instances based on schema
 def create_tools_from_schemas(schemas: Dict[str, Dict[str, Any]]) -> List[StructuredTool]:
@@ -68,6 +133,12 @@ prompt = ChatPromptTemplate.from_messages(
         ("placeholder", "{chat_history}"),
         ("human", "{input}"),
         ("placeholder", "{agent_scratchpad}"),
+    ]
+)
+example_prompt = ChatPromptTemplate.from_messages(
+    [
+        ("human", "{task}"),
+        ("ai", "{code}"),
     ]
 )
 
@@ -119,6 +190,13 @@ async def run_adhoc_endpoint(request: Request):
     errors = []
     previous_code = None
 
+    # Get relevant examples
+    relevant_examples = get_relevant_examples(user_input)
+    few_shot_prompt = FewShotChatMessagePromptTemplate(
+        example_prompt=example_prompt,
+        examples=relevant_examples,
+    )
+
     while retry_count <= max_retries:
         try:
             # Prepare the prompt with error information if available
@@ -129,10 +207,19 @@ async def run_adhoc_endpoint(request: Request):
                     error_context += f"Previous code:\\n{previous_code}\\n"
                 error_context += "Please fix the issue and try again.\\n"
 
-            formatted_prompt = prompt.format_messages(
+            current_prompt = ChatPromptTemplate.from_messages(
+                [
+                    ("system", promptText),
+                    ("placeholder", "{chat_history}"),
+                    few_shot_prompt,
+                    ("human", "{input}"),
+                    ("placeholder", "{agent_scratchpad}"),
+                ]
+            )
+            formatted_prompt = current_prompt.format(
                 input=f"{error_context}{user_input}",
                 chat_history=[],
-                agent_scratchpad=[]
+                agent_scratchpad=[],
             )
             
             response = await llm.ainvoke(formatted_prompt)
@@ -140,6 +227,8 @@ async def run_adhoc_endpoint(request: Request):
             
             if not function_code:
                 raise ValueError("Failed to generate function code")
+            if function_code:
+                previous_code = function_code
             
             result = await capture_and_process_output(execute_generated_function, function_code)
             return JSONResponse(content={"result": result})
@@ -155,8 +244,6 @@ async def run_adhoc_endpoint(request: Request):
                 return JSONResponse(content={"error": f"Max retries reached. Last error: {error_message}"}, status_code=500)
 
             print(f"Retrying... (attempt {retry_count} of {max_retries})")
-            if function_code:
-                previous_code = function_code
 
     # This line should never be reached, but just in case
     return JSONResponse(content={"error": "Unexpected error occurred"}, status_code=500)
@@ -294,6 +381,39 @@ function getTaskFunctions() {
   return taskFunctions;
 }
 
+function getExamples() {
+  const examples = [];
+  const exampleNames = config.project.taskExamples;
+
+  for (const name of exampleNames) {
+    const ymlFilePath = path.join(metadataDir, `${name}.yml`);
+    const txtFilePath = path.join(tasksDir, `${name}.txt`);
+    const jsFilePath = path.join(codeDir, `${name}${codeFileExtension}`);
+
+    if (!fs.existsSync(ymlFilePath) || !fs.existsSync(txtFilePath) || !fs.existsSync(jsFilePath)) {
+    console.warn(`Skipping example "${name}" due to missing files.`);
+    continue;
+    }
+
+    const yamlContent = yaml.load(fs.readFileSync(ymlFilePath, 'utf8'));
+    const taskText = fs.readFileSync(txtFilePath, 'utf8');
+    const jsFileContent = fs.readFileSync(jsFilePath, 'utf8');
+    const doTaskCodeString = extractFunctionCode(jsFileContent, 'doTask');
+
+    examples.push({
+    taskEmbedding: yamlContent.embedding,
+    functionsEmbedding: yamlContent.functions_embedding,
+    document: {
+        id: yamlContent.id,
+        task: taskText,
+        code: doTaskCodeString
+    }
+    });
+  }
+
+  return examples;
+}
+
 export default async function exportStandalone() {
   const { instructions, libs, functions, functionsHeader } = config.project;
 
@@ -307,10 +427,20 @@ export default async function exportStandalone() {
   const libsCode = libs.map(l => l.code);
   const imports = [...new Set(libs.concat(functions).flatMap(f => f.imports))];
   const taskFunctions = getTaskFunctions();
+  const examples = getExamples();
 
-  const agentCode = agentTemplate(imports, functionsCode, libsCode, taskFunctions, tool_schemas, instructions, functionsHeader.signatures);
+  const agentCode = agentTemplate(
+    imports, 
+    functionsCode, 
+    libsCode, 
+    taskFunctions, 
+    tool_schemas, 
+    instructions, 
+    functionsHeader.signatures, 
+    examples
+  );
 
-  console.log('exporting standalone agent...');
-  console.log('Warning: tasks will use the latest version of the functions and libs, migrate outdated tasks to avoid unexpected errors.');
+//   console.log('exporting standalone agent...');
+//   console.log('Warning: tasks will use the latest version of the functions and libs, migrate outdated tasks to avoid unexpected errors.');
   console.log(agentCode);
 }
