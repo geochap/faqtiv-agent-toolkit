@@ -20,12 +20,15 @@ from langchain_core.prompts import ChatPromptTemplate, FewShotChatMessagePromptT
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
+from openai import OpenAI
 import asyncio
 import io
 import json
 from contextlib import redirect_stdout
 import base64
 import numpy as np
+
+EXPECTED_EMBEDDING_DIMENSION = 1536
 
 # Agent lib and functions dependencies
 ${imports.join('\n')}
@@ -48,10 +51,22 @@ examples_with_embeddings = ${JSON.stringify(examples, null, 2)}
 # Initialize embeddings
 embeddings = OpenAIEmbeddings()
 
-# Function to decode base64 embeddings
 def decode_base64_embedding(b64_string):
     decoded_bytes = base64.b64decode(b64_string)
-    return np.frombuffer(decoded_bytes, dtype=np.float32)
+    embedding = np.frombuffer(decoded_bytes, dtype=np.float32)
+    
+    if len(embedding) != EXPECTED_EMBEDDING_DIMENSION:
+        print(f"Warning: Decoded embedding has unexpected dimension: {len(embedding)}. Adjusting to {EXPECTED_EMBEDDING_DIMENSION}.")
+        return adjust_embedding_dimension(embedding)
+    
+    return embedding
+
+def adjust_embedding_dimension(embedding, target_dim=EXPECTED_EMBEDDING_DIMENSION):
+    if len(embedding) < target_dim:
+        return np.pad(embedding, (0, target_dim - len(embedding)), 'constant')
+    elif len(embedding) > target_dim:
+        return embedding[:target_dim]
+    return embedding
 
 # Create vector store from pre-computed embeddings
 texts = [json.dumps({**example['document'], 'embedding': None}) for example in examples_with_embeddings]
@@ -80,16 +95,22 @@ vector_store = FAISS.from_embeddings(
     metadatas=clean_metadatas
 )
 
+# Initialize OpenAI client
+client = OpenAI()
+
+def get_embedding(text, model="text-embedding-ada-002"):
+    text = text.replace("\\n", " ")
+    return client.embeddings.create(input = [text], model=model).data[0].embedding
+
 def get_relevant_examples(query: str, k: int = 10) -> List[Dict]:
-    # Generate embedding for the query
-    query_embedding = embeddings.embed_query(query)
+    # Generate embedding for the query using the same model as stored embeddings
+    query_embedding = get_embedding(query)
     
-    # Ensure the query embedding has the same dimension as the stored embeddings
-    if len(query_embedding) != vector_store.index.d:
-        print(f"Warning: Query embedding dimension ({len(query_embedding)}) does not match index dimension ({vector_store.index.d})")
-        # Pad or truncate the query embedding to match the index dimension
-        query_embedding = query_embedding[:vector_store.index.d] + [0] * max(0, vector_store.index.d - len(query_embedding))
-    
+    # Ensure the query embedding has the correct dimension
+    if len(query_embedding) != EXPECTED_EMBEDDING_DIMENSION:
+        print(f"Warning: Query embedding dimension ({len(query_embedding)}) does not match expected dimension ({EXPECTED_EMBEDDING_DIMENSION})")
+        query_embedding = adjust_embedding_dimension(query_embedding)
+ 
     # Perform vector search
     results = vector_store.similarity_search_by_vector(query_embedding, k=k)
 

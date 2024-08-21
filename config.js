@@ -52,7 +52,14 @@ if (isInitCommand || isHelpCommand || isVersionCommand) {
     },
     modules: [],
     task_examples: [],
-    auto_add_examples: true
+    auto_add_examples: true,
+    metadataDir: path.join(projectWorkdir, 'code'),
+    tasksDir: path.join(process.cwd(), 'tasks'),
+    codeDir: path.join(process.cwd(), 'code'),
+    functionsDir: path.join(process.cwd(), 'functions'),
+    headerPath: path.join(projectWorkdir, 'functions-header.yml'),
+    tmpDir: path.join(projectWorkdir, 'tmp'),
+    logsDir: path.join(process.cwd(), 'logs')
   };
 } else {
   if (!isInProjectDir) {
