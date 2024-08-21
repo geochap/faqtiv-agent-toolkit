@@ -1,3 +1,4 @@
+import { generateAnsweringFunctionPrompt } from '../ai/prompts/generate-answering-function.js';
 import * as config from '../config.js';
 import { getAllFiles } from '../lib/file-utils.js';
 import { extractFunctionCode } from '../lib/parse-utils.js';
@@ -7,7 +8,7 @@ import path from 'path';
 const { runtimeName, codeFileExtension } = config.project.runtime;
 const { codeDir } = config.project;
 
-function agentTemplate(imports, functions, libs, tasks, tool_schemas, instructions, desktopInstructions) {
+function agentTemplate(imports, functions, libs, tasks, tool_schemas, instructions, signatures) {
   return `import os
 import requests
 import argparse
@@ -17,6 +18,10 @@ from langchain_core.tools import StructuredTool
 from langchain_core.prompts import ChatPromptTemplate
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain_openai import ChatOpenAI
+import asyncio
+import io
+import json
+from contextlib import redirect_stdout
 
 # Agent lib and functions dependencies
 ${imports.join('\n')}
@@ -51,13 +56,8 @@ def create_tools_from_schemas(schemas: Dict[str, Dict[str, Any]]) -> List[Struct
 tools = create_tools_from_schemas(tool_schemas)
 
 promptText = """
-You are a technical assistant that answers questions using the available tools.
-
-The following instructions are guidelines for interpreting the tool data and composing responses from them.
-
-${instructions ? 'DATA GUIDELINES\n' + instructions : ''}
-
-${desktopInstructions ? 'USER INTERACTION GUIDELINES\n' + desktopInstructions : ''}
+${generateAnsweringFunctionPrompt(instructions, signatures, true)}
+- Wrap the single doTask function in a python code block
 """
 
 promptText = promptText.replace("{", "{{").replace("}", "}}") # escape curly braces to avoid template errors
@@ -88,7 +88,7 @@ agent_executor = AgentExecutor(agent=agent, tools=tools)
 # http agent
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 from fastapi import FastAPI, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse
 import asyncio
 import io
 import json
@@ -96,30 +96,98 @@ from contextlib import redirect_stdout
 
 app = FastAPI()
 
+async def capture_and_process_output(func, *args, **kwargs):
+    f = io.StringIO()
+    with redirect_stdout(f):
+        result = await func(*args, **kwargs) if asyncio.iscoroutinefunction(func) else func(*args, **kwargs)
+    
+    output = f.getvalue()
+    
+    try:
+        processed_result = json.loads(output)
+    except json.JSONDecodeError:
+        processed_result = output.strip()
+    
+    return processed_result
+
 @app.post("/run_adhoc")
-async def chat_endpoint(request: Request):
+async def run_adhoc_endpoint(request: Request):
     data = await request.json()
     user_input = data["input"]
-    chat_history = data.get("chat_history", [])
-    streaming_handler = HttpStreamingHandler()
+    max_retries = 3
+    retry_count = 0
+    errors = []
+    previous_code = None
 
-    async def generate_response():
-        task = asyncio.create_task(
-            agent_executor.ainvoke(
-                {
-                    "input": user_input,
-                    "chat_history": chat_history
-                },
-                {"callbacks": [streaming_handler]}
+    while retry_count <= max_retries:
+        try:
+            # Prepare the prompt with error information if available
+            error_context = ""
+            if errors:
+                error_context = f"Previous attempt failed with error: {errors[-1]}\\n"
+                if previous_code:
+                    error_context += f"Previous code:\\n{previous_code}\\n"
+                error_context += "Please fix the issue and try again.\\n"
+
+            formatted_prompt = prompt.format_messages(
+                input=f"{error_context}{user_input}",
+                chat_history=[],
+                agent_scratchpad=[]
             )
-        )
-        
-        async for chunk in streaming_handler.get_tokens():
-            yield chunk
+            
+            response = await llm.ainvoke(formatted_prompt)
+            function_code = extract_function_code(response.content)
+            
+            if not function_code:
+                raise ValueError("Failed to generate function code")
+            
+            result = await capture_and_process_output(execute_generated_function, function_code)
+            return JSONResponse(content={"result": result})
 
-        await task
+        except Exception as e:
+            error_message = str(e)
+            print(f"Error during execution (attempt {retry_count + 1}): {error_message}")
+            errors.append(error_message)
+            retry_count += 1
 
-    return StreamingResponse(generate_response(), media_type="text/plain")
+            if retry_count > max_retries:
+                print(f"Max retries ({max_retries}) reached. Aborting.")
+                return JSONResponse(content={"error": f"Max retries reached. Last error: {error_message}"}, status_code=500)
+
+            print(f"Retrying... (attempt {retry_count} of {max_retries})")
+            if function_code:
+                previous_code = function_code
+
+    # This line should never be reached, but just in case
+    return JSONResponse(content={"error": "Unexpected error occurred"}, status_code=500)
+
+def extract_function_code(response):
+    # Extract the code block from the response
+    start = response.find("\`\`\`python")
+    end = response.find("\`\`\`", start + 1)
+    if start != -1 and end != -1:
+        return response[start+9:end].strip()
+    return None
+
+async def execute_generated_function(function_code):
+    # Create a temporary module to execute the function
+    import types
+    module = types.ModuleType("temp_module")
+    
+    # Add necessary imports to the module
+    module.__dict__.update(globals())
+    
+    # Execute the function code in the module's context
+    exec(function_code, module.__dict__)
+    
+    # Call the doTask function
+    result = module.doTask()
+    
+    # If the result is a coroutine, await it
+    if asyncio.iscoroutine(result):
+        result = await result
+    
+    return result
 
 @app.post("/run_task/{task_name}")
 async def run_task_endpoint(task_name: str, request: Request):
@@ -130,21 +198,12 @@ async def run_task_endpoint(task_name: str, request: Request):
         return {"error": f"Task '{task_name}' not found"}
     
     task_function = globals()[task_name]
-    
-    # Capture the printed output
-    f = io.StringIO()
-    with redirect_stdout(f):
-        task_function(**args)
-    
-    output = f.getvalue()
-    
-    # If the output is a JSON string, parse it
+
     try:
-        result = json.loads(output)
-    except json.JSONDecodeError:
-        result = output.strip()
-    
-    return {"result": result}
+        result = await capture_and_process_output(task_function, **args)
+        return {"result": result}
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
 
 class HttpStreamingHandler(StreamingStdOutCallbackHandler):
     def __init__(self):
@@ -236,7 +295,7 @@ function getTaskFunctions() {
 }
 
 export default async function exportStandalone() {
-  const { instructions, libs, functions, functionsHeader, desktopInstructions } = config.project;
+  const { instructions, libs, functions, functionsHeader } = config.project;
 
   if (runtimeName !== 'python') {
     console.log('Standalone export is only supported for Python.');
@@ -249,7 +308,7 @@ export default async function exportStandalone() {
   const imports = [...new Set(libs.concat(functions).flatMap(f => f.imports))];
   const taskFunctions = getTaskFunctions();
 
-  const agentCode = agentTemplate(imports, functionsCode, libsCode, taskFunctions, tool_schemas, instructions, desktopInstructions);
+  const agentCode = agentTemplate(imports, functionsCode, libsCode, taskFunctions, tool_schemas, instructions, functionsHeader.signatures);
 
   console.log('exporting standalone agent...');
   console.log('Warning: tasks will use the latest version of the functions and libs, migrate outdated tasks to avoid unexpected errors.');
