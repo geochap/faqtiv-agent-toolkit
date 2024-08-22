@@ -9,7 +9,7 @@ import yaml from 'js-yaml';
 const { runtimeName, codeFileExtension } = config.project.runtime;
 const { codeDir, metadataDir, tasksDir } = config.project;
 
-function agentTemplate(imports, functions, libs, tasks, tool_schemas, instructions, signatures, examples) {
+function agentTemplate(imports, functions, libs, tasks, taskNameMap, tool_schemas, instructions, signatures, examples) {
   return `import os
 import requests
 import argparse
@@ -39,8 +39,11 @@ ${libs.join('\n')}
 # Agent functions
 ${functions.join('\n')}
 
+# Task name mapping
+task_name_map = ${JSON.stringify(taskNameMap, null, 2)}
+
 # Agent tasks
-${tasks.join('\n')}
+${tasks.join('\n\n')}
 
 # Tool schemas
 tool_schemas = ${tool_schemas}
@@ -302,10 +305,12 @@ async def run_task_endpoint(task_name: str, request: Request):
     data = await request.json()
     args = data.get("args", {})
     
-    if task_name not in globals():
+    valid_task_name = task_name_map.get(task_name, task_name)
+    
+    if valid_task_name not in globals():
         return {"error": f"Task '{task_name}' not found"}
     
-    task_function = globals()[task_name]
+    task_function = globals()[valid_task_name]
 
     try:
         result = await capture_and_process_output(task_function, **args)
@@ -387,19 +392,22 @@ function getTaskFunctions() {
   const taskFiles = getAllFiles(codeDir, codeFileExtension);
 
   // Extract task functions from task files
-  const taskFunctions = taskFiles.map(file => {
+  const taskFunctions = [];
+  const taskNameMap = {};
+
+  taskFiles.forEach(file => {
     const code = fs.readFileSync(file.fullPath, 'utf8');
     const taskName = path.basename(file.fullPath, codeFileExtension);
     const doTaskCode = extractFunctionCode(code, 'doTask');
     if (doTaskCode) {
       // Convert task name to a valid Python function name
       const validPythonName = taskName.replace(/[^a-zA-Z0-9_]/g, '_').replace(/^[0-9]/, '_');
-      return doTaskCode.replace('def doTask', `def ${validPythonName}`);
+      taskFunctions.push(doTaskCode.replace('def doTask', `def ${validPythonName}`));
+      taskNameMap[taskName] = validPythonName;
     }
-    return null;
-  }).filter(Boolean); // Remove any undefined or empty results
+  });
 
-  return taskFunctions;
+  return { taskFunctions, taskNameMap };
 }
 
 function getExamples() {
@@ -447,14 +455,15 @@ export default async function exportStandalone() {
   const functionsCode = functions.map(f => f.code);
   const libsCode = libs.map(l => l.code);
   const imports = [...new Set(libs.concat(functions).flatMap(f => f.imports))];
-  const taskFunctions = getTaskFunctions();
+  const { taskFunctions, taskNameMap } = getTaskFunctions();
   const examples = getExamples();
 
   const agentCode = agentTemplate(
     imports, 
     functionsCode, 
     libsCode, 
-    taskFunctions, 
+    taskFunctions,
+    taskNameMap,
     tool_schemas, 
     instructions, 
     functionsHeader.signatures, 
