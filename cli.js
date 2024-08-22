@@ -19,6 +19,7 @@ import listModules from './commands/list-modules.js';
 import printDesktopInstructions from './commands/print-desktop-instructions.js';
 import setupInterpreter from './commands/setup-interpreter.js';
 import exportStandalone from './commands/export-standalone.js';
+import serve from './commands/serve.js';
 
 program
   .version(config.version)
@@ -133,6 +134,12 @@ program
   .command('export-standalone')
   .description('Export to standalone agent')
   .action(exportStandalone);
+
+program
+  .command('serve')
+  .option('--port <number>', 'Port number for the server', 8000)
+  .description('Start a server with run_task and run_adhoc endpoints')
+  .action(serve);
 
 program
   .on('--help', () => {

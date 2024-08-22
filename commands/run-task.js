@@ -30,27 +30,37 @@ function getRunnableCode(code, runParameters) {
 }
 
 function executeJS(taskName, code, runParameters, outputFilePath, errorFilePath, execOptions) {
-  const tempFileName = path.join(tmpdir, `${uuidv4()}.js`);
-  fs.writeFileSync(tempFileName, code);
+  return new Promise((resolve, reject) => {
+    const tempFileName = path.join(tmpdir, `${uuidv4()}.js`);
+    fs.writeFileSync(tempFileName, code);
 
-  execFile(
-    config.project.runtime.command, [tempFileName], 
-    execOptions, 
-    getExecutionHandler(taskName, runParameters, tempFileName, outputFilePath, errorFilePath)
-  );
+    execFile(
+      config.project.runtime.command, [tempFileName], 
+      execOptions, 
+      (error, stdout, stderr) => {
+        const result = getExecutionHandler(taskName, runParameters, tempFileName, outputFilePath, errorFilePath)(error, stdout, stderr);
+        resolve(result);
+      }
+    );
+  });
 }
 
 function executePython(taskName, code, runParameters, outputFilePath, errorFilePath, execOptions) {
-  const tempFileName = path.join(tmpdir, `${uuidv4()}.py`);
-  fs.writeFileSync(tempFileName, code);
-  const activateCommand = process.platform === 'win32' ?
-    `venv\\Scripts\\activate && cd ${execOptions.cwd} && ${config.project.runtime.command} ${tempFileName}` :
-    `source venv/bin/activate && cd ${execOptions.cwd} && ${config.project.runtime.command} ${tempFileName}`;
+  return new Promise((resolve, reject) => {
+    const tempFileName = path.join(tmpdir, `${uuidv4()}.py`);
+    fs.writeFileSync(tempFileName, code);
+    const activateCommand = process.platform === 'win32' ?
+      `venv\\Scripts\\activate && cd ${execOptions.cwd} && ${config.project.runtime.command} ${tempFileName}` :
+      `source venv/bin/activate && cd ${execOptions.cwd} && ${config.project.runtime.command} ${tempFileName}`;
 
-  exec(
-    activateCommand,
-    getExecutionHandler(taskName, runParameters, tempFileName, outputFilePath, errorFilePath)
-  );
+    exec(
+      activateCommand,
+      (error, stdout, stderr) => {
+        const result = getExecutionHandler(taskName, runParameters, tempFileName, outputFilePath, errorFilePath)(error, stdout, stderr);
+        resolve(result);
+      }
+    );
+  });
 }
 
 function getExecutionHandler(taskName, runParameters, tempFileName, outputFilePath, errorFilePath) {
@@ -60,13 +70,18 @@ function getExecutionHandler(taskName, runParameters, tempFileName, outputFilePa
     const endTime = new Date();
     const runtime = (endTime - startTime) / 1000;
 
-    const metadata = {
-      run_at: startTime.toISOString(),
-      task_name: taskName,
-      task_parameters: runParameters,
-      run_time: `${runtime} seconds`,
-      output_file: outputFilePath || 'stdout',
-      error_file: errorFilePath || 'stderr'
+    const result = {
+      metadata: {
+        run_at: startTime.toISOString(),
+        task_name: taskName,
+        task_parameters: runParameters,
+        run_time: `${runtime} seconds`,
+        output_file: outputFilePath || 'stdout',
+        error_file: errorFilePath || 'stderr'
+      },
+      stdout: stdout,
+      stderr: stderr,
+      error: error ? (error.stack || error.message) : null
     };
 
     if (stdout) {
@@ -88,14 +103,16 @@ function getExecutionHandler(taskName, runParameters, tempFileName, outputFilePa
         process.stderr.write(errorMessage);
       }
     } else {
-      log('run-task', taskName, metadata);
+      log('run-task', taskName, result.metadata);
     }
 
     fs.unlinkSync(tempFileName);
+
+    return result;
   };
 }
 
-function executeCode(taskName, code, runParameters, outputFilePath, errorFilePath, execOptions) {
+async function executeCodeAsync(taskName, code, runParameters, outputFilePath, errorFilePath, execOptions) {
   const executeCodeFns = {
     javascript: executeJS,
     python: executePython
@@ -103,13 +120,12 @@ function executeCode(taskName, code, runParameters, outputFilePath, errorFilePat
   const executeCodeFn = executeCodeFns[runtimeName];
   
   if (!executeCodeFn) {
-    console.error(`Unknown runtime "${runtimeName}"`);
-    process.exit(1);
+    throw new Error(`Unknown runtime "${runtimeName}"`);
   }
-  executeCodeFn(taskName, code, runParameters, outputFilePath, errorFilePath, execOptions);
+  return await executeCodeFn(taskName, code, runParameters, outputFilePath, errorFilePath, execOptions);
 }
 
-export default function(taskName, ...args) {
+export default async function(taskName, ...args) {
   const runParameters = args[0];
   const options = args[1];
   const outputFilePath = options.output || null;
@@ -148,5 +164,19 @@ export default function(taskName, ...args) {
   if (errorFilePath) console.warn(`Error log will be stored in ${errorFilePath}`);
   if (filesOutputDir) console.warn(`Working directory changed to ${filesOutputDir}`);
 
-  executeCode(taskName, code, runParameters, outputFilePath, errorFilePath, execOptions);
+  try {
+    const result = await executeCodeAsync(taskName, code, runParameters, outputFilePath, errorFilePath, execOptions);
+    
+    if (result.stderr && result.stderr.length > 0) {
+      throw new Error(result.stderr);
+    }
+    try {
+      return JSON.parse(result.stdout);
+    } catch (error) {
+      return result.stdout;
+    }
+  } catch (error) {
+    console.error('Error executing task:', error);
+    process.exit(1);
+  }
 }

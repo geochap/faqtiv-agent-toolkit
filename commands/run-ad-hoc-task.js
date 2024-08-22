@@ -55,6 +55,9 @@ async function executeCode(code) {
 function createLogFile(description, code, result, error = null) {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const logFileName = path.join(logDir, `${timestamp}${error ? '-error' : ''}.log`);
+  
+  mkdirpSync(path.dirname(logFileName));
+
   const delimiter = '\n\n---\n\n';
 
   let prettyResult;
@@ -115,9 +118,15 @@ export default async function runAdHocTask(description) {
       if (!fs.existsSync(logDir)) mkdirpSync(logDir);
     
       const { stdout, stderr } = await executeCode(response.output.code);
+      let result = stdout;
       
       if (stdout) {
         process.stdout.write(stdout.toString());
+        try {
+          result = JSON.parse(stdout.toString());
+        } catch (e) {
+          result = stdout.toString();
+        }
       }
       if (stderr && stderr.length > 0) {
         process.stderr.write(stderr.toString());
@@ -125,7 +134,7 @@ export default async function runAdHocTask(description) {
       }
 
       createLogFile(description, response.output.code, stdout.toString());
-      return;
+      return result;
     } catch (error) {
       console.error(`Error during execution (attempt ${retryCount + 1}):`, error);
       errors.push(error.message);
