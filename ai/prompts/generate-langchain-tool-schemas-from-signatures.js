@@ -1,7 +1,7 @@
 import * as config from '../../config.js';
 const { runtimeName } = config.project.runtime;
 
-export function generateLangchainToolSchemasPrompt(functionSignatures) {
+export function generateLangchainToolSchemasFromSignaturesPrompt(functionSignatures) {
   const prompt = `
 Given the following function signatures, generate corresponding tool schemas compatible with langchain function tool schema applying the instructions below.
 
@@ -12,7 +12,7 @@ ${functionSignatures}
 
 ### INSTRUCTIONS ###
 
-Generate a list of langchain tool schemas for this function applying the following criteria:
+Generate a list of langchain tool schemas for these functions applying the following criteria:
 
 - Fill in the schema properties as best as you can based on the function signature, make to use valid ${runtimeName} types.
 - For the function use the function name.

@@ -2,10 +2,10 @@ import { HumanMessage, AIMessage } from '@langchain/core/messages';
 import { AI } from './ai.js';
 import { extractFunctionNames } from '../lib/parse-utils.js';
 import { generateAnsweringFunctionPrompt } from './prompts/generate-answering-function.js';
-import { generateAnswerDescriptionPrompt } from './prompts/generate-answer-description.js';
 import { extractFunctionCode } from '../lib/parse-utils.js';
 import { improveFunctionSignaturesPrompt } from './prompts/improve-function-signatures.js';
-import { generateLangchainToolSchemasPrompt } from './prompts/generate-langchain-tool-schemas.js';
+import { generateLangchainToolSchemasFromSignaturesPrompt } from './prompts/generate-langchain-tool-schemas-from-signatures.js';
+import { generateLangchainToolSchemaFromFunctionPrompt } from './prompts/generate-langchain-tool-schema-from-function.js';
 
 function codeResponse(response) {
   try {
@@ -99,7 +99,7 @@ export default class CodeAgent {
 
   async generateTaskSchema(taskName, code, functionName = 'doTask') {
     const prompt = [
-      new HumanMessage(generateAnswerDescriptionPrompt(taskName, code, functionName))
+      new HumanMessage(generateLangchainToolSchemaFromFunctionPrompt(taskName, code, functionName))
     ];
     const messages = await this.ai.start(null, prompt, [], 'generate-task-schema');
     const response = messages[messages.length - 1].content.trim();
@@ -109,7 +109,7 @@ export default class CodeAgent {
 
   async generateLangchainToolSchemas(functionSignatures) {
     const prompt = [
-      new HumanMessage(generateLangchainToolSchemasPrompt(functionSignatures))
+      new HumanMessage(generateLangchainToolSchemasFromSignaturesPrompt(functionSignatures))
     ];
     const messages = await this.ai.start(null, prompt, [], 'generate-langchain-function-schemas');
     const response = messages[messages.length - 1].content.trim();

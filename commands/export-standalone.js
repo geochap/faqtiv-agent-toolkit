@@ -9,12 +9,49 @@ import yaml from 'js-yaml';
 const { runtimeName, codeFileExtension } = config.project.runtime;
 const { codeDir, metadataDir, tasksDir } = config.project;
 
-function agentTemplate(imports, functions, libs, tasks, taskNameMap, tool_schemas, instructions, signatures, examples) {
+const completionPrompt = `You are a helpful bot assistant that runs tasks based on the user prompt
+
+MAIN GUIDELINES
+
+- Apply your best judgment to decide which tasks to run, if one or more tasks look like they do the same pick a single one
+- To answer questions give preference to tasks that don't generate files unless the user specifically asks for them
+- If the task response includes file paths append them to the end of your response as described in the json block instructions below
+- For math formulas use syntax supported by KaTex and use $$ as delimiter
+- If the user doesn't explicitly ask for a file, asume the data should be rendered with markdown in the response itself
+- Always use markdown to format your response, prefer tables and text formatting over code blocks unless its code
+- Be strict about the accuracy of your responses, do not offer alternative data or use incorrect information
+- Avoid making assumptions or providing speculative answers, when in doubt ask for clarification
+
+CRITERIA FOR USING TOOLS
+
+- If none of the existing tools help you fulfill the request, use the run-ad-hoc-task tool to fulfill the request
+- When using run-ad-hoc-task, make your best guess to select the most suitable agent based on its description and tools
+- If the run-ad-hoc-task result doesn't fully address the user's request or seems incorrect, try using run-ad-hoc-task again with a refined task description (more details below)
+- Only after exhausting all possibilities with run-ad-hoc-task, if you still cannot provide accurate information, reply with a friendly error message explaining that you don't have the necessary information or capabilities to answer the question
+
+AGENT TOOLS INSTRUCTIONS
+
+- The function tools you have available belong to an agent
+- The following is the agent's instructions and domain information that will help you understand how to use the data its functions return
+
+AD-HOC TASK INSTRUCTIONS
+- Try your best to use existing tools but if there aren't any that can be used to fulfill the user's request then call the adhoc tool to achieve what you need to do, select the most suitable agent based on its description and existing tools
+- Look suspiciously at results that are not what you expect: adhoc generates and runs new code and the results could be wrong, apply your best judgment to determine if the result looks correct or not
+    - For example: it returned an array with only invalid or missing data like nulls or empty strings
+- If the results do not look correct try to fix them by using the adhoc tool again with an updated description of the task
+
+AGENT DOMAIN INFORMATION
+
+AGENT INSTRUCTIONS
+This is an agent specialized in retrieving bank data from the FDIC API`
+
+
+function agentTemplate(imports, functions, libs, tasks, taskNameMap, taskToolSchemas, adhocToolSchemas, instructions, signatures, examples) {
   return `import os
 import requests
 import argparse
 from typing import List, Dict, Union, Any, Optional
-from pydantic import create_model
+from pydantic import BaseModel, Field, create_model
 from langchain_core.tools import StructuredTool
 from langchain_core.prompts import ChatPromptTemplate, FewShotChatMessagePromptTemplate
 from langchain.agents import AgentExecutor, create_tool_calling_agent
@@ -27,6 +64,12 @@ import json
 from contextlib import redirect_stdout
 import base64
 import numpy as np
+import time
+import uuid
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import JSONResponse, StreamingResponse
+from langchain.callbacks import AsyncIteratorCallbackHandler
+from functools import partial
 
 EXPECTED_EMBEDDING_DIMENSION = 1536
 
@@ -45,8 +88,13 @@ task_name_map = ${JSON.stringify(taskNameMap, null, 2)}
 # Agent tasks
 ${tasks.join('\n\n')}
 
-# Tool schemas
-tool_schemas = ${tool_schemas}
+# Task tool schemas
+task_tool_schemas = {
+${taskToolSchemas.join(',\n')}
+}
+
+# Adhoc tool schemas
+tool_schemas = ${adhocToolSchemas}
 
 # Examples with pre-computed embeddings
 examples_with_embeddings = ${JSON.stringify(examples, null, 2)}
@@ -76,26 +124,13 @@ texts = [json.dumps({**example['document'], 'embedding': None}) for example in e
 embeddings_list = [decode_base64_embedding(example['taskEmbedding']) for example in examples_with_embeddings]
 metadatas = [{}] * len(examples_with_embeddings)
 
-# Clean up embeddings
-# TODO: this is a hack to fix the issue of embeddings being too short, find why embeddings are invalid for some examples
-maxlen = max(len(e) for e in embeddings_list)
-clean_embeddings = []
-clean_texts = []
-clean_metadatas = []
-
-for i, embedding in enumerate(embeddings_list):
-    if len(embedding) == maxlen:
-        clean_embeddings.append(embedding)
-        clean_texts.append(texts[i])
-        clean_metadatas.append(metadatas[i])
-
 # Convert list of numpy arrays to 2D numpy array
-embeddings_array = np.array(clean_embeddings)
+embeddings_array = np.array(embeddings_list)
 
 vector_store = FAISS.from_embeddings(
-    text_embeddings=list(zip(clean_texts, embeddings_array)),
+    text_embeddings=list(zip(texts, embeddings_list)),
     embedding=embeddings,
-    metadatas=clean_metadatas
+    metadatas=metadatas
 )
 
 # Initialize OpenAI client
@@ -128,32 +163,44 @@ def get_relevant_examples(query: str, k: int = 10) -> List[Dict]:
     return relevant_examples
 
 # Create tool instances based on schema
+async def tool_wrapper(func, *args, **kwargs):
+    return await capture_and_process_output(func, *args, **kwargs)
+
 def create_tools_from_schemas(schemas: Dict[str, Dict[str, Any]]) -> List[StructuredTool]:
     tools = []
     for name, schema in schemas.items():
+        description = schema["description"]
+        if "returns_description" in schema:
+            description += f" Returns: {schema['returns_description']}"
+        
+        if name == "run_adhoc_task":
+            func = schema["function"]
+        else:
+            func = partial(tool_wrapper, schema["function"])
+        
         tool = StructuredTool(
             name=name,
-            description=schema["description"],
+            description=description,
             args_schema=schema["args_schema"],
-            func=schema["function"],
+            coroutine=func,
             metadata={"output": schema["output"]}
         )
         tools.append(tool)
     return tools
 
 # Create tools from schemas
-tools = create_tools_from_schemas(tool_schemas)
+task_tools = create_tools_from_schemas(task_tool_schemas)
 
-promptText = """
+adhoc_promptText = """
 ${generateAnsweringFunctionPrompt(instructions, signatures, true)}
 - Wrap the single doTask function in a python code block
 """
 
-promptText = promptText.replace("{", "{{").replace("}", "}}") # escape curly braces to avoid template errors
+adhoc_promptText = adhoc_promptText.replace("{", "{{").replace("}", "}}") # escape curly braces to avoid template errors
 
-prompt = ChatPromptTemplate.from_messages(
+adhoc_prompt = ChatPromptTemplate.from_messages(
     [
-        ("system", promptText),
+        ("system", adhoc_promptText),
         ("placeholder", "{chat_history}"),
         ("human", "{input}"),
         ("placeholder", "{agent_scratchpad}"),
@@ -166,6 +213,17 @@ example_prompt = ChatPromptTemplate.from_messages(
     ]
 )
 
+completion_promptText = """${completionPrompt}"""
+
+completion_prompt = ChatPromptTemplate.from_messages(
+    [
+        ("system", completion_promptText),
+        ("placeholder", "{chat_history}"),
+        ("human", "{input}"),
+        ("placeholder", "{agent_scratchpad}"),
+    ]
+)
+
 # Read the API key and model from environment variables
 api_key = os.getenv('OPENAI_API_KEY')
 model = os.getenv('OPENAI_MODEL')
@@ -173,28 +231,14 @@ model = os.getenv('OPENAI_MODEL')
 # Initialize OpenAI LLM
 llm = ChatOpenAI(model=model)
 
-# Define the agent
-agent = create_tool_calling_agent(llm, tools, prompt)
-
-# Create the agent executor
-agent_executor = AgentExecutor(agent=agent, tools=tools)
-
-
 # http agent
-from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
-import asyncio
-import io
-import json
-from contextlib import redirect_stdout
 
 app = FastAPI()
 
 async def capture_and_process_output(func, *args, **kwargs):
     f = io.StringIO()
     with redirect_stdout(f):
-        result = await func(*args, **kwargs) if asyncio.iscoroutinefunction(func) else func(*args, **kwargs)
+        await func(*args, **kwargs) if asyncio.iscoroutinefunction(func) else func(*args, **kwargs)
     
     output = f.getvalue()
     
@@ -204,73 +248,6 @@ async def capture_and_process_output(func, *args, **kwargs):
         processed_result = output.strip()
     
     return processed_result
-
-@app.post("/run_adhoc")
-async def run_adhoc_endpoint(request: Request):
-    data = await request.json()
-    user_input = data["input"]
-    max_retries = 3
-    retry_count = 0
-    errors = []
-    previous_code = None
-
-    # Get relevant examples
-    relevant_examples = get_relevant_examples(user_input)
-    few_shot_prompt = FewShotChatMessagePromptTemplate(
-        example_prompt=example_prompt,
-        examples=relevant_examples,
-    )
-
-    while retry_count <= max_retries:
-        try:
-            # Prepare the prompt with error information if available
-            error_context = ""
-            if errors:
-                error_context = f"Previous attempt failed with error: {errors[-1]}\\n"
-                if previous_code:
-                    error_context += f"Previous code:\\n{previous_code}\\n"
-                error_context += "Please fix the issue and try again.\\n"
-
-            current_prompt = ChatPromptTemplate.from_messages(
-                [
-                    ("system", promptText),
-                    ("placeholder", "{chat_history}"),
-                    few_shot_prompt,
-                    ("human", "{input}"),
-                    ("placeholder", "{agent_scratchpad}"),
-                ]
-            )
-            formatted_prompt = current_prompt.format(
-                input=f"{error_context}{user_input}",
-                chat_history=[],
-                agent_scratchpad=[],
-            )
-            
-            response = await llm.ainvoke(formatted_prompt)
-            function_code = extract_function_code(response.content)
-            
-            if not function_code:
-                raise ValueError("Failed to generate function code")
-            if function_code:
-                previous_code = function_code
-            
-            result = await capture_and_process_output(execute_generated_function, function_code)
-            return JSONResponse(content={"result": result})
-
-        except Exception as e:
-            error_message = str(e)
-            print(f"Error during execution (attempt {retry_count + 1}): {error_message}")
-            errors.append(error_message)
-            retry_count += 1
-
-            if retry_count > max_retries:
-                print(f"Max retries ({max_retries}) reached. Aborting.")
-                return JSONResponse(content={"error": f"Max retries reached. Last error: {error_message}"}, status_code=500)
-
-            print(f"Retrying... (attempt {retry_count} of {max_retries})")
-
-    # This line should never be reached, but just in case
-    return JSONResponse(content={"error": "Unexpected error occurred"}, status_code=500)
 
 def extract_function_code(response):
     # Extract the code block from the response
@@ -300,6 +277,80 @@ async def execute_generated_function(function_code):
     
     return result
 
+async def generate_and_execute_adhoc(user_input: str, max_retries: int = 3):
+    retry_count = 0
+    errors = []
+    previous_code = None
+
+    # Get relevant examples
+    relevant_examples = get_relevant_examples(user_input)
+    few_shot_prompt = FewShotChatMessagePromptTemplate(
+        example_prompt=example_prompt,
+        examples=relevant_examples,
+    )
+
+    while retry_count <= max_retries:
+        try:
+            # Prepare the prompt with error information if available
+            error_context = ""
+            if errors:
+                error_context = f"Previous attempt failed with error: {errors[-1]}\\n"
+                if previous_code:
+                    error_context += f"Previous code:\\n{previous_code}\\n"
+                error_context += "Please fix the issue and try again.\\n"
+
+            current_prompt = ChatPromptTemplate.from_messages(
+                [
+                    ("system", adhoc_promptText),
+                    ("placeholder", "{chat_history}"),
+                    few_shot_prompt,
+                    ("human", "{input}"),
+                    ("placeholder", "{agent_scratchpad}"),
+                ]
+            )
+            formatted_prompt = current_prompt.format(
+                input=f"{error_context}{user_input}",
+                chat_history=[],
+                agent_scratchpad=[],
+            )
+            
+            response = await llm.ainvoke(formatted_prompt)
+            function_code = extract_function_code(response.content)
+            
+            if not function_code:
+                raise ValueError("Failed to generate function code")
+            if function_code:
+                previous_code = function_code
+            
+            result = await capture_and_process_output(execute_generated_function, function_code)
+            return result
+
+        except Exception as e:
+            error_message = str(e)
+            print(f"Error during execution (attempt {retry_count + 1}): {error_message}")
+            errors.append(error_message)
+            retry_count += 1
+
+            if retry_count > max_retries:
+                print(f"Max retries ({max_retries}) reached. Aborting.")
+                raise ValueError(f"Max retries reached. Last error: {error_message}")
+
+            print(f"Retrying... (attempt {retry_count} of {max_retries})")
+
+    # This line should never be reached, but just in case
+    raise ValueError("Unexpected error occurred")
+
+@app.post("/run_adhoc")
+async def run_adhoc_endpoint(request: Request):
+    data = await request.json()
+    user_input = data["input"]
+    
+    try:
+        result = await generate_and_execute_adhoc(user_input)
+        return JSONResponse(content={"result": result})
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
 @app.post("/run_task/{task_name}")
 async def run_task_endpoint(task_name: str, request: Request):
     data = await request.json()
@@ -318,32 +369,131 @@ async def run_task_endpoint(task_name: str, request: Request):
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
-class HttpStreamingHandler(StreamingStdOutCallbackHandler):
-    def __init__(self):
-        self.queue = asyncio.Queue()
-        super().__init__()
-    
-    async def on_llm_new_token(self, token: str, **kwargs) -> None:
-        await self.queue.put(token.encode('utf-8'))
+class Message(BaseModel):
+    role: str
+    content: str
 
-    async def get_tokens(self):
-        while True:
-            try:
-                yield await self.queue.get()
-            except asyncio.CancelledError:
-                break
+class CompletionRequest(BaseModel):
+    messages: List[Message]
+    max_tokens: Optional[int] = Field(default=1000, ge=1, le=4096)
+    temperature: Optional[float] = Field(default=0.7, ge=0, le=2)
+    stream: Optional[bool] = False
+
+class CompletionResponse(BaseModel):
+    id: str
+    object: str
+    created: int
+    model: str
+    choices: List[dict]
+
+
+async def run_adhoc_task(description: str) -> str:
+    try:
+        result = await generate_and_execute_adhoc(description)
+        # Ensure the result is a string
+        if isinstance(result, dict):
+            result = json.dumps(result)
+        elif not isinstance(result, str):
+            result = str(result)
+        return result
+    except Exception as e:
+        return f"Error during execution: {str(e)}"
+    
+completion_tool_schemas = {
+    "run_adhoc_task": {
+        "description": "A tool for an agent to run custom tasks described in natural language",
+        "input": {"description": str},
+        "args_schema": create_model(
+            "runAdhocTask",
+            description=(str, ...) 
+        ),
+        "output": Any,
+        "function": run_adhoc_task
+    }
+}
+
+adhoc_tool = create_tools_from_schemas(completion_tool_schemas)
+
+# Create an agent for the completion endpoint using the adhoc tool
+completion_tools = adhoc_tool + task_tools
+completion_agent = create_tool_calling_agent(llm, completion_tools, completion_prompt)
+completion_executor = AgentExecutor(agent=completion_agent, tools=completion_tools)
+
+@app.post("/completions")
+async def completions_endpoint(request: CompletionRequest):
+    try:
+        if request.stream:
+            return StreamingResponse(stream_completion(request), media_type="text/event-stream")
+        else:
+            return await generate_completion(request)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+async def generate_completion(request: CompletionRequest):
+    current_time = int(time.time())
+    completion_id = f"cmpl-{uuid.uuid4()}"
+
+    # Prepare the conversation history
+    conversation = [{"role": msg.role, "content": msg.content} for msg in request.messages]
+    
+    # Use the completion executor to process the request
+    result = await completion_executor.ainvoke(
+        {
+            "input": conversation[-1]["content"],
+            "chat_history": conversation[:-1]
+        }
+    )
+
+    completion_response = CompletionResponse(
+        id=completion_id,
+        object="chat.completion",
+        created=current_time,
+        model=model,
+        choices=[
+            {
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": result["output"]
+                },
+                "finish_reason": "stop"
+            }
+        ]
+    )
+    
+    return JSONResponse(content=completion_response.dict())
+
+async def stream_completion(request: CompletionRequest):
+    current_time = int(time.time())
+    completion_id = f"cmpl-{uuid.uuid4()}"
+
+    # Prepare the conversation history
+    conversation = [{"role": msg.role, "content": msg.content} for msg in request.messages]
+    
+    # Use the completion executor to process the request
+    async for event in completion_executor.astream(
+        {
+            "input": conversation[-1]["content"],
+            "chat_history": conversation[:-1]
+        }
+    ):
+        if "output" in event:
+            yield f"data: {json.dumps({'id': completion_id, 'object': 'chat.completion.chunk', 'created': current_time, 'model': request.model, 'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': event['output']}, 'finish_reason': None}]})}\\n\\n"
+
+    yield f"data: {json.dumps({'id': completion_id, 'object': 'chat.completion.chunk', 'created': current_time, 'model': request.model, 'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'stop'}]})}\\n\\n"
+    yield "data: [DONE]\\n\\n"
 
 # Cli agent
-class CliStreamingHandler(StreamingStdOutCallbackHandler):
+class CliStreamingHandler(AsyncIteratorCallbackHandler):
     def __init__(self):
-        self.text = ""
         super().__init__()
+        self.tokens = []
 
-    def on_llm_new_token(self, token: str, **kwargs) -> None:
-        self.text += token
+    async def on_llm_new_token(self, token: str, **kwargs) -> None:
+        self.tokens.append(token)
         print(token, end="", flush=True)
 
-def cliAgent():
+async def async_cliAgent():
     print("Welcome, please type your request. Type 'exit' to quit.")
     chat_history = []
     streaming_handler = CliStreamingHandler()
@@ -356,22 +506,32 @@ def cliAgent():
             break
 
         print("\\nAgent: ", end="", flush=True)
-        result = agent_executor.invoke(
-            {
-                "input": user_input,
-                "chat_history": chat_history
-            },
-            {"callbacks": [streaming_handler]}
+        
+        task = asyncio.create_task(
+            completion_executor.ainvoke(
+                {
+                    "input": user_input,
+                    "chat_history": chat_history
+                },
+                {"callbacks": [streaming_handler]}
+            )
         )
+
+        async for _ in streaming_handler.aiter():
+            pass  # We're printing in the callback, so just wait for it to finish here
+
+        await task
         print()  # Add a newline after the streamed response
 
-        # Update chat history with correct message types
+        # Update chat history
         chat_history.append({"role": "user", "content": user_input})
-        chat_history.append({"role": "assistant", "content": streaming_handler.text})
+        chat_history.append({"role": "assistant", "content": "".join(streaming_handler.tokens)})
 
-        # Reset the streaming handler text
-        streaming_handler.text = ""
+        # Clear tokens for next iteration
+        streaming_handler.tokens.clear()
 
+def cliAgent():
+    asyncio.run(async_cliAgent())
 
 if __name__ == "__main__":    
     parser = argparse.ArgumentParser(description="FAQtiv Agent CLI/HTTP Server")
@@ -394,6 +554,7 @@ function getTaskFunctions() {
   // Extract task functions from task files
   const taskFunctions = [];
   const taskNameMap = {};
+  const taskToolSchemas = [];
 
   taskFiles.forEach(file => {
     const code = fs.readFileSync(file.fullPath, 'utf8');
@@ -404,10 +565,23 @@ function getTaskFunctions() {
       const validPythonName = taskName.replace(/[^a-zA-Z0-9_]/g, '_').replace(/^[0-9]/, '_');
       taskFunctions.push(doTaskCode.replace('def doTask', `def ${validPythonName}`));
       taskNameMap[taskName] = validPythonName;
+
+      // Get and update the task schema
+      const metadataPath = path.join(metadataDir, `${taskName}.yml`);
+      if (fs.existsSync(metadataPath)) {
+        const metadata = yaml.load(fs.readFileSync(metadataPath, 'utf8'));
+        if (metadata.output && metadata.output.task_schema) {
+          let schemaString = metadata.output.task_schema;
+          const taskNameRegex = new RegExp(taskName, 'g');
+          schemaString = schemaString.replace(taskNameRegex, validPythonName);
+          schemaString = schemaString.replace(/doTask/g, validPythonName);
+          taskToolSchemas.push(schemaString);
+        }
+      }
     }
   });
 
-  return { taskFunctions, taskNameMap };
+  return { taskFunctions, taskNameMap, taskToolSchemas };
 }
 
 function getExamples() {
@@ -451,11 +625,11 @@ export default async function exportStandalone() {
     return;
   }
 
-  const tool_schemas = functionsHeader.function_tool_schemas;
+  const adhocToolSchemas = functionsHeader.function_tool_schemas;
   const functionsCode = functions.map(f => f.code);
   const libsCode = libs.map(l => l.code);
   const imports = [...new Set(libs.concat(functions).flatMap(f => f.imports))];
-  const { taskFunctions, taskNameMap } = getTaskFunctions();
+  const { taskFunctions, taskNameMap, taskToolSchemas } = getTaskFunctions();
   const examples = getExamples();
 
   const agentCode = agentTemplate(
@@ -464,7 +638,8 @@ export default async function exportStandalone() {
     libsCode, 
     taskFunctions,
     taskNameMap,
-    tool_schemas, 
+    taskToolSchemas,
+    adhocToolSchemas, 
     instructions, 
     functionsHeader.signatures, 
     examples
