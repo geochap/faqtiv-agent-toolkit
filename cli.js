@@ -131,7 +131,7 @@ program
   .action(setupInterpreter);
 
 program
-  .command('export-standalone')
+  .command('export-standalone [outputDir]')
   .description('Export to standalone agent')
   .action(exportStandalone);
 

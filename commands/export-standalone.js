@@ -617,7 +617,7 @@ function getExamples() {
   return examples;
 }
 
-export default async function exportStandalone() {
+export default async function exportStandalone(outputDir = process.cwd()) {
   const { instructions, libs, functions, functionsHeader } = config.project;
 
   if (runtimeName !== 'python') {
@@ -645,7 +645,95 @@ export default async function exportStandalone() {
     examples
   );
 
-//   console.log('exporting standalone agent...');
-//   console.log('Warning: tasks will use the latest version of the functions and libs, migrate outdated tasks to avoid unexpected errors.');
-  console.log(agentCode);
+  fs.writeFileSync(path.join(outputDir, 'agent.py'), agentCode);
+
+  // Generate requirements.txt
+  const requirements = [
+    'faiss-cpu==1.8.0.post1',
+    'fastapi==0.112.0',
+    'langchain==0.2.12',
+    'langchain-community==0.2.11',
+    'langchain-core==0.2.28',
+    'langchain-openai==0.1.20',
+    'langchain-text-splitters==0.2.2',
+    'numpy==1.26.4',
+    'openai==1.38.0',
+    'pydantic==2.8.2',
+    'pydantic_core==2.20.1',
+    'requests==2.32.3',
+    'uvicorn==0.30.5'
+  ];
+  fs.writeFileSync(path.join(outputDir, 'requirements.txt'), requirements.join('\n'));
+
+  // Generate README.md
+  const readmeContent = `# Standalone FAQtiv Agent
+
+This is a standalone version of a FAQtiv agent. It includes all the necessary components to run the agent independently.
+
+## Setup
+
+1. Ensure you have Python 3.7+ installed.
+2. Install the required dependencies:
+
+   \`\`\`
+   pip install -r requirements.txt
+   \`\`\`
+
+3. Set up your OpenAI API and model as environment variables:
+
+   \`\`\`
+   export OPENAI_API_KEY=your_api_key_here
+   export OPENAI_MODEL=gpt-4o
+   \`\`\`
+
+## Running the Agent
+
+You can run the agent in two modes:
+
+### Interactive CLI Mode
+
+To start the agent in interactive CLI mode, run:
+
+\`\`\`
+python agent.py
+\`\`\`
+
+You can then interact with the agent by typing your requests. Type 'exit' to quit.
+
+### HTTP Server Mode
+
+To start the agent as an HTTP server, run:
+
+\`\`\`
+python agent.py --http
+\`\`\`
+
+By default, the server will run on \`http://localhost:8000\`. You can interact with it using the following endpoints:
+
+1. \`/run_task/{taskName}\`: Runs a specific task.
+   - Method: POST
+   - Body: JSON object with \`args\` (optional), \`output\` (optional), \`files\` (optional), and \`error\` (optional).
+
+2. \`/run_adhoc\`: Runs an ad-hoc task based on an input.
+   - Method: POST
+   - Body: JSON object with \`input\`.
+
+3. \`/completions\`: Provides a chat-like interface for interacting with the agent.
+   - Method: POST
+   - Body: JSON object with \`messages\`, \`max_tokens\` (optional), \`temperature\` (optional), and \`stream\` (optional).
+
+For more detailed information on how to use these endpoints, refer to the original FAQtiv Agent Toolkit documentation.
+
+## Note
+
+This standalone agent is a static export and does not have the ability to compile new tasks or modify existing ones. It represents the agent's state at the time of export.
+`;
+
+  fs.writeFileSync(path.join(outputDir, 'README.md'), readmeContent);
+
+  console.log(`Standalone agent exported to ${outputDir}`);
+  console.log('Generated files:');
+  console.log('- agent.py');
+  console.log('- requirements.txt');
+  console.log('- README.md');
 }

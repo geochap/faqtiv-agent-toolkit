@@ -297,10 +297,10 @@ faqtiv list-examples
 To export a standalone agent that can be run independently, use the `export-standalone` command:
 
 ```bash
-faqtiv export-standalone <outputDir>
+faqtiv export-standalone [outputDir]
 ```
 
-- `<outputDir>`: The directory where the standalone agent will be exported.
+- `[outputDir]`: The directory where the standalone agent will be exported. If not provided, it defaults to the current working directory.
 
 This command creates a standalone version of your agent, including all necessary files to run it independently. The exported agent will include:
 
