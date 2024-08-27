@@ -24,6 +24,10 @@ export const runtimeCommands = {
   'javascript': process.env.JS_CMD || 'node',
   'python': process.env.PYTHON_CMD || 'python'
 };
+export const runtimePackageManagers = {
+  'javascript': process.env.JS_PKG_CMD || 'npm',
+  'python': process.env.PYTHON_PKG_CMD || 'pip'
+};
 const defaultModules = {
   'javascript': [],
   'python': []
@@ -48,7 +52,8 @@ if (isInitCommand || isHelpCommand || isVersionCommand) {
     runtime: {
       codeFileExtension: codeExtensions['javascript'],
       runtimeName: runtimes['javascript'],
-      command: runtimeCommands['javascript']
+      command: runtimeCommands['javascript'],
+      packageManager: runtimePackageManagers['javascript']
     },
     modules: [],
     task_examples: [],
@@ -76,7 +81,8 @@ if (isInitCommand || isHelpCommand || isVersionCommand) {
     codeFileExtension: codeExtensions[faqtivConfig.runtime],
     runtimeName: runtimes[faqtivConfig.runtime],
     defaultModules: defaultModules[faqtivConfig.runtime],
-    command: runtimeCommands[faqtivConfig.runtime]
+    command: runtimeCommands[faqtivConfig.runtime],
+    packageManager: runtimePackageManagers[faqtivConfig.runtime]
   };
 
   const loadFunctions = (dir) => {
@@ -124,14 +130,14 @@ if (isInitCommand || isHelpCommand || isVersionCommand) {
     instructions = fs.readFileSync(path.join('instructions.txt'), 'utf8');
   } catch(e) {}
 
-  let desktopInstructions = '';
+  let assistantInstructions = '';
   try {
-    desktopInstructions = fs.readFileSync(path.join('desktop_instructions.txt'), 'utf8');
+    assistantInstructions = fs.readFileSync(path.join('assistant_instructions.txt'), 'utf8');
   } catch(e) {}
 
   projectConfig = {
     instructions,
-    desktopInstructions,
+    assistantInstructions,
     functionsHeader,
     functions,
     libs,

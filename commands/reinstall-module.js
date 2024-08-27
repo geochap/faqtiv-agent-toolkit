@@ -5,12 +5,12 @@ const runtimeName = config.project.runtime.runtimeName;
 
 async function updateJS() {
   return new Promise((resolve, reject) => {
-    exec('npm install', (error, stdout, stderr) => {
+    exec(`${config.project.runtime.packageManager} install`, (error, stdout, stderr) => {
       if (error) {
         console.error(`npm install failed: ${error.message}`);
         return reject(error);
       }
-      console.log(`npm install completed successfully`);
+      console.log(`${config.project.runtime.packageManager} install completed successfully`);
       resolve();
     });
   });
@@ -20,8 +20,8 @@ async function updatePython() {
   return new Promise((resolve, reject) => {
     // Activate virtual environment and run pip install
     const activateCommand = process.platform === 'win32' ? 
-    `venv\\Scripts\\activate && pip install -r requirements.txt` : 
-    `source venv/bin/activate && pip install -r requirements.txt`;
+    `venv\\Scripts\\activate && ${config.project.runtime.packageManager} install -r requirements.txt` : 
+    `source venv/bin/activate && ${config.project.runtime.packageManager} install -r requirements.txt`;
 
     // Run pip install for the module
     exec(activateCommand, (error, stdout, stderr) => {
@@ -30,7 +30,7 @@ async function updatePython() {
         return reject(false);
       }
 
-      console.log(`pip install completed successfully`);
+      console.log(`${config.project.runtime.packageManager} install completed successfully`);
       resolve(true);
     });
   });

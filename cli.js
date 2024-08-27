@@ -16,7 +16,6 @@ import removeExample from './commands/remove-example.js';
 import listExamples from './commands/list-examples.js';
 import removeModule from './commands/remove-module.js';
 import listModules from './commands/list-modules.js';
-import printDesktopInstructions from './commands/print-desktop-instructions.js';
 import setupInterpreter from './commands/setup-interpreter.js';
 import exportStandalone from './commands/export-standalone.js';
 import serve from './commands/serve.js';
@@ -119,11 +118,6 @@ program
   .command('list-examples')
   .description('List existing examples')
   .action(listExamples);
-
-program
-  .command('print-desktop-instructions')
-  .description('Prints FAQtiv desktop instructions')
-  .action(printDesktopInstructions);
 
 program
   .command('setup-interpreter')
