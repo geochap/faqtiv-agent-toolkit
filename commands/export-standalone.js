@@ -394,6 +394,22 @@ completion_tools = adhoc_tool + task_tools
 completion_agent = create_tool_calling_agent(llm, completion_tools, completion_prompt)
 completion_executor = AgentExecutor(agent=completion_agent, tools=completion_tools)
 
+# Completion streaming handler
+class CompletionStreamingHandler(AsyncIteratorCallbackHandler):
+    def __init__(self):
+        self.done = asyncio.Event()
+        self.queue = asyncio.Queue()
+
+    async def on_llm_end(self, *args, **kwargs):
+        await self.queue.put(None)
+
+    async def aiter(self):
+        while True:
+            token = await self.queue.get()
+            if token is None:
+                break
+            yield token
+
 @app.post("/completions")
 async def completions_endpoint(request: CompletionRequest):
     try:
@@ -441,21 +457,39 @@ async def generate_completion(request: CompletionRequest):
 async def stream_completion(request: CompletionRequest):
     current_time = int(time.time())
     completion_id = f"cmpl-{uuid.uuid4()}"
-
-    # Prepare the conversation history
     conversation = [{"role": msg.role, "content": msg.content} for msg in request.messages]
+    streaming_handler = CompletionStreamingHandler()
     
-    # Use the completion executor to process the request
-    async for event in completion_executor.astream(
-        {
-            "input": conversation[-1]["content"],
-            "chat_history": conversation[:-1]
-        }
-    ):
-        if "output" in event:
-            yield f"data: {json.dumps({'id': completion_id, 'object': 'chat.completion.chunk', 'created': current_time, 'model': model, 'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': event['output']}, 'finish_reason': None}]})}\\n\\n"
+    task = asyncio.create_task(
+        completion_executor.ainvoke(
+            {
+                "input": conversation[-1]["content"],
+                "chat_history": conversation[:-1]
+            },
+            {"callbacks": [streaming_handler]}
+        )
+    )
 
-    yield f"data: {json.dumps({'id': completion_id, 'object': 'chat.completion.chunk', 'created': current_time, 'model': model, 'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'stop'}]})}\\n\\n"
+    async for token in streaming_handler.aiter():
+        chunk = {
+            'id': completion_id,
+            'object': 'chat.completion.chunk',
+            'created': current_time,
+            'model': model,
+            'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': token}, 'finish_reason': None}]
+        }
+        yield f"data: {json.dumps(chunk)}\\n\\n"
+
+    await task
+
+    final_chunk = {
+        'id': completion_id,
+        'object': 'chat.completion.chunk',
+        'created': current_time,
+        'model': model,
+        'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'stop'}]
+    }
+    yield f"data: {json.dumps(final_chunk)}\\n\\n"
     yield "data: [DONE]\\n\\n"
 
 # Cli agent
