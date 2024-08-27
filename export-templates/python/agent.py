@@ -114,7 +114,7 @@ def get_relevant_examples(query: str, k: int = 10) -> List[Dict]:
     
     return relevant_examples
 
-# Create tool instances based on schema
+# Capture stdout of tasks
 async def tool_wrapper(func, *args, **kwargs):
     return await capture_and_process_output(func, *args, **kwargs)
 
@@ -380,22 +380,6 @@ completion_tools = adhoc_tool + task_tools
 completion_agent = create_tool_calling_agent(llm, completion_tools, completion_prompt)
 completion_executor = AgentExecutor(agent=completion_agent, tools=completion_tools)
 
-# Completion streaming handler
-class CompletionStreamingHandler(AsyncIteratorCallbackHandler):
-    def __init__(self):
-        self.done = asyncio.Event()
-        self.queue = asyncio.Queue()
-
-    async def on_llm_end(self, *args, **kwargs):
-        await self.queue.put(None)
-
-    async def aiter(self):
-        while True:
-            token = await self.queue.get()
-            if token is None:
-                break
-            yield token
-
 @app.post("/completions")
 async def completions_endpoint(request: CompletionRequest):
     try:
@@ -444,54 +428,60 @@ async def stream_completion(request: CompletionRequest):
     current_time = int(time.time())
     completion_id = f"cmpl-{uuid.uuid4()}"
     conversation = [{"role": msg.role, "content": msg.content} for msg in request.messages]
-    streaming_handler = CompletionStreamingHandler()
-    
-    task = asyncio.create_task(
-        completion_executor.ainvoke(
+
+    try:
+        async for event in completion_executor.astream_events(
             {
                 "input": conversation[-1]["content"],
                 "chat_history": conversation[:-1]
             },
-            {"callbacks": [streaming_handler]}
-        )
-    )
+            version="v1"
+        ):
+            kind = event["event"]
+            if kind == "on_chat_model_stream":
+                content = event["data"]["chunk"].content
+                if content:
+                    token_chunk = {
+                        'id': completion_id,
+                        'object': 'chat.completion.chunk',
+                        'created': current_time,
+                        'model': model,
+                        'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': content}, 'finish_reason': None}]
+                    }
+                    yield f"data: {json.dumps(token_chunk)}\n\n"
+            elif kind == "on_chain_end" and event["name"] == "AgentExecutor":
+                token_chunk = {
+                    'id': completion_id,
+                    'object': 'chat.completion.chunk',
+                    'created': current_time,
+                    'model': model,
+                    'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'stop'}]
+                }
+                yield f"data: {json.dumps(token_chunk)}\n\n"
+                yield "data: [DONE]\n\n"
 
-    async for token in streaming_handler.aiter():
-        chunk = {
+    except Exception as e:
+        print(f"Error during streaming: {e}", flush=True)
+        error_chunk = {
             'id': completion_id,
             'object': 'chat.completion.chunk',
             'created': current_time,
             'model': model,
-            'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': token}, 'finish_reason': None}]
+            'choices': [{'delta': {}, 'index': 0, 'finish_reason': 'error'}],
+            'error': {
+                'message': str(e),
+                'type': type(e).__name__,
+                'param': None,
+                'code': None
+            }
         }
-        yield f"data: {json.dumps(chunk)}\n\n"
-
-    await task
-
-    final_chunk = {
-        'id': completion_id,
-        'object': 'chat.completion.chunk',
-        'created': current_time,
-        'model': model,
-        'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'stop'}]
-    }
-    yield f"data: {json.dumps(final_chunk)}\n\n"
-    yield "data: [DONE]\n\n"
-
-# Cli agent
-class CliStreamingHandler(AsyncIteratorCallbackHandler):
-    def __init__(self):
-        super().__init__()
-        self.tokens = []
-
-    async def on_llm_new_token(self, token: str, **kwargs) -> None:
-        self.tokens.append(token)
-        print(token, end="", flush=True)
+        yield f"data: {json.dumps(error_chunk)}\n\n"
+        yield "data: [DONE]\n\n"
+        raise
 
 async def async_cliAgent():
     print("Welcome, please type your request. Type 'exit' to quit.")
     chat_history = []
-    streaming_handler = CliStreamingHandler()
 
     while True:
         user_input = input("\nYou: ")
@@ -502,28 +492,28 @@ async def async_cliAgent():
 
         print("\nAgent: ", end="", flush=True)
         
-        task = asyncio.create_task(
-            completion_executor.ainvoke(
+        try:
+            async for event in completion_executor.astream_events(
                 {
                     "input": user_input,
                     "chat_history": chat_history
                 },
-                {"callbacks": [streaming_handler]}
-            )
-        )
+                version="v1"
+            ):
+                kind = event["event"]
+                if kind == "on_chat_model_stream":
+                    content = event["data"]["chunk"].content
+                    if content:
+                        print(content, end="", flush=True)
+                elif kind == "on_chain_end" and event["name"] == "Agent":
+                    print()  # Add a newline after the response
 
-        async for _ in streaming_handler.aiter():
-            pass  # We're printing in the callback, so just wait for it to finish here
+            # Update chat history
+            chat_history.append({"role": "user", "content": user_input})
+            chat_history.append({"role": "assistant", "content": event['data'].get('output')['output']})
 
-        await task
-        print()  # Add a newline after the streamed response
-
-        # Update chat history
-        chat_history.append({"role": "user", "content": user_input})
-        chat_history.append({"role": "assistant", "content": "".join(streaming_handler.tokens)})
-
-        # Clear tokens for next iteration
-        streaming_handler.tokens.clear()
+        except Exception as e:
+            print(f"\nError during execution: {e}", flush=True)
 
 def cliAgent():
     asyncio.run(async_cliAgent())
