@@ -191,7 +191,7 @@ curl -X POST http://localhost:8000/completions \
 
 The server will respond with a JSON object containing the task result or an error message.
 
-Useful for development and testing before exporting to a standalone agent.
+Useful for development and testing, internally it exports and runs a standalone agent.
 
 ### Migrating Tasks
 
