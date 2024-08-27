@@ -23,7 +23,7 @@ export default async function serve(options) {
   const tmpDir = path.join(config.project.tmpDir, 'standalone_agent');
   const venvPath = path.join(tmpDir, 'venv');
 
-  if (config.project.runtime.name !== 'python') {
+  if (config.project.runtime.runtimeName !== 'python') {
     console.log('Serve is only supported for Python.');
     return;
   }
