@@ -1,4 +1,5 @@
 import { generateAnsweringFunctionPrompt } from '../ai/prompts/generate-answering-function.js';
+import { getAssistantInstructionsPrompt } from '../ai/prompts/assistant-instructions.js';
 import * as config from '../config.js';
 import { getAllFiles } from '../lib/file-utils.js';
 import { extractFunctionCode } from '../lib/parse-utils.js';
@@ -9,44 +10,8 @@ import yaml from 'js-yaml';
 const { runtimeName, codeFileExtension } = config.project.runtime;
 const { codeDir, metadataDir, tasksDir } = config.project;
 
-const completionPrompt = `You are a helpful bot assistant that runs tasks based on the user prompt
 
-MAIN GUIDELINES
-
-- Apply your best judgment to decide which tasks to run, if one or more tasks look like they do the same pick a single one
-- To answer questions give preference to tasks that don't generate files unless the user specifically asks for them
-- If the task response includes file paths append them to the end of your response as described in the json block instructions below
-- For math formulas use syntax supported by KaTex and use $$ as delimiter
-- If the user doesn't explicitly ask for a file, asume the data should be rendered with markdown in the response itself
-- Always use markdown to format your response, prefer tables and text formatting over code blocks unless its code
-- Be strict about the accuracy of your responses, do not offer alternative data or use incorrect information
-- Avoid making assumptions or providing speculative answers, when in doubt ask for clarification
-
-CRITERIA FOR USING TOOLS
-
-- If none of the existing tools help you fulfill the request, use the run-ad-hoc-task tool to fulfill the request
-- When using run-ad-hoc-task, make your best guess to select the most suitable agent based on its description and tools
-- If the run-ad-hoc-task result doesn't fully address the user's request or seems incorrect, try using run-ad-hoc-task again with a refined task description (more details below)
-- Only after exhausting all possibilities with run-ad-hoc-task, if you still cannot provide accurate information, reply with a friendly error message explaining that you don't have the necessary information or capabilities to answer the question
-
-AGENT TOOLS INSTRUCTIONS
-
-- The function tools you have available belong to an agent
-- The following is the agent's instructions and domain information that will help you understand how to use the data its functions return
-
-AD-HOC TASK INSTRUCTIONS
-- Try your best to use existing tools but if there aren't any that can be used to fulfill the user's request then call the adhoc tool to achieve what you need to do, select the most suitable agent based on its description and existing tools
-- Look suspiciously at results that are not what you expect: adhoc generates and runs new code and the results could be wrong, apply your best judgment to determine if the result looks correct or not
-    - For example: it returned an array with only invalid or missing data like nulls or empty strings
-- If the results do not look correct try to fix them by using the adhoc tool again with an updated description of the task
-
-AGENT DOMAIN INFORMATION
-
-AGENT INSTRUCTIONS
-This is an agent specialized in retrieving bank data from the FDIC API`
-
-
-function agentTemplate(imports, functions, libs, tasks, taskNameMap, taskToolSchemas, adhocToolSchemas, instructions, signatures, examples) {
+function agentTemplate(imports, functions, libs, tasks, taskNameMap, taskToolSchemas, adhocToolSchemas, instructions, assistantInstructions, signatures, examples) {
   return `import os
 import requests
 import argparse
@@ -213,7 +178,7 @@ example_prompt = ChatPromptTemplate.from_messages(
     ]
 )
 
-completion_promptText = """${completionPrompt}"""
+completion_promptText = """${getAssistantInstructionsPrompt(assistantInstructions, instructions)}"""
 
 completion_prompt = ChatPromptTemplate.from_messages(
     [
@@ -533,6 +498,8 @@ async def async_cliAgent():
 def cliAgent():
     asyncio.run(async_cliAgent())
 
+port = int(os.getenv('PORT')) if os.getenv('PORT') else 8000
+
 if __name__ == "__main__":    
     parser = argparse.ArgumentParser(description="FAQtiv Agent CLI/HTTP Server")
     parser.add_argument("--http", action="store_true", help="Run as HTTP server")
@@ -541,7 +508,7 @@ if __name__ == "__main__":
     if args.http:
         import uvicorn
         print("Starting HTTP server...")
-        uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
+        uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
     else:
         cliAgent()
 `
@@ -594,8 +561,8 @@ function getExamples() {
     const jsFilePath = path.join(codeDir, `${name}${codeFileExtension}`);
 
     if (!fs.existsSync(ymlFilePath) || !fs.existsSync(txtFilePath) || !fs.existsSync(jsFilePath)) {
-    console.warn(`Skipping example "${name}" due to missing files.`);
-    continue;
+      console.warn(`Skipping example "${name}" due to missing files.`);
+      continue;
     }
 
     const yamlContent = yaml.load(fs.readFileSync(ymlFilePath, 'utf8'));
@@ -604,51 +571,23 @@ function getExamples() {
     const doTaskCodeString = extractFunctionCode(jsFileContent, 'doTask');
 
     examples.push({
-    taskEmbedding: yamlContent.embedding,
-    functionsEmbedding: yamlContent.functions_embedding,
-    document: {
+      taskEmbedding: yamlContent.embedding,
+      functionsEmbedding: yamlContent.functions_embedding,
+      document: {
         id: yamlContent.id,
         task: taskText,
         code: doTaskCodeString
-    }
+      }
     });
   }
 
   return examples;
 }
 
-export default async function exportStandalone(outputDir = process.cwd()) {
-  const { instructions, libs, functions, functionsHeader } = config.project;
 
-  if (runtimeName !== 'python') {
-    console.log('Standalone export is only supported for Python.');
-    return;
-  }
-
-  const adhocToolSchemas = functionsHeader.function_tool_schemas;
-  const functionsCode = functions.map(f => f.code);
-  const libsCode = libs.map(l => l.code);
-  const imports = [...new Set(libs.concat(functions).flatMap(f => f.imports))];
-  const { taskFunctions, taskNameMap, taskToolSchemas } = getTaskFunctions();
-  const examples = getExamples();
-
-  const agentCode = agentTemplate(
-    imports, 
-    functionsCode, 
-    libsCode, 
-    taskFunctions,
-    taskNameMap,
-    taskToolSchemas,
-    adhocToolSchemas, 
-    instructions, 
-    functionsHeader.signatures, 
-    examples
-  );
-
-  fs.writeFileSync(path.join(outputDir, 'agent.py'), agentCode);
-
-  // Generate requirements.txt
-  const requirements = [
+// requirements.txt
+const getRequirements = (agentModules) => {
+  return [
     'faiss-cpu==1.8.0.post1',
     'fastapi==0.112.0',
     'langchain==0.2.12',
@@ -661,12 +600,12 @@ export default async function exportStandalone(outputDir = process.cwd()) {
     'pydantic==2.8.2',
     'pydantic_core==2.20.1',
     'requests==2.32.3',
-    'uvicorn==0.30.5'
-  ];
-  fs.writeFileSync(path.join(outputDir, 'requirements.txt'), requirements.join('\n'));
+    'uvicorn==0.30.5',
+    ...agentModules
+  ].join('\n');
+};
 
-  // Generate README.md
-  const readmeContent = `# Standalone FAQtiv Agent
+const readmeContent = `# Standalone FAQtiv Agent
 
 This is a standalone version of a FAQtiv agent. It includes all the necessary components to run the agent independently.
 
@@ -729,11 +668,45 @@ For more detailed information on how to use these endpoints, refer to the origin
 This standalone agent is a static export and does not have the ability to compile new tasks or modify existing ones. It represents the agent's state at the time of export.
 `;
 
+export default async function exportStandalone(outputDir = process.cwd(), options = {}) {
+  const { silent = false } = options;
+  const log = silent ? () => {} : console.log;
+
+  const { instructions, assistantInstructions, libs, functions, functionsHeader, modules } = config.project;
+
+  if (runtimeName !== 'python') {
+    log('Standalone export is only supported for Python.');
+    return;
+  }
+
+  const adhocToolSchemas = functionsHeader.function_tool_schemas;
+  const functionsCode = functions.map(f => f.code);
+  const libsCode = libs.map(l => l.code);
+  const imports = [...new Set(libs.concat(functions).flatMap(f => f.imports))];
+  const { taskFunctions, taskNameMap, taskToolSchemas } = getTaskFunctions();
+  const examples = getExamples();
+
+  const agentCode = agentTemplate(
+    imports, 
+    functionsCode, 
+    libsCode, 
+    taskFunctions,
+    taskNameMap,
+    taskToolSchemas,
+    adhocToolSchemas, 
+    instructions, 
+    assistantInstructions,
+    functionsHeader.signatures, 
+    examples
+  );
+
+  fs.writeFileSync(path.join(outputDir, 'agent.py'), agentCode);
+  fs.writeFileSync(path.join(outputDir, 'requirements.txt'), getRequirements(modules.map(m => m.name)));
   fs.writeFileSync(path.join(outputDir, 'README.md'), readmeContent);
 
-  console.log(`Standalone agent exported to ${outputDir}`);
-  console.log('Generated files:');
-  console.log('- agent.py');
-  console.log('- requirements.txt');
-  console.log('- README.md');
+  log(`Standalone agent exported to ${outputDir}`);
+  log('Generated files:');
+  log('- agent.py');
+  log('- requirements.txt');
+  log('- README.md');
 }

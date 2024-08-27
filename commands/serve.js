@@ -1,57 +1,101 @@
-import express from 'express';
-import runTask from './run-task.js';
-import runAdHocTask from './run-ad-hoc-task.js';
-import { extractFunctionCode, getFunctionParameters } from '../lib/parse-utils.js';
-import fs from 'fs';
+import { exec } from 'child_process';
 import path from 'path';
+import fs from 'fs';
 import * as config from '../config.js';
+import exportStandalone from './export-standalone.js';
 
-export default function serve(options) {
-  const app = express();
+function runCommand(command, options = {}) {
+  return new Promise((resolve, reject) => {
+    const process = exec(command, options);
+    
+    process.stdout.on('data', (data) => console.log(data.toString()));
+    process.stderr.on('data', (data) => console.error(data.toString()));
+    
+    process.on('close', (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`Command failed with exit code ${code}`));
+    });
+  });
+}
+
+export default async function serve(options) {
   const port = options.port || 8000;
+  const tmpDir = path.join(config.project.tmpDir, 'standalone_agent');
+  const venvPath = path.join(tmpDir, 'venv');
 
-  app.use(express.json());
+  if (config.project.runtime.name !== 'python') {
+    console.log('Serve is only supported for Python.');
+    return;
+  }
 
-  app.post('/run_task/:taskName', async (req, res) => {
-    try {
-      const { taskName } = req.params;
-      const { args = {}, output, files, error } = req.body;
+  // Ensure the tmp directory exists
+  if (!fs.existsSync(tmpDir)) {
+    fs.mkdirSync(tmpDir, { recursive: true });
+  }
 
-      // Validate and order arguments
-      const taskFile = path.join(config.project.codeDir, `${taskName}${config.project.runtime.codeFileExtension}`);
-      if (!fs.existsSync(taskFile)) {
-        return res.status(404).json({ error: `Task "${taskName}" doesn't exist` });
-      }
+  console.log('Creating agent...');
+  await exportStandalone(tmpDir, { silent: true });
 
-      const taskCode = fs.readFileSync(taskFile, 'utf8');
-      const doTaskCode = extractFunctionCode(taskCode, 'doTask');
-      const doTaskParameters = getFunctionParameters(doTaskCode);
+  console.log('Installing dependencies...');
+  try {
+    // Create virtual environment
+    await runCommand(`${config.project.runtime.command} -m venv venv`, { cwd: tmpDir, stdio: 'ignore' });
+    
+    // Install dependencies
+    const activateCommand = process.platform === 'win32' ?
+      `${venvPath}\\Scripts\\activate.bat && ` :
+      `source ${venvPath}/bin/activate && `;
 
-      const orderedArgs = doTaskParameters.map(param => {
-        if (!(param in args)) {
-          return res.status(400).json({ error: `Missing required parameter: ${param}` });
-        }
-        return args[param];
-      });
+    const installCommand = `${activateCommand}${config.project.runtime.packageManager} install -r requirements.txt`;
+    
+    await runCommand(installCommand, { 
+      cwd: tmpDir,
+      stdio: ['ignore', 'ignore', 'pipe'], // Suppress stdout, keep stderr
+      shell: true
+    });
+  } catch (error) {
+    console.error('Failed to install dependencies:', error);
+    process.exit(1);
+  }
 
-      const result = await runTask(taskName, orderedArgs, { output, files, error });
-      res.json({ result });
-    } catch (error) {
-      res.status(500).json({ error: error.message });
-    }
+  console.log('Starting the standalone agent server...');
+  const agentPath = path.join(tmpDir, 'agent.py');
+  
+  const activateCommand = process.platform === 'win32' ?
+    `${venvPath}\\Scripts\\activate.bat && ` :
+    `source ${venvPath}/bin/activate && `;
+
+  const agentCommand = `${activateCommand}${config.project.runtime.command} ${agentPath} --http`;
+
+  const serverProcess = exec(agentCommand, { 
+    env: {
+      ...process.env,
+      OPENAI_API_KEY: config.openai.apiKey,
+      OPENAI_MODEL: config.openai.model,
+      PORT: port.toString()
+    },
+    cwd: tmpDir,
+    shell: true
   });
 
-  app.post('/run_adhoc', async (req, res) => {
-    try {
-      const { input } = req.body;
-      const result = await runAdHocTask(input);
-      res.json({ result });
-    } catch (error) {
-      res.status(500).json({ error: error.message });
-    }
+  serverProcess.stdout.on('data', (data) => {
+    console.log(data.toString());
   });
 
-  app.listen(port, () => {
-    console.log(`Server running on port ${port}`);
+  serverProcess.stderr.on('data', (data) => {
+    console.error(data.toString());
+  });
+
+  serverProcess.on('close', (code) => {
+    console.log(`Server process exited with code ${code}`);
+  });
+
+  console.log(`Server running on port ${port}`);
+
+  // Handle SIGINT (Ctrl+C) to gracefully shut down the server
+  process.on('SIGINT', () => {
+    console.log('Shutting down server...');
+    serverProcess.kill();
+    process.exit();
   });
 }
