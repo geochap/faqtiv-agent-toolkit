@@ -35,6 +35,7 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 from langchain.callbacks import AsyncIteratorCallbackHandler
 from functools import partial
+from fastapi.middleware.cors import CORSMiddleware  # Add this import
 
 EXPECTED_EMBEDDING_DIMENSION = 1536
 
@@ -199,6 +200,15 @@ llm = ChatOpenAI(model=model)
 # http agent
 
 app = FastAPI()
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
+)
 
 async def capture_and_process_output(func, *args, **kwargs):
     f = io.StringIO()
@@ -443,9 +453,9 @@ async def stream_completion(request: CompletionRequest):
         }
     ):
         if "output" in event:
-            yield f"data: {json.dumps({'id': completion_id, 'object': 'chat.completion.chunk', 'created': current_time, 'model': request.model, 'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': event['output']}, 'finish_reason': None}]})}\\n\\n"
+            yield f"data: {json.dumps({'id': completion_id, 'object': 'chat.completion.chunk', 'created': current_time, 'model': model, 'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': event['output']}, 'finish_reason': None}]})}\\n\\n"
 
-    yield f"data: {json.dumps({'id': completion_id, 'object': 'chat.completion.chunk', 'created': current_time, 'model': request.model, 'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'stop'}]})}\\n\\n"
+    yield f"data: {json.dumps({'id': completion_id, 'object': 'chat.completion.chunk', 'created': current_time, 'model': model, 'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'stop'}]})}\\n\\n"
     yield "data: [DONE]\\n\\n"
 
 # Cli agent
