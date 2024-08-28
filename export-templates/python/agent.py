@@ -4,7 +4,7 @@ import argparse
 from typing import List, Dict, Union, Any, Optional
 from pydantic import BaseModel, Field, create_model
 from langchain_core.tools import StructuredTool
-from langchain_core.prompts import ChatPromptTemplate, FewShotChatMessagePromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
@@ -180,8 +180,11 @@ completion_prompt = ChatPromptTemplate.from_messages(
 api_key = os.getenv('OPENAI_API_KEY')
 model = os.getenv('OPENAI_MODEL')
 
-# Initialize OpenAI LLM
-llm = ChatOpenAI(model=model)
+# Initialize OpenAI LLM for adhoc tasks
+openAIClient = OpenAI(api_key=api_key)
+
+# Initialize OpenAI LLM for completion agent
+completion_llm = ChatOpenAI(model=model)
 
 # http agent
 
@@ -245,10 +248,6 @@ async def generate_and_execute_adhoc(user_input: str, max_retries: int = 3):
 
     # Get relevant examples
     relevant_examples = get_relevant_examples(user_input)
-    few_shot_prompt = FewShotChatMessagePromptTemplate(
-        example_prompt=example_prompt,
-        examples=relevant_examples,
-    )
 
     while retry_count <= max_retries:
         try:
@@ -259,30 +258,27 @@ async def generate_and_execute_adhoc(user_input: str, max_retries: int = 3):
                 if previous_code:
                     error_context += f"Previous code:\n{previous_code}\n"
                 error_context += "Please fix the issue and try again.\n"
-
-            current_prompt = ChatPromptTemplate.from_messages(
-                [
-                    ("system", adhoc_promptText),
-                    ("placeholder", "{chat_history}"),
-                    few_shot_prompt,
-                    ("human", "{input}"),
-                    ("placeholder", "{agent_scratchpad}"),
+            
+            example_messages = [
+                {"role": "user" if i % 2 == 0 else "assistant", "content": content}
+                for example in relevant_examples
+                for i, content in enumerate([example["task"], example["code"]])
+            ]
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": adhoc_promptText},
+                    *example_messages,
+                    {"role": "user", "content": f"{error_context}{user_input}"}
                 ]
             )
-            formatted_prompt = current_prompt.format(
-                input=f"{error_context}{user_input}",
-                chat_history=[],
-                agent_scratchpad=[],
-            )
-            
-            response = await llm.ainvoke(formatted_prompt)
-            function_code = extract_function_code(response.content)
-            
+            function_code = extract_function_code(response.choices[0].message.content)
+
             if not function_code:
                 raise ValueError("Failed to generate function code")
             if function_code:
                 previous_code = function_code
-            
+
             result = await capture_and_process_output(execute_generated_function, function_code)
             return result
 
@@ -377,7 +373,7 @@ adhoc_tool = create_tools_from_schemas(completion_tool_schemas)
 
 # Create an agent for the completion endpoint using the adhoc tool
 completion_tools = adhoc_tool + task_tools
-completion_agent = create_tool_calling_agent(llm, completion_tools, completion_prompt)
+completion_agent = create_tool_calling_agent(completion_llm, completion_tools, completion_prompt)
 completion_executor = AgentExecutor(agent=completion_agent, tools=completion_tools)
 
 @app.post("/completions")
