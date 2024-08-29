@@ -107,21 +107,14 @@ def add_table_header(worksheet, row, col, column_names):
 def doTask(bank_name: str, years: str):
     import json
 
-    # Unpack the years parameter
-    years = years.split('|')
-
-    # Get the bank ID based on the given bank name
     bank_id = get_bank_id_by_name(bank_name)
-
-    # Retrieve financial records for the selected bank
     financials = get_bank_financials(bank_id)
-
-    # Filter financial records based on the specific years
-    filtered_financials = [
+    
+    selected_years = set(int(year) for year in years.split('|'))
+    
+    report = [
         {"Report Date": record["report_date"], "Total Deposits": record["total_deposits"]}
-        for record in financials
-        if record["report_date"].split('-')[0] in years
+        for record in financials if int(record["report_date"][:4]) in selected_years
     ]
-
-    # Output the filtered financial records
-    print(json.dumps(filtered_financials))
+    
+    print(json.dumps(report))

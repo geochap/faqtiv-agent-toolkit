@@ -19,7 +19,6 @@ import time
 import uuid
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
-from langchain.callbacks import AsyncIteratorCallbackHandler
 from functools import partial
 from fastapi.middleware.cors import CORSMiddleware
 from langchain.chat_models.base import BaseChatModel
