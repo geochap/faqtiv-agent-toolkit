@@ -22,6 +22,8 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from langchain.callbacks import AsyncIteratorCallbackHandler
 from functools import partial
 from fastapi.middleware.cors import CORSMiddleware
+from langchain.chat_models.base import BaseChatModel
+from langchain.schema import SystemMessage, HumanMessage, AIMessage
 
 EXPECTED_EMBEDDING_DIMENSION = 1536
 
@@ -180,9 +182,6 @@ completion_prompt = ChatPromptTemplate.from_messages(
 api_key = os.getenv('OPENAI_API_KEY')
 model = os.getenv('OPENAI_MODEL')
 
-# Initialize OpenAI LLM for adhoc tasks
-openAIClient = OpenAI(api_key=api_key)
-
 # Initialize OpenAI LLM for completion agent
 completion_llm = ChatOpenAI(model=model)
 
@@ -241,6 +240,9 @@ async def execute_generated_function(function_code):
     
     return result
 
+# Initialize the language model
+llm: BaseChatModel = ChatOpenAI(model=model)
+
 async def generate_and_execute_adhoc(user_input: str, max_retries: int = 3):
     retry_count = 0
     errors = []
@@ -264,15 +266,16 @@ async def generate_and_execute_adhoc(user_input: str, max_retries: int = 3):
                 for example in relevant_examples
                 for i, content in enumerate([example["task"], example["code"]])
             ]
-            response = client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": adhoc_promptText},
-                    *example_messages,
-                    {"role": "user", "content": f"{error_context}{user_input}"}
-                ]
-            )
-            function_code = extract_function_code(response.choices[0].message.content)
+            
+            # Use the generic language model for the completion
+            messages = [
+                SystemMessage(content=adhoc_promptText),
+                *[HumanMessage(content=msg["content"]) if msg["role"] == "user" else AIMessage(content=msg["content"]) for msg in example_messages],
+                HumanMessage(content=f"{error_context}{user_input}")
+            ]
+            response = await llm.agenerate([messages])
+            
+            function_code = extract_function_code(response.generations[0][0].text)
 
             if not function_code:
                 raise ValueError("Failed to generate function code")
