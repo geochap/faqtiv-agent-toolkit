@@ -425,14 +425,43 @@ async def stream_completion(request: CompletionRequest):
     completion_id = f"cmpl-{uuid.uuid4()}"
     conversation = [{"role": msg.role, "content": msg.content} for msg in request.messages]
 
+    async def process_request(input_data):
+        try:
+            async for event in completion_executor.astream_events(input_data, version="v2"):
+                kind = event["event"]
+                if kind == "on_tool_start":
+                    current_tool = event["name"]
+                yield event
+        except Exception as e:
+            # Handle tool output context length errors
+            error_message = str(e)
+            if "context length" in error_message.lower() or "too many tokens" in error_message.lower():
+                error_response = (
+                    f"Error: The tool '{current_tool}' returned too much data. "
+                    "Please try to be more specific or choose a different approach that requires less data."
+                )
+                # Add the error as a tool call result to the chat history
+                input_data["chat_history"].append({
+                    "role": "function",
+                    "name": current_tool,
+                    "content": error_response
+                })
+                # Retry with the updated chat history
+                retry_input = {
+                    "input": "The previous tool call returned too much data. Please adjust your approach and try again.",
+                    "chat_history": input_data["chat_history"]
+                }
+                async for retry_event in completion_executor.astream_events(retry_input, version="v2"):
+                    yield retry_event
+            else:
+                # Re-raise other exceptions
+                raise
+
     try:
-        async for event in completion_executor.astream_events(
-            {
-                "input": conversation[-1]["content"],
-                "chat_history": conversation[:-1]
-            },
-            version="v1"
-        ):
+        async for event in process_request({
+            "input": conversation[-1]["content"],
+            "chat_history": conversation[:-1]
+        }):
             kind = event["event"]
             if kind == "on_chat_model_stream":
                 content = event["data"]["chunk"].content
@@ -494,7 +523,7 @@ async def async_cliAgent():
                     "input": user_input,
                     "chat_history": chat_history
                 },
-                version="v1"
+                version="v2"
             ):
                 kind = event["event"]
                 if kind == "on_chat_model_stream":
