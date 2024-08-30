@@ -46,9 +46,6 @@ task_tool_schemas = {
 {{ taskToolSchemas }}
 }
 
-# Adhoc tool schemas
-tool_schemas = {{ adhocToolSchemas }}
-
 # Examples with pre-computed embeddings
 examples_with_embeddings = {{ examples }}
 
@@ -151,21 +148,6 @@ adhoc_promptText = """
 
 adhoc_promptText = adhoc_promptText.replace("{", "{{").replace("}", "}}") # escape curly braces to avoid template errors
 
-adhoc_prompt = ChatPromptTemplate.from_messages(
-    [
-        ("system", adhoc_promptText),
-        ("placeholder", "{chat_history}"),
-        ("human", "{input}"),
-        ("placeholder", "{agent_scratchpad}"),
-    ]
-)
-example_prompt = ChatPromptTemplate.from_messages(
-    [
-        ("human", "{task}"),
-        ("ai", "{code}"),
-    ]
-)
-
 completion_promptText = """{{ getAssistantInstructionsPrompt }}"""
 
 completion_prompt = ChatPromptTemplate.from_messages(
@@ -239,8 +221,8 @@ async def execute_generated_function(function_code):
     
     return result
 
-# Initialize the language model
-llm: BaseChatModel = ChatOpenAI(model=model)
+# Initialize the adhoc language model
+adhoc_llm: BaseChatModel = ChatOpenAI(model=model)
 
 async def generate_and_execute_adhoc(user_input: str, max_retries: int = 3):
     retry_count = 0
@@ -272,7 +254,7 @@ async def generate_and_execute_adhoc(user_input: str, max_retries: int = 3):
                 *[HumanMessage(content=msg["content"]) if msg["role"] == "user" else AIMessage(content=msg["content"]) for msg in example_messages],
                 HumanMessage(content=f"{error_context}{user_input}")
             ]
-            response = await llm.agenerate([messages])
+            response = await adhoc_llm.agenerate([messages])
             
             function_code = extract_function_code(response.generations[0][0].text)
 
@@ -322,6 +304,7 @@ async def run_task_endpoint(task_name: str, request: Request):
     
     task_function = globals()[valid_task_name]
 
+    # todo: make sure the args are in the correct positional order
     try:
         result = await capture_and_process_output(task_function, **args)
         return {"result": result}

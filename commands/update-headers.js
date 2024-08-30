@@ -66,13 +66,11 @@ export default async function(options) {
     const functionsCode = fullPaths.map(file => fs.readFileSync(file, 'utf8'));
     const improvedSignatures = await codeAgent.improveFunctionSignatures(functionsCode, signatures);
     const headersEmbedding = encodeBase64(await getTaskEmbedding(improvedSignatures));
-    const functionToolSchemas = await codeAgent.generateLangchainToolSchemas(improvedSignatures);
 
     // Write to header file
     fs.writeFileSync(headerPath, yaml.dump({
       signatures: improvedSignatures,
-      embedding: headersEmbedding,
-      function_tool_schemas: functionToolSchemas
+      embedding: headersEmbedding
     }), 'utf8');
     console.log('Function signatures header updated');
   } catch (error) {

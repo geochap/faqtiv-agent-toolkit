@@ -4,7 +4,6 @@ import { extractFunctionNames } from '../lib/parse-utils.js';
 import { generateAnsweringFunctionPrompt } from './prompts/generate-answering-function.js';
 import { extractFunctionCode } from '../lib/parse-utils.js';
 import { improveFunctionSignaturesPrompt } from './prompts/improve-function-signatures.js';
-import { generateLangchainToolSchemasFromSignaturesPrompt } from './prompts/generate-langchain-tool-schemas-from-signatures.js';
 import { generateLangchainToolSchemaFromFunctionPrompt } from './prompts/generate-langchain-tool-schema-from-function.js';
 
 function codeResponse(response) {
@@ -102,16 +101,6 @@ export default class CodeAgent {
       new HumanMessage(generateLangchainToolSchemaFromFunctionPrompt(taskName, code, functionName))
     ];
     const messages = await this.ai.start(null, prompt, [], 'generate-task-schema');
-    const response = messages[messages.length - 1].content.trim();
-  
-    return response;
-  }
-
-  async generateLangchainToolSchemas(functionSignatures) {
-    const prompt = [
-      new HumanMessage(generateLangchainToolSchemasFromSignaturesPrompt(functionSignatures))
-    ];
-    const messages = await this.ai.start(null, prompt, [], 'generate-langchain-function-schemas');
     const response = messages[messages.length - 1].content.trim();
   
     return response;

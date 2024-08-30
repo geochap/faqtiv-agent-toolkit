@@ -27,8 +27,7 @@ In a codeblock at the top of your response write a ${runtimeName} function calle
 
 const adHocPrompt = `
 - doTask must not accept any parameters, hardcode all values.
-- Never generate files, write the data as JSON to stdout as-is.
-- Ignore any functions which generate files.
+- Ignore globally available public functions that are related to file creation, the generated data has to be written as JSON to stdout as-is.
 `;
 
 const compilePrompt = `

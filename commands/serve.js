@@ -4,6 +4,8 @@ import fs from 'fs';
 import * as config from '../config.js';
 import exportStandalone from './export-standalone.js';
 
+const { runtimeName, codeFileExtension } = config.project.runtime;
+
 function runCommand(command, options = {}) {
   return new Promise((resolve, reject) => {
     const process = exec(command, options);
@@ -23,8 +25,8 @@ export default async function serve(options) {
   const tmpDir = path.join(config.project.tmpDir, 'standalone_agent');
   const venvPath = path.join(tmpDir, 'venv');
 
-  if (config.project.runtime.runtimeName !== 'python') {
-    console.log('Serve is only supported for Python.');
+  if (runtimeName !== 'python' && runtimeName !== 'javascript') {
+    log(`Serve is not supported for ${runtimeName}.`);
     return;
   }
 
@@ -38,34 +40,49 @@ export default async function serve(options) {
 
   console.log('Installing dependencies...');
   try {
-    // Create virtual environment
-    await runCommand(`${config.project.runtime.command} -m venv venv`, { cwd: tmpDir, stdio: 'ignore' });
-    
-    // Install dependencies
-    const activateCommand = process.platform === 'win32' ?
-      `${venvPath}\\Scripts\\activate.bat && ` :
-      `source ${venvPath}/bin/activate && `;
+    if (runtimeName === 'python') {
+      // Create virtual environment
+      await runCommand(`${config.project.runtime.command} -m venv venv`, { cwd: tmpDir, stdio: 'ignore' });
+      
+      // Install dependencies
+      const activateCommand = process.platform === 'win32' ?
+        `${venvPath}\\Scripts\\activate.bat && ` :
+        `source ${venvPath}/bin/activate && `;
 
-    const installCommand = `${activateCommand}${config.project.runtime.packageManager} install -r requirements.txt`;
-    
-    await runCommand(installCommand, { 
-      cwd: tmpDir,
-      stdio: ['ignore', 'ignore', 'pipe'], // Suppress stdout, keep stderr
-      shell: true
-    });
+      const installCommand = `${activateCommand}${config.project.runtime.packageManager} install -r requirements.txt`;
+      
+      await runCommand(installCommand, { 
+        cwd: tmpDir,
+        stdio: ['ignore', 'ignore', 'pipe'], // Suppress stdout, keep stderr
+        shell: true
+      });
+    } else if (runtimeName === 'javascript') {
+      // Install dependencies for JavaScript
+      const installCommand = `${config.project.runtime.packageManager} install`;
+      
+      await runCommand(installCommand, { 
+        cwd: tmpDir,
+        stdio: ['ignore', 'ignore', 'pipe'], // Suppress stdout, keep stderr
+        shell: true
+      });
+    }
   } catch (error) {
     console.error('Failed to install dependencies:', error);
     process.exit(1);
   }
 
   console.log('Starting the standalone agent server...');
-  const agentPath = path.join(tmpDir, 'agent.py');
+  const agentPath = path.join(tmpDir, `agent${codeFileExtension}`);
   
-  const activateCommand = process.platform === 'win32' ?
-    `${venvPath}\\Scripts\\activate.bat && ` :
-    `source ${venvPath}/bin/activate && `;
-
-  const agentCommand = `${activateCommand}${config.project.runtime.command} ${agentPath} --http`;
+  let agentCommand;
+  if (runtimeName === 'python') {
+    const activateCommand = process.platform === 'win32' ?
+      `${venvPath}\\Scripts\\activate.bat && ` :
+      `source ${venvPath}/bin/activate && `;
+    agentCommand = `${activateCommand}${config.project.runtime.command} ${agentPath} --http`;
+  } else {
+    agentCommand = `${config.project.runtime.command} ${agentPath} --http`;
+  }
 
   const serverProcess = exec(agentCommand, { 
     env: {

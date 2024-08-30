@@ -12,6 +12,33 @@ import { extractFunctionCode } from '../lib/parse-utils.js';
 const { runtimeName, codeFileExtension } = config.project.runtime;
 const { codeDir, metadataDir, tasksDir } = config.project;
 
+const exportDependencies = {
+  python: [
+    'faiss-cpu==1.8.0.post1',
+    'fastapi==0.112.0',
+    'langchain==0.2.12',
+    'langchain-community==0.2.11',
+    'langchain-core==0.2.28',
+    'langchain-openai==0.1.20',
+    'langchain-text-splitters==0.2.2',
+    'numpy==1.26.4',
+    'openai==1.38.0',
+    'pydantic==2.8.2',
+    'pydantic_core==2.20.1',
+    'requests==2.32.3',
+    'uvicorn==0.30.5'
+  ],
+  javascript: {
+    "@langchain/core": "^0.2.31",
+    "@langchain/openai": "^0.2.8",
+    "body-parser": "^1.20.2",
+    "exceljs": "^4.4.0",
+    "express": "^4.19.2",
+    "langchain": "^0.2.17",
+    "zod": "^3.23.8"
+  }
+};
+
 function getTaskFunctions() {
   // Get all task files
   const taskFiles = getAllFiles(codeDir, codeFileExtension);
@@ -26,10 +53,14 @@ function getTaskFunctions() {
     const taskName = path.basename(file.fullPath, codeFileExtension);
     const doTaskCode = extractFunctionCode(code, 'doTask');
     if (doTaskCode) {
-      // Convert task name to a valid Python function name
-      const validPythonName = taskName.replace(/[^a-zA-Z0-9_]/g, '_').replace(/^[0-9]/, '_');
-      taskFunctions.push(doTaskCode.replace('def doTask', `def ${validPythonName}`));
-      taskNameMap[taskName] = validPythonName;
+      // Convert task name to a valid function name for both Python and JavaScript
+      const validFunctionName = taskName.replace(/[^a-zA-Z0-9_]/g, '_').replace(/^[0-9]/, '_');
+      
+      // Replace 'doTask' with the new function name for both Python and JavaScript
+      const updatedCode = doTaskCode.replace(/\b(def|function)\s+doTask\b/, `$1 ${validFunctionName}`);
+      
+      taskFunctions.push(updatedCode);
+      taskNameMap[taskName] = validFunctionName;
 
       // Get and update the task schema
       const metadataPath = path.join(metadataDir, `${taskName}.yml`);
@@ -38,15 +69,15 @@ function getTaskFunctions() {
         if (metadata.output && metadata.output.task_schema) {
           let schemaString = metadata.output.task_schema;
           const taskNameRegex = new RegExp(taskName, 'g');
-          schemaString = schemaString.replace(taskNameRegex, validPythonName);
-          schemaString = schemaString.replace(/doTask/g, validPythonName);
+          schemaString = schemaString.replace(taskNameRegex, validFunctionName);
+          schemaString = schemaString.replace(/\bdoTask\b/g, validFunctionName);
           taskToolSchemas.push(schemaString);
         }
       }
     }
   });
 
-  return { taskFunctions, taskNameMap, taskToolSchemas };
+  return { taskFunctions, taskNameMap, taskToolSchemas, taskFunctionNames: Object.values(taskNameMap).join(', ') };
 }
 
 function getExamples() {
@@ -82,22 +113,56 @@ function getExamples() {
   return examples;
 }
 
+const runtimeConfigs = {
+  python: {
+    templateDir: 'python',
+    agentFile: 'agent.py',
+    dependenciesFile: 'requirements.txt',
+    installCommand: `${config.project.runtime.packageManager} install -r requirements.txt`,
+    cliCommand: `${config.project.runtime.command} agent.py`,
+    httpCommand: `${config.project.runtime.command} agent.py --http`,
+  },
+  javascript: {
+    templateDir: 'javascript',
+    agentFile: 'agent.js',
+    dependenciesFile: 'package.json',
+    installCommand: `${config.project.runtime.packageManager} install`,
+    cliCommand: `${config.project.runtime.command} agent.js`,
+    httpCommand: `${config.project.runtime.command} agent.js --http`,
+  }
+};
+
+function getDependenciesFile(runtimeName, existingDependencies) {
+  let updatedDependencies = existingDependencies;
+  if (runtimeName === 'python') {
+    // For Python, append new dependencies to requirements.txt
+    updatedDependencies += '\n' + exportDependencies[runtimeName].join('\n');
+  } else if (runtimeName === 'javascript') {
+    // For JavaScript, update package.json
+    const packageJson = JSON.parse(existingDependencies || '{}');
+    packageJson.dependencies = { ...packageJson.dependencies, ...exportDependencies[runtimeName] };
+    updatedDependencies = JSON.stringify(packageJson, null, 2);
+  }
+  return updatedDependencies;
+}
+
 export default async function exportStandalone(outputDir = process.cwd(), options = {}) {
   const { silent = false } = options;
-  const log = silent ? () => {} : console.log;
+  const log = silent ? () => {} : console.error;
 
-  const { instructions, assistantInstructions, libs, functions, functionsHeader, modules } = config.project;
+  const { instructions, assistantInstructions, libs, functions, functionsHeader } = config.project;
 
-  if (runtimeName !== 'python') {
-    log('Standalone export is only supported for Python.');
+  if (!runtimeConfigs[runtimeName]) {
+    log(`Standalone export is not supported for ${runtimeName}.`);
     return;
   }
 
-  const adhocToolSchemas = functionsHeader.function_tool_schemas;
+  const runtimeConfig = runtimeConfigs[runtimeName];
   const functionsCode = functions.map(f => f.code);
+  const functionsName = functions.map(f => f.name);
   const libsCode = libs.map(l => l.code);
   const imports = [...new Set(libs.concat(functions).flatMap(f => f.imports))];
-  const { taskFunctions, taskNameMap, taskToolSchemas } = getTaskFunctions();
+  const { taskFunctions, taskNameMap, taskToolSchemas, taskFunctionNames } = getTaskFunctions();
   const examples = getExamples();
 
   // Get the current file's path
@@ -105,26 +170,35 @@ export default async function exportStandalone(outputDir = process.cwd(), option
   const __dirname = dirname(__filename);
 
   // Read template files
-  const agentTemplate = fs.readFileSync(path.join(__dirname, '../export-templates/python/agent.py'), 'utf8');
+  const agentTemplate = fs.readFileSync(path.join(__dirname, `../export-templates/${runtimeConfig.templateDir}/${runtimeConfig.agentFile}`), 'utf8');
   const readmeTemplate = fs.readFileSync(path.join(__dirname, '../export-templates/README.md'), 'utf8');
-  const requirementsTemplate = fs.readFileSync(path.join(__dirname, '../export-templates/python/requirements.txt'), 'utf8');
+
+  // Read existing dependencies file
+  let existingDependencies = '';
+  const existingDependenciesPath = path.join(process.cwd(), runtimeConfig.dependenciesFile);
+  if (fs.existsSync(existingDependenciesPath)) {
+    existingDependencies = fs.readFileSync(existingDependenciesPath, 'utf8');
+  }
+
+  // Add export dependencies to existing agent dependencies file
+  const dependencies = getDependenciesFile(runtimeName, existingDependencies);
 
   // Prepare data for templates
   const templateData = {
     imports: imports.join('\n'),
     libs: libsCode.join('\n'),
     functions: functionsCode.join('\n'),
+    functionNames: functionsName.join(',\n'),
     taskNameMap: JSON.stringify(taskNameMap, null, 2),
     tasks: taskFunctions.join('\n\n'),
     taskToolSchemas: taskToolSchemas.join(',\n'),
-    adhocToolSchemas: JSON.stringify(adhocToolSchemas, null, 2),
     examples: JSON.stringify(examples, null, 2),
     generateAnsweringFunctionPrompt: generateAnsweringFunctionPrompt(instructions, functionsHeader.signatures, true),
     getAssistantInstructionsPrompt: getAssistantInstructionsPrompt(assistantInstructions, instructions),
-    installCommand: `${config.project.runtime.packageManager} install -r requirements.txt`,
-    cliAgentCommand: `${config.project.runtime.command} agent.py`,
-    httpServerCommand: `${config.project.runtime.command} agent.py --http`,
-    agentDependencies: modules.map(m => m.name).join('\n')
+    installCommand: runtimeConfig.installCommand,
+    cliAgentCommand: runtimeConfig.cliCommand,
+    httpServerCommand: runtimeConfig.httpCommand,
+    taskFunctionNames
   };
 
   // Function to replace placeholders in templates
@@ -137,16 +211,15 @@ export default async function exportStandalone(outputDir = process.cwd(), option
   // Generate files from templates
   const agentCode = replacePlaceholders(agentTemplate, templateData);
   const readmeContent = replacePlaceholders(readmeTemplate, templateData);
-  const requirementsContent = replacePlaceholders(requirementsTemplate, templateData);
 
   // Write files
-  fs.writeFileSync(path.join(outputDir, 'agent.py'), agentCode);
+  fs.writeFileSync(path.join(outputDir, runtimeConfig.agentFile), agentCode);
   fs.writeFileSync(path.join(outputDir, 'README.md'), readmeContent);
-  fs.writeFileSync(path.join(outputDir, 'requirements.txt'), requirementsContent);
+  fs.writeFileSync(path.join(outputDir, runtimeConfig.dependenciesFile), dependencies);
 
   log(`Standalone agent exported to ${outputDir}`);
   log('Generated files:');
-  log('- agent.py');
-  log('- requirements.txt');
+  log(`- ${runtimeConfig.agentFile}`);
+  log(`- ${runtimeConfig.dependenciesFile}`);
   log('- README.md');
 }
