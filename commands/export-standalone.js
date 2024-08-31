@@ -35,7 +35,8 @@ const exportDependencies = {
     "exceljs": "^4.4.0",
     "express": "^4.19.2",
     "langchain": "^0.2.17",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "uuid": "^10.0.0"
   }
 };
 

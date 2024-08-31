@@ -6,6 +6,11 @@ const cwdPathRuntimeCode = {
   'python': 'os.getcwd() + file_name'
 };
 
+const runtimeInstructions = {
+  'javascript': `- Always use console.log to output information, do not use any other logging mechanism.`,
+  'python': `- Always use print to output information, do not use any other logging mechanism.`
+}
+
 const basePrompt = `
 You have these globally available public functions:
 
@@ -23,11 +28,12 @@ In a codeblock at the top of your response write a ${runtimeName} function calle
 - Never output anything else to stdout, any messages if needed should be included in the resulting JSON.
 - Do not include any comments or documentation in your code, only the code is needed.
 - If the code can not be generated using the available functions provide this plain text error with no additional formatting: "The request cannot be fulfilled using the available functions".
+${runtimeInstructions[runtimeName]}
 `;
 
 const adHocPrompt = `
 - doTask must not accept any parameters, hardcode all values.
-- Ignore globally available public functions that are related to file creation, the generated data has to be written as JSON to stdout as-is.
+- Do not create files unless explicitly requested, otherwise only output plain text JSON data to stdout.
 `;
 
 const compilePrompt = `
