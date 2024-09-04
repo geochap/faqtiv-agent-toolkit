@@ -1,8 +1,7 @@
-const { DynamicStructuredTool, StructuredTool } = require('@langchain/core/tools');
-const { ChatPromptTemplate } = require('@langchain/core/prompts');
+const { DynamicStructuredTool } = require('@langchain/core/tools');
+const { ChatPromptTemplate, MessagesPlaceholder } = require('@langchain/core/prompts');
 const { ChatOpenAI } = require('@langchain/openai');
-const { AIMessage, HumanMessage, SystemMessage } = require('@langchain/core/messages');
-const { AgentExecutor, createToolCallingAgent } = require('langchain/agents');
+const { AIMessage, HumanMessage, SystemMessage, ToolMessage } = require('@langchain/core/messages');
 const z = require('zod');
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -28,7 +27,7 @@ const taskFunctions = { {{ taskFunctionNames }} };
 // Task tool schemas
 const taskToolSchemas = [{{ taskToolSchemas }}]
 
-async function captureAndProcessOutput(func, ...args) {
+async function captureAndProcessOutput(func, args) {
   return new Promise((resolve, reject) => {
     const customLog = (...args) => {
       resolve(args.join(' ').trim());
@@ -63,11 +62,11 @@ async function captureAndProcessOutput(func, ...args) {
 }
 
 // Capture stdout of tasks
-async function toolWrapper(func, ...args) {
+async function toolWrapper(func, args) {
   // todo: make sure the args are in the correct positional order
   // this code extracts the args map from the object and passes them as individual value arguments
   try {
-    const result = await captureAndProcessOutput(func, ...Object.values(args[0]));
+    const result = await captureAndProcessOutput(func, Object.values(args));
     // Ensure the result is a string
     return (typeof result === 'object' ? JSON.stringify(result) : String(result));
   } catch (error) {
@@ -107,26 +106,9 @@ let adhocPromptText = `
 // Escape curly braces to avoid template errors
 adhocPromptText = adhocPromptText.replace(/\{/g, '{{').replace(/\}/g, '}}');
 
-const completionPromptText = `{{ getAssistantInstructionsPrompt }}`;
-
-const completionPrompt = ChatPromptTemplate.fromMessages(
-  [
-    ("system", completionPromptText),
-    ("placeholder", "{chat_history}"),
-    ("human", "{input}"),
-    ("placeholder", "{agent_scratchpad}"),
-  ]
-);
-
 // Read the API key and model from environment variables
 const apiKey = process.env.OPENAI_API_KEY;
 const model = process.env.OPENAI_MODEL;
-
-// Initialize OpenAI LLM for completion agent
-const completionLLM = new ChatOpenAI({
-  apiKey,
-  model,
-});
 
 // Initialize the adhoc language model
 const adhocLLM = new ChatOpenAI({
@@ -301,8 +283,23 @@ const completionTools = [
   ...taskTools
 ];
 
-const completionAgent = createToolCallingAgent({ llm: completionLLM, tools: completionTools, prompt: completionPrompt });
-const completionExecutor = new AgentExecutor({ agent: completionAgent, tools: completionTools });
+// Initialize OpenAI LLM for completion agent
+const completionLLM = new ChatOpenAI({
+  apiKey,
+  model,
+})
+.bindTools(completionTools);
+
+const completionPromptText = `{{ getAssistantInstructionsPrompt }}`;
+
+const completionPrompt = ChatPromptTemplate.fromMessages(
+  [
+    ("system", completionPromptText),
+    new MessagesPlaceholder("conversation")
+  ]
+);
+
+const completionChain = completionPrompt.pipe(completionLLM);
 
 app.post('/completions', async (req, res) => {
   const { stream = false } = req.body;
@@ -324,16 +321,47 @@ app.post('/completions', async (req, res) => {
   }
 });
 
+async function processToolCalls(toolCalls) {
+  const toolMessages = [
+    new AIMessage({
+      content: '',
+      additional_kwargs: { tool_calls: toolCalls }
+    })
+  ];
+
+  for (const toolCall of toolCalls) {
+    const tool = completionTools.find(t => t.name === toolCall.function.name);
+    if (tool) {
+      const toolResult = await tool.func(JSON.parse(toolCall.function.arguments));
+      toolMessages.push(new ToolMessage({
+        content: toolResult,
+        tool_call_id: toolCall.id,
+      }));
+    }
+  }
+  return toolMessages;
+}
+
 async function generateCompletion(request) {
   const currentTime = Math.floor(Date.now() / 1000);
   const completionId = `cmpl-${uuidv4()}`;
 
-  const conversation = request.messages.map(msg => ({ role: msg.role, content: msg.content }));
+  let conversation = request.messages.map(msg => ({ role: msg.role, content: msg.content }));
+  let finalContent = '';
 
-  const result = await completionExecutor.invoke({
-    input: conversation[conversation.length - 1].content,
-    chat_history: conversation.slice(0, -1)
-  });
+  do {
+    const result = await completionChain.invoke({
+      input: conversation[conversation.length - 1].content,
+      chat_history: conversation.length > 1 ? conversation.slice(0, -1) : [],
+    });
+
+    if (result.additional_kwargs && result.additional_kwargs.tool_calls && result.additional_kwargs.tool_calls.length > 0) {
+      const toolMessages = await processToolCalls(result.additional_kwargs.tool_calls);
+      conversation = conversation.concat(toolMessages);
+    } else {
+      finalContent = result.content;
+    }
+  } while (!finalContent);
 
   return {
     id: completionId,
@@ -345,7 +373,7 @@ async function generateCompletion(request) {
         index: 0,
         message: {
           role: 'assistant',
-          content: result.output,
+          content: finalContent,
         },
         finish_reason: 'stop',
       },
@@ -357,52 +385,57 @@ async function streamCompletion(req, res) {
   const { messages } = req.body;
   const currentTime = Math.floor(Date.now() / 1000);
   const completionId = `cmpl-${uuidv4()}`;
-  const conversation = messages.map(msg => ({ role: msg.role, content: msg.content }));
-
-  let currentTool = '';
+  let conversation = messages.map(msg => ({ role: msg.role, content: msg.content }));
 
   try {
-    const events = completionExecutor.streamEvents({
-      input: conversation[conversation.length - 1].content,
-      chat_history: conversation.slice(0, -1),
-    }, 'v2');
+    do {
+      const events = completionChain.streamEvents({
+        conversation,
+      }, {
+        version: 'v2'
+      });
 
-    for await (const event of events) {
-      const kind = event.event;
-      if (kind === 'on_tool_start') {
-        currentTool = event.name;
-      } else if (kind === 'on_chat_model_stream') {
-        const content = event.data.chunk.content;
-        if (content) {
-          const tokenChunk = {
-            id: completionId,
-            object: 'chat.completion.chunk',
-            created: currentTime,
-            model,
-            choices: [{ index: 0, delta: { role: 'assistant', content }, finish_reason: null }],
-          };
-          res.write(`data: ${JSON.stringify(tokenChunk)}\n\n`);
+      for await (const event of events) {
+        if (event.event === 'on_chat_model_stream') {
+          const content = event.data.chunk.content;
+          if (content) {
+            const tokenChunk = {
+              id: completionId,
+              object: 'chat.completion.chunk',
+              created: currentTime,
+              model,
+              choices: [{ index: 0, delta: { role: 'assistant', content }, finish_reason: null }],
+            };
+            res.write(`data: ${JSON.stringify(tokenChunk)}\n\n`);
+          }
+        } else if (event.event === 'on_chain_end') {
+          if (event.data.output.additional_kwargs.tool_calls) {
+            const toolCalls = event.data.output.additional_kwargs.tool_calls;
+            const toolMessages = await processToolCalls(toolCalls);
+            conversation = conversation.concat(toolMessages);
+          } else {
+            const tokenChunk = {
+              id: completionId,
+              object: 'chat.completion.chunk',
+              created: currentTime,
+              model,
+              choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
+            };
+            res.write(`data: ${JSON.stringify(tokenChunk)}\n\n`);
+            res.write('data: [DONE]\n\n');
+            res.end();
+            return;
+          }
         }
-      } else if (kind === 'on_chain_end' && event.name === 'AgentExecutor') {
-        const tokenChunk = {
-          id: completionId,
-          object: 'chat.completion.chunk',
-          created: currentTime,
-          model,
-          choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
-        };
-        res.write(`data: ${JSON.stringify(tokenChunk)}\n\n`);
-        res.write('data: [DONE]\n\n');
-        res.end();
       }
-    }
+    } while (true);
   } catch (error) {
     console.error(`Error during streaming: ${error}`);
     const errorChunk = {
       id: completionId,
       object: 'chat.completion.chunk',
       created: currentTime,
-      model: process.env.OPENAI_MODEL,
+      model,
       choices: [{ delta: {}, index: 0, finish_reason: 'error' }],
       error: {
         message: error.message,
