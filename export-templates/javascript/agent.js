@@ -370,8 +370,7 @@ async function generateCompletion(request) {
 
   do {
     const result = await completionChain.invoke({
-      input: conversation[conversation.length - 1].content,
-      chat_history: conversation.length > 1 ? conversation.slice(0, -1) : [],
+      conversation
     });
 
     if (result.additional_kwargs && result.additional_kwargs.tool_calls && result.additional_kwargs.tool_calls.length > 0) {
