@@ -1,7 +1,8 @@
 const { DynamicStructuredTool } = require('@langchain/core/tools');
 const { ChatPromptTemplate, MessagesPlaceholder } = require('@langchain/core/prompts');
-const { ChatOpenAI } = require('@langchain/openai');
+const { ChatOpenAI, OpenAIEmbeddings } = require('@langchain/openai');
 const { AIMessage, HumanMessage, SystemMessage, ToolMessage } = require('@langchain/core/messages');
+const { MemoryVectorStore } = require('langchain/vectorstores/memory');
 const z = require('zod');
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -25,9 +26,53 @@ const taskNameMap = {{ taskNameMap }}
 const taskFunctions = { {{ taskFunctionNames }} };
 
 // Task tool schemas
-const taskToolSchemas = [{{ taskToolSchemas }}]
+const taskToolSchemas = [{{ taskToolSchemas }}];
 
-async function captureAndProcessOutput(func, args) {
+// Examples with pre-computed embeddings
+const examplesWithEmbeddings = {{ examples }}
+
+// Initialize embeddings
+const embeddings = new OpenAIEmbeddings({
+  model: 'text-embedding-ada-002'
+});
+
+function decodeBase64Embedding(b64String) {
+  const buffer = Buffer.from(b64String, 'base64');
+  const decodedArray = new Float32Array(buffer);
+  return decodedArray;
+}
+
+// Create vector store from pre-computed embeddings
+const documents = examplesWithEmbeddings.map(example => 
+  ({ pageContent: JSON.stringify({ ...example.document, embedding: null }), metadata: {} })
+);
+const embeddingsList = examplesWithEmbeddings.map(example => 
+  decodeBase64Embedding(example.taskEmbedding)
+);
+const vectorStore = new MemoryVectorStore();
+vectorStore.addVectors(embeddingsList, documents);
+
+async function getEmbedding(text) {
+  text = text.replace("\n", " ")
+  return await embeddings.embedQuery(text)
+}
+
+async function getRelevantExamples(query, k = 10) {
+  const queryEmbedding = await getEmbedding(query);
+  const results = await vectorStore.similaritySearchVectorWithScore(queryEmbedding, k);
+
+  const relevantExamples = [];
+  for (const doc of results) {
+    const example = JSON.parse(doc[0].pageContent);
+    relevantExamples.push({
+      task: example.task,
+      code: example.code
+    });
+  }
+  return relevantExamples;
+}
+
+async function captureAndProcessOutput(func, args = []) {
   return new Promise((resolve, reject) => {
     const customLog = (...args) => {
       resolve(args.join(' ').trim());
@@ -42,7 +87,7 @@ async function captureAndProcessOutput(func, args) {
     };
 
     // Convert the function to a string
-    const funcString = func.toString();
+    const funcString = typeof func === 'function' ? func.toString() : func;
 
     // Create a new function with the context as its scope
     const contextFunction = new Function(...Object.keys(context), `return (${funcString})`)(...Object.values(context));
@@ -125,44 +170,13 @@ function extractFunctionCode(response) {
   return null;
 }
 
-async function executeGeneratedFunction(functionCode) {
-  return new Promise((resolve, reject) => {
-    const customLog = (...args) => {
-      resolve(args.join(' ').trim());
-    };
-
-    // Create a context object with all the necessary functions and variables
-    const context = {
-      require,
-      console: { log: customLog },
-      // Add all the functions and variables from the local scope that the generated function might need
-      {{ functionNames }}
-    };
-
-    // Create the doTask function with access to the context
-    const executeInContext = new Function(...Object.keys(context), functionCode);
-
-    try {
-      // Execute the function in the given context
-      executeInContext(...Object.values(context));
-
-      // Set a timeout in case customLog is never called
-      setTimeout(() => {
-        reject(new Error("Function execution timed out"));
-      }, 30000); // 30 seconds timeout
-    } catch (error) {
-      reject(error);
-    }
-  });
-}
-
 async function generateAndExecuteAdhoc(userInput, maxRetries = 3) {
   let retryCount = 0;
   const errors = [];
   let previousCode = null;
 
   // Get relevant examples
-  const relevantExamples = [] //await getRelevantExamples(userInput);
+  const relevantExamples = await getRelevantExamples(userInput);
 
   while (retryCount <= maxRetries) {
     try {
@@ -198,7 +212,7 @@ async function generateAndExecuteAdhoc(userInput, maxRetries = 3) {
 
       previousCode = functionCode;
 
-      return await executeGeneratedFunction(functionCode);
+      return await captureAndProcessOutput(functionCode);
     } catch (e) {
       const errorMessage = e.message;
       console.error(`Error during execution (attempt ${retryCount + 1}): ${errorMessage}`);
@@ -235,7 +249,12 @@ app.use((req, res, next) => {
 app.post('/run_adhoc', async (req, res) => {
   try {
     const { input } = req.body;
-    const result = await generateAndExecuteAdhoc(input);
+    let result = await generateAndExecuteAdhoc(input);
+
+    try {
+      result = JSON.parse(result);
+    } catch (e) {}
+
     res.json({ result });
   } catch (error) {
     res.status(500).json({ error: error.message });
