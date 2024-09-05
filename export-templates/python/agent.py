@@ -421,68 +421,42 @@ async def stream_completion(request: CompletionRequest):
     completion_id = f"cmpl-{uuid.uuid4()}"
     conversation = [{"role": msg.role, "content": msg.content} for msg in request.messages]
 
-    tool_call_buffer = {}
-    continue_streaming = True
-
     try:
-        while continue_streaming:
-            async for chunk in completion_chain.astream({
-                "conversation": conversation
-            }):
-                if isinstance(chunk, AIMessage) and chunk.content:
-                    token_chunk = {
-                        'id': completion_id,
-                        'object': 'chat.completion.chunk',
-                        'created': current_time,
-                        'model': model,
-                        'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': chunk.content}, 'finish_reason': None}]
-                    }
-                    yield f"data: {json.dumps(token_chunk)}\n\n"
-                
-                if chunk.additional_kwargs.get("tool_calls"):
-                    for tool_call in chunk.additional_kwargs["tool_calls"]:
-                        index = tool_call.get('index', 0)
-                        if index not in tool_call_buffer:
-                            tool_call_buffer[index] = {
-                                'id': tool_call.get('id'),
-                                'function': {
-                                    'name': tool_call.get('function', {}).get('name'),
-                                    'arguments': ''
-                                },
-                                'type': tool_call.get('type')
-                            }
-                        
-                        if tool_call['function'].get('name'):
-                            tool_call_buffer[index]['function']['name'] = tool_call['function']['name']
-                        
-                        if tool_call['function'].get('arguments'):
-                            tool_call_buffer[index]['function']['arguments'] += tool_call['function']['arguments']
-
-                if chunk.response_metadata:
-                    finish_reason = chunk.response_metadata.get('finish_reason')
-                    if finish_reason == 'tool_calls':
-                        complete_tool_calls = list(tool_call_buffer.values())
-                        tool_messages = await process_tool_calls(complete_tool_calls)
+        while True:
+            async for event in completion_chain.astream_events(
+                {"conversation": conversation},
+                version="v2"
+            ):
+                if event['event'] == 'on_chat_model_stream':
+                    content = event['data']['chunk'].content
+                    if content:
+                        token_chunk = {
+                            'id': completion_id,
+                            'object': 'chat.completion.chunk',
+                            'created': current_time,
+                            'model': model,
+                            'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': content}, 'finish_reason': None}]
+                        }
+                        yield f"data: {json.dumps(token_chunk)}\n\n"
+                elif event['event'] == 'on_chain_end':
+                    if event['data']['output'].additional_kwargs.get('tool_calls'):
+                        tool_calls = event['data']['output'].additional_kwargs['tool_calls']
+                        tool_messages = await process_tool_calls(tool_calls)
                         conversation.extend(tool_messages)
-                        tool_call_buffer.clear()
-                        # Continue the loop to process the tool results
-                        break
-                    elif finish_reason in ['stop', 'length', 'content_filter']:
-                        continue_streaming = False
-                        break
+                    else:
+                        final_chunk = {
+                            'id': completion_id,
+                            'object': 'chat.completion.chunk',
+                            'created': current_time,
+                            'model': model,
+                            'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'stop'}]
+                        }
+                        yield f"data: {json.dumps(final_chunk)}\n\n"
+                        yield "data: [DONE]\n\n"
+                        return
 
-        final_chunk = {
-            'id': completion_id,
-            'object': 'chat.completion.chunk',
-            'created': current_time,
-            'model': model,
-            'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'stop'}]
-        }
-        yield f"data: {json.dumps(final_chunk)}\n\n"
-        yield "data: [DONE]\n\n"
-
-    except Exception as e:
-        print(f"Error during streaming: {str(e)}", flush=True)
+    except Exception as error:
+        print(f"Error during streaming: {error}", flush=True)
         traceback.print_exc()
         error_chunk = {
             'id': completion_id,
@@ -491,8 +465,8 @@ async def stream_completion(request: CompletionRequest):
             'model': model,
             'choices': [{'delta': {}, 'index': 0, 'finish_reason': 'error'}],
             'error': {
-                'message': str(e),
-                'type': type(e).__name__,
+                'message': str(error),
+                'type': type(error).__name__,
                 'param': None,
                 'code': None
             }
