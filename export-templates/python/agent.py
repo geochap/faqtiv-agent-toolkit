@@ -4,8 +4,7 @@ import argparse
 from typing import List, Dict, Union, Any, Optional
 from pydantic import BaseModel, Field, create_model
 from langchain_core.tools import StructuredTool
-from langchain_core.prompts import ChatPromptTemplate
-from langchain.agents import AgentExecutor, create_tool_calling_agent
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
 from openai import OpenAI
@@ -17,12 +16,14 @@ import base64
 import numpy as np
 import time
 import uuid
+import traceback
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 from functools import partial
 from fastapi.middleware.cors import CORSMiddleware
 from langchain.chat_models.base import BaseChatModel
 from langchain.schema import SystemMessage, HumanMessage, AIMessage
+from langchain_core.messages import ToolMessage
 
 EXPECTED_EMBEDDING_DIMENSION = 1536
 
@@ -50,24 +51,11 @@ task_tool_schemas = {
 examples_with_embeddings = {{ examples }}
 
 # Initialize embeddings
-embeddings = OpenAIEmbeddings()
+embeddings = OpenAIEmbeddings(model="text-embedding-ada-002")
 
 def decode_base64_embedding(b64_string):
     decoded_bytes = base64.b64decode(b64_string)
-    embedding = np.frombuffer(decoded_bytes, dtype=np.float32)
-    
-    if len(embedding) != EXPECTED_EMBEDDING_DIMENSION:
-        print(f"Warning: Decoded embedding has unexpected dimension: {len(embedding)}. Adjusting to {EXPECTED_EMBEDDING_DIMENSION}.")
-        return adjust_embedding_dimension(embedding)
-    
-    return embedding
-
-def adjust_embedding_dimension(embedding, target_dim=EXPECTED_EMBEDDING_DIMENSION):
-    if len(embedding) < target_dim:
-        return np.pad(embedding, (0, target_dim - len(embedding)), 'constant')
-    elif len(embedding) > target_dim:
-        return embedding[:target_dim]
-    return embedding
+    return np.frombuffer(decoded_bytes, dtype=np.float32)
 
 # Create vector store from pre-computed embeddings
 texts = [json.dumps({**example['document'], 'embedding': None}) for example in examples_with_embeddings]
@@ -83,21 +71,13 @@ vector_store = FAISS.from_embeddings(
     metadatas=metadatas
 )
 
-# Initialize OpenAI client
-client = OpenAI()
-
-def get_embedding(text, model="text-embedding-ada-002"):
+def get_embedding(text):
     text = text.replace("\n", " ")
-    return client.embeddings.create(input = [text], model=model).data[0].embedding
+    return embeddings.embed_query(text)
 
 def get_relevant_examples(query: str, k: int = 10) -> List[Dict]:
     # Generate embedding for the query using the same model as stored embeddings
     query_embedding = get_embedding(query)
-    
-    # Ensure the query embedding has the correct dimension
-    if len(query_embedding) != EXPECTED_EMBEDDING_DIMENSION:
-        print(f"Warning: Query embedding dimension ({len(query_embedding)}) does not match expected dimension ({EXPECTED_EMBEDDING_DIMENSION})")
-        query_embedding = adjust_embedding_dimension(query_embedding)
  
     # Perform vector search
     results = vector_store.similarity_search_by_vector(query_embedding, k=k)
@@ -112,9 +92,30 @@ def get_relevant_examples(query: str, k: int = 10) -> List[Dict]:
     
     return relevant_examples
 
+async def capture_and_process_output(func, *args, **kwargs):
+    f = io.StringIO()
+    with redirect_stdout(f):
+        await func(*args, **kwargs) if asyncio.iscoroutinefunction(func) else func(*args, **kwargs)
+    
+    output = f.getvalue()
+    
+    try:
+        processed_result = json.loads(output)
+    except json.JSONDecodeError:
+        processed_result = output.strip()
+    
+    return processed_result
+
 # Capture stdout of tasks
 async def tool_wrapper(func, *args, **kwargs):
-    return await capture_and_process_output(func, *args, **kwargs)
+    # todo: make sure the args are in the correct positional order
+    # this code extracts the args map from the object and passes them as individual value arguments
+    arguments = args[0] if isinstance(args, tuple) and len(args) == 1 else args
+    arguments_json = json.dumps(arguments)
+    arguments_map = json.loads(arguments_json)
+    positional_args = list(arguments_map.values())
+            
+    return await capture_and_process_output(func, *positional_args, **kwargs)
 
 def create_tools_from_schemas(schemas: Dict[str, Dict[str, Any]]) -> List[StructuredTool]:
     tools = []
@@ -148,50 +149,12 @@ adhoc_promptText = """
 
 adhoc_promptText = adhoc_promptText.replace("{", "{{").replace("}", "}}") # escape curly braces to avoid template errors
 
-completion_promptText = """{{ getAssistantInstructionsPrompt }}"""
-
-completion_prompt = ChatPromptTemplate.from_messages(
-    [
-        ("system", completion_promptText),
-        ("placeholder", "{chat_history}"),
-        ("human", "{input}"),
-        ("placeholder", "{agent_scratchpad}"),
-    ]
-)
-
 # Read the API key and model from environment variables
 api_key = os.getenv('OPENAI_API_KEY')
 model = os.getenv('OPENAI_MODEL')
 
-# Initialize OpenAI LLM for completion agent
-completion_llm = ChatOpenAI(model=model)
-
-# http agent
-
-app = FastAPI()
-
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins
-    allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods
-    allow_headers=["*"],  # Allows all headers
-)
-
-async def capture_and_process_output(func, *args, **kwargs):
-    f = io.StringIO()
-    with redirect_stdout(f):
-        await func(*args, **kwargs) if asyncio.iscoroutinefunction(func) else func(*args, **kwargs)
-    
-    output = f.getvalue()
-    
-    try:
-        processed_result = json.loads(output)
-    except json.JSONDecodeError:
-        processed_result = output.strip()
-    
-    return processed_result
+# Initialize the adhoc language model
+adhoc_llm: BaseChatModel = ChatOpenAI(model=model)
 
 def extract_function_code(response):
     # Extract the code block from the response
@@ -221,9 +184,6 @@ async def execute_generated_function(function_code):
     
     return result
 
-# Initialize the adhoc language model
-adhoc_llm: BaseChatModel = ChatOpenAI(model=model)
-
 async def generate_and_execute_adhoc(user_input: str, max_retries: int = 3):
     retry_count = 0
     errors = []
@@ -243,7 +203,7 @@ async def generate_and_execute_adhoc(user_input: str, max_retries: int = 3):
                 error_context += "Please fix the issue and try again.\n"
             
             example_messages = [
-                {"role": "user" if i % 2 == 0 else "assistant", "content": content}
+                {"role": "human" if i % 2 == 0 else "assistant", "content": content}
                 for example in relevant_examples
                 for i, content in enumerate([example["task"], example["code"]])
             ]
@@ -251,7 +211,7 @@ async def generate_and_execute_adhoc(user_input: str, max_retries: int = 3):
             # Use the generic language model for the completion
             messages = [
                 SystemMessage(content=adhoc_promptText),
-                *[HumanMessage(content=msg["content"]) if msg["role"] == "user" else AIMessage(content=msg["content"]) for msg in example_messages],
+                *[HumanMessage(content=msg["content"]) if msg["role"] == "human" else AIMessage(content=msg["content"]) for msg in example_messages],
                 HumanMessage(content=f"{error_context}{user_input}")
             ]
             response = await adhoc_llm.agenerate([messages])
@@ -268,18 +228,31 @@ async def generate_and_execute_adhoc(user_input: str, max_retries: int = 3):
 
         except Exception as e:
             error_message = str(e)
-            print(f"Error during execution (attempt {retry_count + 1}): {error_message}")
+            print(f"Error during execution (attempt {retry_count + 1}): {error_message}", flush=True)
             errors.append(error_message)
             retry_count += 1
 
             if retry_count > max_retries:
-                print(f"Max retries ({max_retries}) reached. Aborting.")
+                print(f"Max retries ({max_retries}) reached. Aborting.", flush=True)
                 raise ValueError(f"Max retries reached. Last error: {error_message}")
 
-            print(f"Retrying... (attempt {retry_count} of {max_retries})")
+            print(f"Retrying... (attempt {retry_count} of {max_retries})", flush=True)
 
     # This line should never be reached, but just in case
     raise ValueError("Unexpected error occurred")
+
+# http agent
+
+app = FastAPI()
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
+)
 
 @app.post("/run_adhoc")
 async def run_adhoc_endpoint(request: Request):
@@ -329,9 +302,9 @@ class CompletionResponse(BaseModel):
     choices: List[dict]
 
 
-async def run_adhoc_task(description: str) -> str:
+async def run_adhoc_task(input: str) -> str:
     try:
-        result = await generate_and_execute_adhoc(description)
+        result = await generate_and_execute_adhoc(input["description"])
         # Ensure the result is a string
         if isinstance(result, dict):
             result = json.dumps(result)
@@ -339,8 +312,10 @@ async def run_adhoc_task(description: str) -> str:
             result = str(result)
         return result
     except Exception as e:
+        print(f"Error during execution: {str(e)}", flush=True)
+        traceback.print_exc()
         return f"Error during execution: {str(e)}"
-    
+
 completion_tool_schemas = {
     "run_adhoc_task": {
         "description": "A tool for an agent to run custom tasks described in natural language",
@@ -353,38 +328,70 @@ completion_tool_schemas = {
         "function": run_adhoc_task
     }
 }
-
 adhoc_tool = create_tools_from_schemas(completion_tool_schemas)
-
-# Create an agent for the completion endpoint using the adhoc tool
 completion_tools = adhoc_tool + task_tools
-completion_agent = create_tool_calling_agent(completion_llm, completion_tools, completion_prompt)
-completion_executor = AgentExecutor(agent=completion_agent, tools=completion_tools)
+
+# Initialize OpenAI LLM for completion agent
+completion_llm = ChatOpenAI(model=model).bind_tools(completion_tools)
+completion_promptText = """{{ getAssistantInstructionsPrompt }}"""
+completion_prompt = ChatPromptTemplate.from_messages(
+    [
+        ("system", completion_promptText),
+        MessagesPlaceholder("conversation")
+    ]
+)
+completion_chain = completion_prompt.pipe(completion_llm)
 
 @app.post("/completions")
 async def completions_endpoint(request: CompletionRequest):
     try:
         if request.stream:
-            return StreamingResponse(stream_completion(request), media_type="text/event-stream")
+            return StreamingResponse(stream_completion_wrapper(request), media_type="text/event-stream")
         else:
             return await generate_completion(request)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+async def process_tool_calls(tool_calls):
+    tool_messages = [
+        AIMessage(
+            content='',
+            additional_kwargs={'tool_calls': tool_calls}
+        )
+    ]
+
+    for tool_call in tool_calls:
+        tool = next((t for t in completion_tools if t.name == tool_call["function"]["name"]), None)
+        if tool:
+            tool_result = await tool.coroutine(json.loads(tool_call["function"]["arguments"]))
+            tool_messages.append(
+                ToolMessage(
+                    content=json.dumps({
+                        "type": "tool_result",
+                        "result": tool_result
+                    }),
+                    tool_call_id=tool_call["id"]
+                )
+            )
+    return tool_messages
+
 async def generate_completion(request: CompletionRequest):
     current_time = int(time.time())
     completion_id = f"cmpl-{uuid.uuid4()}"
 
-    # Prepare the conversation history
     conversation = [{"role": msg.role, "content": msg.content} for msg in request.messages]
-    
-    # Use the completion executor to process the request
-    result = await completion_executor.ainvoke(
-        {
-            "input": conversation[-1]["content"],
-            "chat_history": conversation[:-1]
-        }
-    )
+    final_content = ''
+
+    while not final_content:
+        result = completion_chain.invoke({
+            "conversation": conversation
+        })
+
+        if result.additional_kwargs and result.additional_kwargs.get("tool_calls"):
+            tool_messages = await process_tool_calls(result.additional_kwargs["tool_calls"])
+            conversation.extend(tool_messages)
+        else:
+            final_content = result.content
 
     completion_response = CompletionResponse(
         id=completion_id,
@@ -396,7 +403,7 @@ async def generate_completion(request: CompletionRequest):
                 "index": 0,
                 "message": {
                     "role": "assistant",
-                    "content": result["output"]
+                    "content": final_content
                 },
                 "finish_reason": "stop"
             }
@@ -405,73 +412,78 @@ async def generate_completion(request: CompletionRequest):
     
     return JSONResponse(content=completion_response.dict())
 
+async def stream_completion_wrapper(request: CompletionRequest):
+    async for event in stream_completion(request):
+        yield event
+
 async def stream_completion(request: CompletionRequest):
     current_time = int(time.time())
     completion_id = f"cmpl-{uuid.uuid4()}"
     conversation = [{"role": msg.role, "content": msg.content} for msg in request.messages]
 
-    async def process_request(input_data):
-        try:
-            async for event in completion_executor.astream_events(input_data, version="v2"):
-                kind = event["event"]
-                if kind == "on_tool_start":
-                    current_tool = event["name"]
-                yield event
-        except Exception as e:
-            # Handle tool output context length errors
-            error_message = str(e)
-            if "context length" in error_message.lower() or "too many tokens" in error_message.lower():
-                error_response = (
-                    f"Error: The tool '{current_tool}' returned too much data. "
-                    "Please try to be more specific or choose a different approach that requires less data."
-                )
-                # Add the error as a tool call result to the chat history
-                input_data["chat_history"].append({
-                    "role": "function",
-                    "name": current_tool,
-                    "content": error_response
-                })
-                # Retry with the updated chat history
-                retry_input = {
-                    "input": "The previous tool call returned too much data. Please adjust your approach and try again.",
-                    "chat_history": input_data["chat_history"]
-                }
-                async for retry_event in completion_executor.astream_events(retry_input, version="v2"):
-                    yield retry_event
-            else:
-                # Re-raise other exceptions
-                raise
+    tool_call_buffer = {}
+    continue_streaming = True
 
     try:
-        async for event in process_request({
-            "input": conversation[-1]["content"],
-            "chat_history": conversation[:-1]
-        }):
-            kind = event["event"]
-            if kind == "on_chat_model_stream":
-                content = event["data"]["chunk"].content
-                if content:
+        while continue_streaming:
+            async for chunk in completion_chain.astream({
+                "conversation": conversation
+            }):
+                if isinstance(chunk, AIMessage) and chunk.content:
                     token_chunk = {
                         'id': completion_id,
                         'object': 'chat.completion.chunk',
                         'created': current_time,
                         'model': model,
-                        'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': content}, 'finish_reason': None}]
+                        'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': chunk.content}, 'finish_reason': None}]
                     }
                     yield f"data: {json.dumps(token_chunk)}\n\n"
-            elif kind == "on_chain_end" and event["name"] == "AgentExecutor":
-                token_chunk = {
-                    'id': completion_id,
-                    'object': 'chat.completion.chunk',
-                    'created': current_time,
-                    'model': model,
-                    'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'stop'}]
-                }
-                yield f"data: {json.dumps(token_chunk)}\n\n"
-                yield "data: [DONE]\n\n"
+                
+                if chunk.additional_kwargs.get("tool_calls"):
+                    for tool_call in chunk.additional_kwargs["tool_calls"]:
+                        index = tool_call.get('index', 0)
+                        if index not in tool_call_buffer:
+                            tool_call_buffer[index] = {
+                                'id': tool_call.get('id'),
+                                'function': {
+                                    'name': tool_call.get('function', {}).get('name'),
+                                    'arguments': ''
+                                },
+                                'type': tool_call.get('type')
+                            }
+                        
+                        if tool_call['function'].get('name'):
+                            tool_call_buffer[index]['function']['name'] = tool_call['function']['name']
+                        
+                        if tool_call['function'].get('arguments'):
+                            tool_call_buffer[index]['function']['arguments'] += tool_call['function']['arguments']
+
+                if chunk.response_metadata:
+                    finish_reason = chunk.response_metadata.get('finish_reason')
+                    if finish_reason == 'tool_calls':
+                        complete_tool_calls = list(tool_call_buffer.values())
+                        tool_messages = await process_tool_calls(complete_tool_calls)
+                        conversation.extend(tool_messages)
+                        tool_call_buffer.clear()
+                        # Continue the loop to process the tool results
+                        break
+                    elif finish_reason in ['stop', 'length', 'content_filter']:
+                        continue_streaming = False
+                        break
+
+        final_chunk = {
+            'id': completion_id,
+            'object': 'chat.completion.chunk',
+            'created': current_time,
+            'model': model,
+            'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'stop'}]
+        }
+        yield f"data: {json.dumps(final_chunk)}\n\n"
+        yield "data: [DONE]\n\n"
 
     except Exception as e:
-        print(f"Error during streaming: {e}", flush=True)
+        print(f"Error during streaming: {str(e)}", flush=True)
+        traceback.print_exc()
         error_chunk = {
             'id': completion_id,
             'object': 'chat.completion.chunk',
@@ -487,7 +499,6 @@ async def stream_completion(request: CompletionRequest):
         }
         yield f"data: {json.dumps(error_chunk)}\n\n"
         yield "data: [DONE]\n\n"
-        raise
 
 async def async_cliAgent():
     print("Welcome, please type your request. Type 'exit' to quit.")
@@ -503,27 +514,33 @@ async def async_cliAgent():
         print("\nAgent: ", end="", flush=True)
         
         try:
-            async for event in completion_executor.astream_events(
-                {
-                    "input": user_input,
-                    "chat_history": chat_history
-                },
-                version="v2"
-            ):
-                kind = event["event"]
-                if kind == "on_chat_model_stream":
-                    content = event["data"]["chunk"].content
-                    if content:
-                        print(content, end="", flush=True)
-                elif kind == "on_chain_end" and event["name"] == "Agent":
-                    print()  # Add a newline after the response
+            # Create a CompletionRequest object
+            request = CompletionRequest(
+                messages=[Message(role="user", content=user_input)],
+                stream=True
+            )
+
+            full_response = ""
+
+            # Use stream_completion for token streaming
+            async for event in stream_completion(request):
+                if event.startswith("data: ") and "[DONE]" not in event:
+                    data = json.loads(event[6:])
+                    if isinstance(data, dict) and 'choices' in data:
+                        content = data['choices'][0]['delta'].get('content', '')
+                        if content:
+                            print(content, end="", flush=True)
+                            full_response += content
+
+            print()  # Add a newline after the response
 
             # Update chat history
             chat_history.append({"role": "user", "content": user_input})
-            chat_history.append({"role": "assistant", "content": event['data'].get('output')['output']})
+            chat_history.append({"role": "assistant", "content": full_response})
 
         except Exception as e:
             print(f"\nError during execution: {e}", flush=True)
+            traceback.print_exc()
 
 def cliAgent():
     asyncio.run(async_cliAgent())
