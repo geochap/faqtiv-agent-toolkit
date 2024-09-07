@@ -363,7 +363,12 @@ async def process_tool_calls(tool_calls):
     for tool_call in tool_calls:
         tool = next((t for t in completion_tools if t.name == tool_call["function"]["name"]), None)
         if tool:
-            tool_result = await tool.coroutine(json.loads(tool_call["function"]["arguments"]))
+            try:
+                tool_result = await tool.coroutine(json.loads(tool_call["function"]["arguments"]))
+            except Exception as e:
+                error_message = f"Error in tool '{tool_call['function']['name']}': {str(e)}"
+                tool_result = {"error": error_message}
+            
             tool_messages.append(
                 ToolMessage(
                     content=json.dumps({
@@ -382,16 +387,48 @@ async def generate_completion(request: CompletionRequest):
     conversation = [{"role": msg.role, "content": msg.content} for msg in request.messages]
     final_content = ''
 
-    while not final_content:
-        result = completion_chain.invoke({
-            "conversation": conversation
-        })
+    async def process_request(input_data):
+        try:
+            result = completion_chain.invoke(input_data)
+            return result
+        except Exception as e:
+            error_message = str(e)
+            if "context length" in error_message.lower() or "too many tokens" in error_message.lower():
+                error_response = (
+                    f"Error: The tool returned too much data. "
+                    "Please try to be more specific or choose a different approach that requires less data."
+                )
+                # Find the longest tool call result
+                tool_messages = [msg for msg in input_data["conversation"] if isinstance(msg, ToolMessage)]
+                if tool_messages:
+                    longest_tool_message = max(tool_messages, key=lambda x: len(x.content))
+                    # Modify the content of the longest tool message
+                    longest_tool_message.content = error_response
+                
+                # Retry with the updated conversation
+                retry_input = {
+                    "conversation": input_data["conversation"] + [
+                        HumanMessage(content="The previous tool call returned too much data. Please adjust your approach and try again.")
+                    ]
+                }
+                return completion_chain.invoke(retry_input)
+            else:
+                raise
 
-        if result.additional_kwargs and result.additional_kwargs.get("tool_calls"):
-            tool_messages = await process_tool_calls(result.additional_kwargs["tool_calls"])
-            conversation.extend(tool_messages)
-        else:
-            final_content = result.content
+    while not final_content:
+        try:
+            result = await process_request({"conversation": conversation})
+
+            if result.additional_kwargs and result.additional_kwargs.get("tool_calls"):
+                tool_messages = await process_tool_calls(result.additional_kwargs["tool_calls"])
+                conversation.extend(tool_messages)
+            else:
+                final_content = result.content
+
+        except Exception as e:
+            print(f"Error during completion: {e}", flush=True)
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=str(e))
 
     completion_response = CompletionResponse(
         id=completion_id,
@@ -421,12 +458,40 @@ async def stream_completion(request: CompletionRequest):
     completion_id = f"cmpl-{uuid.uuid4()}"
     conversation = [{"role": msg.role, "content": msg.content} for msg in request.messages]
 
+    async def process_request(input_data):
+        try:
+            async for event in completion_chain.astream_events(input_data, version="v2"):
+                yield event
+        except Exception as e:
+            error_message = str(e)
+            if "context length" in error_message.lower() or "too many tokens" in error_message.lower():
+                error_response = (
+                    f"Error: The tool returned too much data. "
+                    "Please try to be more specific or choose a different approach that requires less data."
+                )
+                # Find the longest tool call result
+                tool_messages = [msg for msg in input_data["conversation"] if isinstance(msg, ToolMessage)]
+                if tool_messages:
+                    longest_tool_message = max(tool_messages, key=lambda x: len(x.content))
+                    # Modify the content of the longest tool message
+                    longest_tool_message.content = error_response
+
+                # Retry with the updated conversation
+                retry_input = {
+                    "conversation": input_data["conversation"] + [
+                        HumanMessage(content="The previous tool call returned too much data. Please adjust your approach and try again.")
+                    ]
+                }
+                async for retry_event in completion_chain.astream_events(retry_input, version="v2"):
+                    yield retry_event
+            else:
+                raise
+
     try:
         while True:
-            async for event in completion_chain.astream_events(
-                {"conversation": conversation},
-                version="v2"
-            ):
+            events = process_request({"conversation": conversation})
+            has_tool_calls = False
+            async for event in events:
                 if event['event'] == 'on_chat_model_stream':
                     content = event['data']['chunk'].content
                     if content:
@@ -443,6 +508,7 @@ async def stream_completion(request: CompletionRequest):
                         tool_calls = event['data']['output'].additional_kwargs['tool_calls']
                         tool_messages = await process_tool_calls(tool_calls)
                         conversation.extend(tool_messages)
+                        has_tool_calls = True
                     else:
                         final_chunk = {
                             'id': completion_id,
@@ -454,6 +520,9 @@ async def stream_completion(request: CompletionRequest):
                         yield f"data: {json.dumps(final_chunk)}\n\n"
                         yield "data: [DONE]\n\n"
                         return
+
+            if not has_tool_calls:
+                break
 
     except Exception as error:
         print(f"Error during streaming: {error}", flush=True)

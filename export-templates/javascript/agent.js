@@ -356,11 +356,25 @@ async function processToolCalls(toolCalls) {
   for (const toolCall of toolCalls) {
     const tool = completionTools.find(t => t.name === toolCall.function.name);
     if (tool) {
-      const toolResult = await tool.func(JSON.parse(toolCall.function.arguments));
-      toolMessages.push(new ToolMessage({
-        content: toolResult,
-        tool_call_id: toolCall.id,
-      }));
+      try {
+        const toolResult = await tool.func(JSON.parse(toolCall.function.arguments));
+        toolMessages.push(new ToolMessage({
+          content: JSON.stringify({
+            type: "tool_result",
+            result: toolResult
+          }),
+          tool_call_id: toolCall.id,
+        }));
+      } catch (error) {
+        const errorMessage = `Error in tool '${toolCall.function.name}': ${error.message}`;
+        toolMessages.push(new ToolMessage({
+          content: JSON.stringify({
+            type: "tool_result",
+            result: { error: errorMessage }
+          }),
+          tool_call_id: toolCall.id,
+        }));
+      }
     }
   }
   return toolMessages;
@@ -373,18 +387,51 @@ async function generateCompletion(request) {
   let conversation = request.messages.map(msg => ({ role: msg.role, content: msg.content }));
   let finalContent = '';
 
-  do {
-    const result = await completionChain.invoke({
-      conversation
-    });
+  const processRequest = async (inputData) => {
+    try {
+      const result = await completionChain.invoke(inputData);
+      return result;
+    } catch (e) {
+      const errorMessage = e.message.toLowerCase();
+      if (errorMessage.includes("context length") || errorMessage.includes("too many tokens")) {
+        const errorResponse = "Error: The tool returned too much data. Please try to be more specific or choose a different approach that requires less data.";
+        
+        // Find the longest tool message
+        const toolMessages = inputData.conversation.filter(msg => msg instanceof ToolMessage);
+        if (toolMessages.length > 0) {
+          const longestToolMessage = toolMessages.reduce((a, b) => a.content.length > b.content.length ? a : b);
+          longestToolMessage.content = errorResponse;
+        }
 
-    if (result.additional_kwargs && result.additional_kwargs.tool_calls && result.additional_kwargs.tool_calls.length > 0) {
-      const toolMessages = await processToolCalls(result.additional_kwargs.tool_calls);
-      conversation = conversation.concat(toolMessages);
-    } else {
-      finalContent = result.content;
+        // Retry with updated conversation
+        const retryInput = {
+          conversation: [
+            ...inputData.conversation,
+            new HumanMessage("The previous tool call returned too much data. Please adjust your approach and try again.")
+          ]
+        };
+        return await completionChain.invoke(retryInput);
+      } else {
+        throw e;
+      }
     }
-  } while (!finalContent);
+  };
+
+  while (!finalContent) {
+    try {
+      const result = await processRequest({ conversation });
+
+      if (result.additional_kwargs && result.additional_kwargs.tool_calls && result.additional_kwargs.tool_calls.length > 0) {
+        const toolMessages = await processToolCalls(result.additional_kwargs.tool_calls);
+        conversation = conversation.concat(toolMessages);
+      } else {
+        finalContent = result.content;
+      }
+    } catch (error) {
+      console.error(`Error during completion: ${error}`);
+      throw error;
+    }
+  }
 
   return {
     id: completionId,
@@ -409,15 +456,45 @@ async function* streamCompletion(messages) {
   const completionId = `cmpl-${uuidv4()}`;
   let conversation = messages.map(msg => ({ role: msg.role, content: msg.content }));
 
-  try {
-    do {
-      const events = completionChain.streamEvents({
-        conversation,
-      }, {
-        version: 'v2'
-      });
-
+  const processRequest = async function* (inputData) {
+    try {
+      const events = completionChain.streamEvents(inputData, { version: 'v2' });
       for await (const event of events) {
+        yield event;
+      }
+    } catch (e) {
+      const errorMessage = e.message.toLowerCase();
+      if (errorMessage.includes("context length") || errorMessage.includes("too many tokens")) {
+        const errorResponse = "Error: The tool returned too much data. Please try to be more specific or choose a different approach that requires less data.";
+        
+        // Find the longest tool message
+        const toolMessages = inputData.conversation.filter(msg => msg instanceof ToolMessage);
+        if (toolMessages.length > 0) {
+          const longestToolMessage = toolMessages.reduce((a, b) => a.content.length > b.content.length ? a : b);
+          longestToolMessage.content = errorResponse;
+        }
+
+        // Retry with updated conversation
+        const retryInput = {
+          conversation: [
+            ...inputData.conversation,
+            new HumanMessage("The previous tool call returned too much data. Please adjust your approach and try again.")
+          ]
+        };
+        const retryEvents = completionChain.streamEvents(retryInput, { version: 'v2' });
+        for await (const event of retryEvents) {
+          yield event;
+        }
+      } else {
+        throw e;
+      }
+    }
+  };
+
+  try {
+    while (true) {
+      let hasToolCalls = false;
+      for await (const event of processRequest({ conversation })) {
         if (event.event === 'on_chat_model_stream') {
           const content = event.data.chunk.content;
           if (content) {
@@ -435,6 +512,7 @@ async function* streamCompletion(messages) {
             const toolCalls = event.data.output.additional_kwargs.tool_calls;
             const toolMessages = await processToolCalls(toolCalls);
             conversation = conversation.concat(toolMessages);
+            hasToolCalls = true;
           } else {
             const tokenChunk = {
               id: completionId,
@@ -448,7 +526,8 @@ async function* streamCompletion(messages) {
           }
         }
       }
-    } while (true);
+      if (!hasToolCalls) break;
+    }
   } catch (error) {
     console.error(`Error during streaming: ${error}`);
     const errorChunk = {
