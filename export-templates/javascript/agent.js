@@ -7,6 +7,7 @@ const z = require('zod');
 const express = require('express');
 const bodyParser = require('body-parser');
 const { v4: uuidv4 } = require('uuid');
+const readline = require('readline');
 
 // Agent lib and functions dependencies
 {{ imports }}
@@ -321,7 +322,7 @@ const completionPrompt = ChatPromptTemplate.fromMessages(
 const completionChain = completionPrompt.pipe(completionLLM);
 
 app.post('/completions', async (req, res) => {
-  const { stream = false } = req.body;
+  const { stream = false, messages } = req.body;
 
   if (stream) {
     res.writeHead(200, {
@@ -329,7 +330,11 @@ app.post('/completions', async (req, res) => {
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
     });
-    await streamCompletion(req, res);
+    for await (const chunk of streamCompletion(messages)) {
+      res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+    }
+    res.write('data: [DONE]\n\n');
+    res.end();
   } else {
     try {
       const result = await generateCompletion(req.body);
@@ -399,8 +404,7 @@ async function generateCompletion(request) {
   };
 }
 
-async function streamCompletion(req, res) {
-  const { messages } = req.body;
+async function* streamCompletion(messages) {
   const currentTime = Math.floor(Date.now() / 1000);
   const completionId = `cmpl-${uuidv4()}`;
   let conversation = messages.map(msg => ({ role: msg.role, content: msg.content }));
@@ -424,7 +428,7 @@ async function streamCompletion(req, res) {
               model,
               choices: [{ index: 0, delta: { role: 'assistant', content }, finish_reason: null }],
             };
-            res.write(`data: ${JSON.stringify(tokenChunk)}\n\n`);
+            yield tokenChunk;
           }
         } else if (event.event === 'on_chain_end') {
           if (event.data.output.additional_kwargs.tool_calls) {
@@ -439,9 +443,7 @@ async function streamCompletion(req, res) {
               model,
               choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
             };
-            res.write(`data: ${JSON.stringify(tokenChunk)}\n\n`);
-            res.write('data: [DONE]\n\n');
-            res.end();
+            yield tokenChunk;
             return;
           }
         }
@@ -462,13 +464,68 @@ async function streamCompletion(req, res) {
         code: null,
       },
     };
-    res.write(`data: ${JSON.stringify(errorChunk)}\n\n`);
-    res.write('data: [DONE]\n\n');
-    res.end();
+    yield errorChunk;
   }
 }
 
-// Start the server
-const port = process.env.PORT || 8000;
-app.listen(port, () => {});
+async function cliAgent() {
+  console.log("Welcome, please type your request. Type 'exit' to quit.");
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
 
+  const conversation = [];
+
+  const askQuestion = () => {
+    return new Promise((resolve) => {
+      rl.question("\nYou: ", (answer) => {
+        resolve(answer);
+      });
+    });
+  };
+
+  while (true) {
+    const userInput = await askQuestion();
+
+    if (userInput.toLowerCase() === 'exit') {
+      console.log("Goodbye!");
+      rl.close();
+      break;
+    }
+
+    process.stdout.write("\nAgent: ");
+
+    try {
+      conversation.push({ role: 'user', content: userInput });
+
+      let fullResponse = '';
+
+      for await (const chunk of streamCompletion(conversation)) {
+        if (chunk.choices[0].delta.content) {
+          const content = chunk.choices[0].delta.content;
+          process.stdout.write(content);
+          fullResponse += content;
+        }
+      }
+
+      console.log(); // Add a newline after the response
+
+      conversation.push({ role: 'assistant', content: fullResponse });
+    } catch (error) {
+      console.error(`\nError during execution: ${error.message}`);
+    }
+  }
+}
+
+if (require.main === module) {
+  const args = process.argv.slice(2);
+  if (args.includes('--http')) {
+    const port = process.env.PORT || 8000;
+    app.listen(port, () => {
+      console.log(`HTTP server running on port ${port}`);
+    });
+  } else {
+    cliAgent();
+  }
+}
