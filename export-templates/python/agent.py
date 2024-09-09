@@ -221,6 +221,8 @@ async def generate_and_execute_adhoc(user_input: str, max_retries: int = 3):
             if function_code:
                 previous_code = function_code
 
+            print("Generated code:", function_code, flush=True)
+
             result = await capture_and_process_output(execute_generated_function, function_code)
             return result
 
@@ -342,6 +344,8 @@ completion_chain = completion_prompt.pipe(completion_llm)
 
 @app.post("/completions")
 async def completions_endpoint(request: CompletionRequest):
+    print("Completion request: ", request.messages[-1].content if request.messages else "", flush=True)
+
     try:
         if request.stream:
             return StreamingResponse(stream_completion_wrapper(request), media_type="text/event-stream")
@@ -359,6 +363,8 @@ async def process_tool_calls(tool_calls):
     ]
 
     for tool_call in tool_calls:
+        print("Calling tool:", tool_call["function"]["name"], tool_call["function"]["arguments"], flush=True)
+
         tool = next((t for t in completion_tools if t.name == tool_call["function"]["name"]), None)
         if tool:
             try:
@@ -376,6 +382,18 @@ async def process_tool_calls(tool_calls):
                     tool_call_id=tool_call["id"]
                 )
             )
+        else:
+            print("Tool not found:", tool_call["function"]["name"], flush=True)
+            tool_messages.append(
+                ToolMessage(
+                    content=json.dumps({
+                        "type": "tool_result",
+                        "result": {"error": "Tool not found"}
+                    }),
+                    tool_call_id=tool_call["id"]
+                )
+            )
+    
     return tool_messages
 
 async def generate_completion(request: CompletionRequest):

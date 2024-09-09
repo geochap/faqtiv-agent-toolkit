@@ -210,6 +210,8 @@ async function generateAndExecuteAdhoc(userInput, maxRetries = 3) {
 
       previousCode = functionCode;
 
+      console.log("Generated code:", functionCode);
+
       return await captureAndProcessOutput(functionCode);
     } catch (e) {
       const errorMessage = e.message;
@@ -321,6 +323,8 @@ const completionChain = completionPrompt.pipe(completionLLM);
 app.post('/completions', async (req, res) => {
   const { stream = false, messages } = req.body;
 
+  console.log("Completion request: ", messages.length > 0 ? messages[messages.length - 1].content : "")
+
   if (stream) {
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
@@ -352,6 +356,9 @@ async function processToolCalls(toolCalls) {
 
   for (const toolCall of toolCalls) {
     const tool = completionTools.find(t => t.name === toolCall.function.name);
+
+    console.warn("Calling tool:", toolCall.function.name, toolCall.function.arguments);
+
     if (tool) {
       try {
         const toolResult = await tool.func(JSON.parse(toolCall.function.arguments));
@@ -372,6 +379,15 @@ async function processToolCalls(toolCalls) {
           tool_call_id: toolCall.id,
         }));
       }
+    } else {
+      console.warn("Tool not found:", toolCall.function.name);
+      toolMessages.push(new ToolMessage({
+        content: JSON.stringify({
+          type: "tool_result",
+          result: { error: "Tool not found" }
+        }),
+        tool_call_id: toolCall.id,
+      }));
     }
   }
   return toolMessages;
