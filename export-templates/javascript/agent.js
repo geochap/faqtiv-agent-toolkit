@@ -149,9 +149,6 @@ let adhocPromptText = `
 - Wrap the single doTask function in a javascript code block
 `;
 
-// Escape curly braces to avoid template errors
-adhocPromptText = adhocPromptText.replace(/\{/g, '{{').replace(/\}/g, '}}');
-
 // Read the API key and model from environment variables
 const apiKey = process.env.OPENAI_API_KEY;
 const model = process.env.OPENAI_MODEL;
@@ -314,7 +311,7 @@ const completionPromptText = `{{ getAssistantInstructionsPrompt }}`;
 
 const completionPrompt = ChatPromptTemplate.fromMessages(
   [
-    ("system", completionPromptText),
+    new SystemMessage(completionPromptText),
     new MessagesPlaceholder("conversation")
   ]
 );

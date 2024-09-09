@@ -147,8 +147,6 @@ adhoc_promptText = """
 - Wrap the single doTask function in a python code block
 """
 
-adhoc_promptText = adhoc_promptText.replace("{", "{{").replace("}", "}}") # escape curly braces to avoid template errors
-
 # Read the API key and model from environment variables
 api_key = os.getenv('OPENAI_API_KEY')
 model = os.getenv('OPENAI_MODEL')
@@ -336,7 +334,7 @@ completion_llm = ChatOpenAI(model=model).bind_tools(completion_tools)
 completion_promptText = """{{ getAssistantInstructionsPrompt }}"""
 completion_prompt = ChatPromptTemplate.from_messages(
     [
-        ("system", completion_promptText),
+        SystemMessage(completion_promptText),
         MessagesPlaceholder("conversation")
     ]
 )
