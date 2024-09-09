@@ -82,7 +82,7 @@ async function captureAndProcessOutput(func, args = []) {
     // Create a context object with all the necessary functions and variables
     const context = {
       require,
-      console: { log: customLog },
+      console: { log: customLog, warn: console.warn },
       // Add all the functions and variables from the local scope that the function might need
       {{ functionNames }}
     };
@@ -96,6 +96,7 @@ async function captureAndProcessOutput(func, args = []) {
         try {
           return await (${funcString}).apply(this, arguments);
         } catch (error) {
+          console.warn("Error executing tool:", error);
           throw error;
         }
       }

@@ -16,6 +16,7 @@ import base64
 import numpy as np
 import time
 import uuid
+import sys
 import traceback
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -94,17 +95,22 @@ def get_relevant_examples(query: str, k: int = 10) -> List[Dict]:
 
 async def capture_and_process_output(func, *args, **kwargs):
     f = io.StringIO()
-    with redirect_stdout(f):
-        await func(*args, **kwargs) if asyncio.iscoroutinefunction(func) else func(*args, **kwargs)
-    
-    output = f.getvalue()
-    
     try:
-        processed_result = json.loads(output)
-    except json.JSONDecodeError:
-        processed_result = output.strip()
-    
-    return processed_result
+        with redirect_stdout(f):
+            result = await func(*args, **kwargs) if asyncio.iscoroutinefunction(func) else func(*args, **kwargs)
+        
+        output = f.getvalue()
+        
+        try:
+            processed_result = json.loads(output)
+        except json.JSONDecodeError:
+            processed_result = output.strip()
+        
+        return processed_result
+    except Exception as e:
+        print(f"Error executing tool:", file=sys.stderr)
+        traceback.print_exc()
+        raise
 
 # Capture stdout of tasks
 async def tool_wrapper(func, *args, **kwargs):
