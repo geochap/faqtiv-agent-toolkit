@@ -91,11 +91,19 @@ async function captureAndProcessOutput(func, args = []) {
     const funcString = typeof func === 'function' ? func.toString() : func;
 
     // Create a new function with the context as its scope
-    const contextFunction = new Function(...Object.keys(context), `return (${funcString})`)(...Object.values(context));
+    const contextFunction = new Function(...Object.keys(context), `
+      return async function() {
+        try {
+          return await (${funcString}).apply(this, arguments);
+        } catch (error) {
+          throw error;
+        }
+      }
+    `)(...Object.values(context));
 
     try {
       // Execute the function with the provided arguments
-      contextFunction(...args);
+      contextFunction(...args).then(resolve).catch(reject);
 
       // Set a timeout in case customLog is never called
       setTimeout(() => {
