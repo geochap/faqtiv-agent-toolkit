@@ -8,6 +8,7 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const { v4: uuidv4 } = require('uuid');
 const readline = require('readline');
+const figlet = require('figlet');
 
 // Agent lib and functions dependencies
 {{ imports }}
@@ -620,6 +621,8 @@ async function cliAgent() {
 }
 
 if (require.main === module) {
+  console.log(figlet.textSync("FAQtiv"));
+
   const args = process.argv.slice(2);
   if (args.includes('--http')) {
     const port = process.env.PORT || 8000;

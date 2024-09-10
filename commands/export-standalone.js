@@ -26,7 +26,8 @@ const exportDependencies = {
     'pydantic==2.8.2',
     'pydantic_core==2.20.1',
     'requests==2.32.3',
-    'uvicorn==0.30.5'
+    'uvicorn==0.30.5',
+    'pyfiglet==1.0.2'
   ],
   javascript: {
     "@langchain/core": "^0.2.31",
@@ -36,7 +37,8 @@ const exportDependencies = {
     "express": "^4.19.2",
     "langchain": "^0.2.17",
     "zod": "^3.23.8",
-    "uuid": "^10.0.0"
+    "uuid": "^10.0.0",
+    "figlet": "^1.7.0"
   }
 };
 

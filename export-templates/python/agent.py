@@ -25,6 +25,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from langchain.chat_models.base import BaseChatModel
 from langchain.schema import SystemMessage, HumanMessage, AIMessage
 from langchain_core.messages import ToolMessage
+import pyfiglet
 
 EXPECTED_EMBEDDING_DIMENSION = 1536
 
@@ -613,13 +614,16 @@ def cliAgent():
 port = int(os.getenv('PORT')) if os.getenv('PORT') else 8000
 
 if __name__ == "__main__":    
+    print(pyfiglet.figlet_format("FAQtiv"), flush=True)
+
     parser = argparse.ArgumentParser(description="FAQtiv Agent CLI/HTTP Server")
     parser.add_argument("--http", action="store_true", help="Run as HTTP server")
     args = parser.parse_args()
 
     if args.http:
         import uvicorn
-        print("Starting HTTP server...")
-        uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
+        print("Starting HTTP server...", flush=True)
+        print("HTTP server running on port", port, flush=True)
+        uvicorn.run(app, host="0.0.0.0", port=port, log_level="error")
     else:
         cliAgent()

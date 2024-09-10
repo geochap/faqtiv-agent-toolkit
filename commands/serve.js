@@ -1,6 +1,8 @@
 import { exec } from 'child_process';
 import path from 'path';
 import fs from 'fs';
+import chokidar from 'chokidar';
+import net from 'net';
 import * as config from '../config.js';
 import exportStandalone from './export-standalone.js';
 
@@ -71,48 +73,85 @@ export default async function serve(options) {
     process.exit(1);
   }
 
-  console.log('Starting the standalone agent server...');
-  const agentPath = path.join(tmpDir, `agent${codeFileExtension}`);
-  
-  let agentCommand;
-  if (runtimeName === 'python') {
-    const activateCommand = process.platform === 'win32' ?
-      `${venvPath}\\Scripts\\activate.bat && ` :
-      `source ${venvPath}/bin/activate && `;
-    agentCommand = `${activateCommand}${config.project.runtime.command} ${agentPath} --http`;
-  } else {
-    agentCommand = `${config.project.runtime.command} ${agentPath} --http`;
+  let serverProcess;
+
+  async function startServer() {
+    console.log('Starting the standalone agent server...');
+    const agentPath = path.join(tmpDir, `agent${codeFileExtension}`);
+    
+    let agentCommand;
+    if (runtimeName === 'python') {
+      const activateCommand = process.platform === 'win32' ?
+        `${venvPath}\\Scripts\\activate.bat && ` :
+        `source ${venvPath}/bin/activate && `;
+      agentCommand = `${activateCommand}${config.project.runtime.command} ${agentPath} --http`;
+    } else {
+      agentCommand = `${config.project.runtime.command} ${agentPath} --http`;
+    }
+
+    serverProcess = exec(agentCommand, { 
+      env: {
+        ...process.env,
+        OPENAI_API_KEY: config.openai.apiKey,
+        OPENAI_MODEL: config.openai.model,
+        PORT: port.toString()
+      },
+      cwd: tmpDir,
+      shell: true
+    });
+
+    serverProcess.stdout.on('data', (data) => {
+      console.log(data.toString());
+    });
+
+    serverProcess.stderr.on('data', (data) => {
+      console.error(data.toString());
+    });
+
+    serverProcess.on('close', (code) => {
+      if (code) console.log(`Server process exited with code ${code}`);
+    });
+
+    console.log('Started FAQtiv standalone agent');
   }
 
-  const serverProcess = exec(agentCommand, { 
-    env: {
-      ...process.env,
-      OPENAI_API_KEY: config.openai.apiKey,
-      OPENAI_MODEL: config.openai.model,
-      PORT: port.toString()
-    },
-    cwd: tmpDir,
-    shell: true
+  async function restartServer() {
+    if (serverProcess) {
+      console.log('Stopping the current server...');
+      serverProcess.kill('SIGKILL');
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
+    console.log('Re-exporting the agent...');
+    await exportStandalone(tmpDir, { silent: true });
+
+    await startServer();
+  }
+
+  // Setup live reload
+  const watchPaths = [
+    path.join(config.project.codeDir, `**/*${codeFileExtension}`),
+    path.join(config.project.metadataDir, '**/*.yml')
+  ];
+
+  const watcher = chokidar.watch(watchPaths, {
+    ignored: /(^|[\/\\])\../, // ignore dotfiles
+    persistent: true
   });
 
-  serverProcess.stdout.on('data', (data) => {
-    console.log(data.toString());
+  watcher.on('change', async (path) => {
+    console.log(`File ${path} has been changed. Reloading...`);
+    await restartServer();
   });
 
-  serverProcess.stderr.on('data', (data) => {
-    console.error(data.toString());
-  });
+  // Initial server start
+  await startServer();
 
-  serverProcess.on('close', (code) => {
-    console.log(`Server process exited with code ${code}`);
-  });
-
-  console.log(`Server running on port ${port}`);
-
-  // Handle SIGINT (Ctrl+C) to gracefully shut down the server
+  // Handle SIGINT (Ctrl+C) to gracefully shut down the server and watcher
   process.on('SIGINT', () => {
-    console.log('Shutting down server...');
-    serverProcess.kill();
+    console.log('Shutting down server and file watcher...');
+    if (serverProcess) serverProcess.kill();
+    watcher.close();
     process.exit();
   });
 }
