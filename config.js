@@ -24,6 +24,10 @@ export const runtimeCommands = {
   'javascript': process.env.JS_CMD || 'node',
   'python': process.env.PYTHON_CMD || 'python'
 };
+export const runtimePackageManagers = {
+  'javascript': process.env.JS_PKG_CMD || 'npm',
+  'python': process.env.PYTHON_PKG_CMD || 'pip'
+};
 const defaultModules = {
   'javascript': [],
   'python': []
@@ -48,11 +52,19 @@ if (isInitCommand || isHelpCommand || isVersionCommand) {
     runtime: {
       codeFileExtension: codeExtensions['javascript'],
       runtimeName: runtimes['javascript'],
-      command: runtimeCommands['javascript']
+      command: runtimeCommands['javascript'],
+      packageManager: runtimePackageManagers['javascript']
     },
     modules: [],
     task_examples: [],
-    auto_add_examples: true
+    auto_add_examples: true,
+    metadataDir: path.join(projectWorkdir, 'code'),
+    tasksDir: path.join(process.cwd(), 'tasks'),
+    codeDir: path.join(process.cwd(), 'code'),
+    functionsDir: path.join(process.cwd(), 'functions'),
+    headerPath: path.join(projectWorkdir, 'functions-header.yml'),
+    tmpDir: path.join(projectWorkdir, 'tmp'),
+    logsDir: path.join(process.cwd(), 'logs')
   };
 } else {
   if (!isInProjectDir) {
@@ -69,7 +81,8 @@ if (isInitCommand || isHelpCommand || isVersionCommand) {
     codeFileExtension: codeExtensions[faqtivConfig.runtime],
     runtimeName: runtimes[faqtivConfig.runtime],
     defaultModules: defaultModules[faqtivConfig.runtime],
-    command: runtimeCommands[faqtivConfig.runtime]
+    command: runtimeCommands[faqtivConfig.runtime],
+    packageManager: runtimePackageManagers[faqtivConfig.runtime]
   };
 
   const loadFunctions = (dir) => {
@@ -117,14 +130,14 @@ if (isInitCommand || isHelpCommand || isVersionCommand) {
     instructions = fs.readFileSync(path.join('instructions.txt'), 'utf8');
   } catch(e) {}
 
-  let desktopInstructions = '';
+  let assistantInstructions = '';
   try {
-    desktopInstructions = fs.readFileSync(path.join('desktop_instructions.txt'), 'utf8');
+    assistantInstructions = fs.readFileSync(path.join('assistant_instructions.txt'), 'utf8');
   } catch(e) {}
 
   projectConfig = {
     instructions,
-    desktopInstructions,
+    assistantInstructions,
     functionsHeader,
     functions,
     libs,

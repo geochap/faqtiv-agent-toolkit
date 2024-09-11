@@ -135,6 +135,64 @@ faqtiv run-task <taskName> [args...] --output <file> --error <file>
 
 Run metadata will be logged with runtime information.
 
+### Serving Agent via HTTP
+
+To start a server that can run tasks and ad-hoc tasks via HTTP endpoints, use the `serve` command:
+
+```bash
+faqtiv serve --port <number>
+```
+
+- `--port <number>`: The port number for the server (optional, defaults to 8000).
+
+This command starts an HTTP server with three endpoints:
+
+1. `/run_task/{taskName}`: Runs a specific task.
+   - Method: POST
+   - Body: JSON object with `args` (optional), `output` (optional), `files` (optional), and `error` (optional).
+
+2. `/run_adhoc`: Runs an ad-hoc task based on an input.
+   - Method: POST
+   - Body: JSON object with `input`.
+
+3. `/completions`: Provides a chat-like interface for interacting with the agent.
+   - Method: POST
+   - Body: JSON object with `messages`, `max_tokens` (optional), `temperature` (optional), and `stream` (optional).
+   - `messages`: An array of message objects, each with a `role` ("user" or "assistant") and `content`.
+   - `max_tokens` (optional): The maximum number of tokens to generate. Defaults to 1000. Must be between 1 and 4096.
+   - `temperature` (optional): Controls randomness in the output. Defaults to 0.7. Must be between 0 and 2.
+   - `stream` (optional): If true, the response will be streamed. Defaults to false.
+   - Response: JSON object with `id`, `object`, `created`, `model`, and `choices` array with the generated message.
+
+Example usage with curl:
+
+```bash
+# Run a task
+curl -X POST http://localhost:8000/run_task \
+  -H "Content-Type: application/json" \
+  -d '{"taskName": "myTask", "args": ["arg1", "arg2"]}'
+
+# Run an ad-hoc task
+curl -X POST http://localhost:8000/run_adhoc \
+  -H "Content-Type: application/json" \
+  -d '{"description": "Perform some ad-hoc task"}'
+
+# Use the completions endpoint
+curl -X POST http://localhost:8000/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {"role": "user", "content": "What is the capital of France?"}
+    ],
+    "max_tokens": 100,
+    "temperature": 0.7
+  }'
+```
+
+The server will respond with a JSON object containing the task result or an error message.
+
+Useful for development and testing, internally it exports and runs a standalone agent.
+
 ### Migrating Tasks
 
 The toolkit can detect changes based on the modification dates of functions and task text files in the `./tasks` directory to determine if code regeneration is necessary.
@@ -234,7 +292,44 @@ To list all existing examples, use the `list-examples` command:
 faqtiv list-examples
 ```
 
-## Help
+### Exporting Standalone Python Langchain Agent
+
+To export a standalone agent that can be run independently, use the `export-standalone` command:
+
+```bash
+faqtiv export-standalone [outputDir]
+```
+
+- `[outputDir]`: The directory where the standalone agent will be exported. If not provided, it defaults to the current working directory.
+
+This command creates a standalone version of your agent, including all necessary files to run it independently. The exported agent will include:
+
+- All tasks and examples
+- All functions and libraries
+- A simplified runtime environment
+- A README file with instructions on how to run the standalone agent
+
+The exported agent can be run without the full FAQtiv Agent Toolkit installed, making it easier to deploy or share your agent.
+
+Example usage:
+
+```bash
+faqtiv export-standalone ./my-standalone-agent
+```
+
+This will create a standalone agent in the `./my-standalone-agent` directory.
+
+To run the exported standalone agent:
+
+1. Navigate to the exported directory
+2. Install dependencies with `pip install -r requirements.txt`
+3. Run a task with `python agent.py` for an interactive agent or `python agent.py --http` to serve the agent via HTTP
+
+The HTTP api will match the same endpoints as the FAQtiv Agent Toolkit serve command.
+
+Note: The standalone agent will not have the ability to compile new tasks or modify existing ones. It's a static export of your agent's current state.
+
+### Help
 For help with any command, use the `--help` flag:
 
 ```bash

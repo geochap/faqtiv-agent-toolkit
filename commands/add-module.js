@@ -8,7 +8,7 @@ const configPath = path.join('faqtiv_config.yml');
 
 async function installJSModules(name, moduleVersion) {
   return await new Promise((resolve, reject) => {
-    const npmCommand = moduleVersion ? `npm install --save ${name}@${moduleVersion}` : `npm install --save ${name}`;
+    const npmCommand = moduleVersion ? `${config.project.runtime.packageManager} install --save ${name}@${moduleVersion}` : `${config.project.runtime.packageManager} install --save ${name}`;
     
     // Run npm install --save for the module
     exec(npmCommand, (error, stdout, stderr) => {
@@ -35,8 +35,8 @@ async function installPythonModules(name, moduleVersion) {
 
     // Activate virtual environment and run pip install
     const activateCommand = process.platform === 'win32' ? 
-      `venv\\Scripts\\activate && pip install -r requirements.txt` : 
-      `source venv/bin/activate && pip install -r requirements.txt`;
+      `venv\\Scripts\\activate && ${config.project.runtime.packageManager} install -r requirements.txt` : 
+      `source venv/bin/activate && ${config.project.runtime.packageManager} install -r requirements.txt`;
 
     // Run pip install for the module
     exec(activateCommand, (error, stdout, stderr) => {

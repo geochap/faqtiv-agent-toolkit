@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import AIAgent from '../ai/agent.js';
+import CodeAgent from '../ai/code-agent.js';
 import * as config from '../config.js';
 import OpenAIModel from '../ai/models/openai.js';
 
@@ -123,7 +123,7 @@ export async function generateResponse(taskName, vectorStore, conversation) {
   const embedding = await getTaskEmbedding(conversation[conversation.length - 1].message);
   const examples = await getNearestExamples(vectorStore, embedding, functionsHeader.embedding);
 
-  const aiAgent = new AIAgent('code-gen', instructions, functions, functionsHeader.signatures, config.openai);
+  const aiAgent = new CodeAgent('code-gen', instructions, functions, functionsHeader.signatures, config.openai);
   const response = await aiAgent.generateResponse(conversation, examples);
   const taskSchema = await aiAgent.generateTaskSchema(taskName, response.code);
 
@@ -143,7 +143,7 @@ export async function generateAdHocResponse(vectorStore, conversation, retryCoun
   const embedding = await getTaskEmbedding(conversation[conversation.length - 1].message);
   const examples = await getNearestExamples(vectorStore, embedding, functionsHeader.embedding);
 
-  const aiAgent = new AIAgent('code-gen', instructions, functions, functionsHeader.signatures, config.openai);
+  const aiAgent = new CodeAgent('code-gen', instructions, functions, functionsHeader.signatures, config.openai);
   
   if (retryCount > 0) {
     let retryMessage = `
@@ -180,7 +180,7 @@ export async function generateAdHocResponse(vectorStore, conversation, retryCoun
 
 export async function generateTaskSchema(doTaskCode, taskName) {
   const { instructions, functions, functionsHeader } = config.project;
-  const aiAgent = new AIAgent('code-gen', instructions, functions, functionsHeader.signatures, config.openai);
+  const aiAgent = new CodeAgent('code-gen', instructions, functions, functionsHeader.signatures, config.openai);
   
   const response = await aiAgent.generateTaskSchema(taskName, doTaskCode);
 

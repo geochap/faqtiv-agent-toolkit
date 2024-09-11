@@ -6,7 +6,7 @@ import * as config from '../config.js';
 
 const { runtimeName: defaultRuntime } = config.project.runtime; // defaults to javascript
 const defaultInstructions = ``;
-const defaultDesktopInstructions = ``;
+const defaultAssistantInstructions = ``;
 
 const defaultEnvFile = `OPENAI_ORGANIZATION=<your_org>
 OPENAI_API_KEY=<your_api_key>
@@ -25,7 +25,7 @@ const runtimeGitIgnore = {
 
 export function initJS(runtimeCommand, baseDir) {
   // Create package.json for npm project
-  execSync('npm init -y', { cwd: baseDir, stdio: 'ignore' });
+  execSync(`${config.project.runtime.packageManager} init -y`, { cwd: baseDir, stdio: 'ignore' });
     
   // Install base npm packages
   // execSync('npm install <package_name>', { cwd: baseDir, stdio: 'ignore' });
@@ -81,7 +81,7 @@ task_examples: []`;
     fs.writeFileSync(`${baseDir}/faqtiv_config.yml`, faqtivConfig);
     fs.writeFileSync(`${baseDir}/.env.example`, defaultEnvFile);
     fs.writeFileSync(`${baseDir}/instructions.txt`, defaultInstructions);
-    fs.writeFileSync(`${baseDir}/desktop_instructions.txt`, defaultDesktopInstructions);
+    fs.writeFileSync(`${baseDir}/assistant_instructions.txt`, defaultAssistantInstructions);
     fs.writeFileSync(`${baseDir}/.gitignore`, `${gitIgnore}\n${runtimeGitIgnore[projectRuntime]}`);
 
     // Initialize interpreter environment

@@ -29,7 +29,9 @@ export default function(options) {
       
       const metadata = yaml.load(fs.readFileSync(metdataFilePath, 'utf8'));
   
-      compiled.push(JSON.parse(metadata.output.task_schema));
+      compiled.push({
+        [taskName]: metadata.output.task_schema
+      });
     }
 
     return console.log(JSON.stringify(compiled, null, 2));
