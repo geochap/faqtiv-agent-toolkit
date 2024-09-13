@@ -225,7 +225,7 @@ faqtiv setup-interpreter
 This command will install the necessary dependencies for the interpreter runtime environment.
 
 ### Managing Modules
-Modules are external javascript or pythn libraries that are required by your function libraries.
+Modules are external javascript or python libraries that are required by your function libraries.
 
 #### Adding a Module
 To add a new module, use the `add-module` command:
@@ -342,3 +342,29 @@ Here is an example of initializing a new project:
 ```bash
 faqtiv init my_project --runtime python
 ```
+
+### Managing Functions
+
+#### Adding a Function
+To add a new function to the project, use the `add-function` command:
+
+```
+faqtiv add-function <name> <code>
+```
+
+- `<name>`: The name of the function.
+- `<code>`: The code for the function.
+
+This command will add the new function to the `functions` directory in your project.
+
+#### Updating Agent Instructions
+
+To update the agent instructions, use the `update-instructions` command:
+
+```bash
+faqtiv update-instructions <newInstructions>
+```
+
+- `<newInstructions>`: The new instructions for the agent.
+
+This command will update the `instructions.txt` file in your project which is added as part of the task code generation prompt.

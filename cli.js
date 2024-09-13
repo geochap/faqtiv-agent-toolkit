@@ -18,6 +18,8 @@ import removeModule from './commands/remove-module.js';
 import listModules from './commands/list-modules.js';
 import setupInterpreter from './commands/setup-interpreter.js';
 import exportStandalone from './commands/export-standalone.js';
+import addFunction from './commands/add-function.js';
+import updateInstructions from './commands/update-instructions.js';
 import serve from './commands/serve.js';
 
 program
@@ -134,6 +136,16 @@ program
   .option('--port <number>', 'Port number for the server', 8000)
   .description('Start a server with run_task and run_adhoc endpoints')
   .action(serve);
+
+program
+  .command('add-function <name> <code>')
+  .description('Add a new function')
+  .action(addFunction);
+
+program
+  .command('update-instructions <newInstructions>')
+  .description('Update the agent instructions')
+  .action(updateInstructions);
 
 program
   .on('--help', () => {

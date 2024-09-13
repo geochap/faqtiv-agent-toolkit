@@ -196,8 +196,12 @@ export default async function exportStandalone(outputDir = process.cwd(), option
     tasks: taskFunctions.join('\n\n'),
     taskToolSchemas: taskToolSchemas.join(',\n'),
     examples: JSON.stringify(examples, null, 2),
-    generateAnsweringFunctionPrompt: generateAnsweringFunctionPrompt(instructions, functionsHeader.signatures, true),
-    getAssistantInstructionsPrompt: getAssistantInstructionsPrompt(assistantInstructions, instructions),
+    generateAnsweringFunctionPrompt: runtimeName === 'javascript' 
+      ? generateAnsweringFunctionPrompt(instructions, functionsHeader.signatures, true).replace(/`/g, '\\`')
+      : generateAnsweringFunctionPrompt(instructions, functionsHeader.signatures, true),
+    getAssistantInstructionsPrompt: runtimeName === 'javascript'
+      ? getAssistantInstructionsPrompt(assistantInstructions, instructions).replace(/`/g, '\\`')
+      : getAssistantInstructionsPrompt(assistantInstructions, instructions),
     installCommand: runtimeConfig.installCommand,
     cliAgentCommand: runtimeConfig.cliCommand,
     httpServerCommand: runtimeConfig.httpCommand,

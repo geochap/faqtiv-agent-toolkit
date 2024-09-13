@@ -1,0 +1,52 @@
+Use function executeAgentCommand to execute faqtiv cli commands in the agent directory:
+
+### Initializing a New Project
+To initialize a new project, use the `init` command:
+
+```bash
+faqtiv init <projectRoot> --runtime <value>
+```
+
+- `<projectRoot>`: The root directory of the new project.
+- `--runtime <value>`: The runtime environment, either `javascript` or `python`. Defaults to `javascript`.
+
+### Updating Function Headers
+In order to generate code first we need to generate function signature headers for your functions, use the `update-headers` command:
+
+```bash
+faqtiv update-headers
+```
+
+### Managing Modules
+Modules are external javascript or python libraries that are required by your function libraries.
+
+#### Adding a Module
+To add a new module, use the `add-module` command:
+
+```bash
+faqtiv add-module <name> [alias] [version]
+```
+
+#### Adding a Function
+To add a new function to the project, use the `add-function` command:
+
+```
+faqtiv add-function <name> <code>
+```
+
+- `<name>`: The name of the function.
+- `<code>`: The code for the function. Make sure to use double quotes around the code and use new lines.
+
+This command will add the new function to the `functions` directory in your project.
+
+#### Updating Agent Instructions
+
+To update the agent instructions, use the `update-instructions` command:
+
+```bash
+faqtiv update-instructions <newInstructions>
+```
+
+- `<newInstructions>`: The new instructions for the agent.
+
+This command will update the `instructions.txt` file in your project which is added as part of the task code generation prompt.

@@ -145,6 +145,7 @@ if (isInitCommand || isHelpCommand || isVersionCommand) {
     modules,
     taskExamples: faqtivConfig.task_examples || [],
     autoAddExamples: faqtivConfig.auto_add_examples != undefined ? faqtivConfig.auto_add_examples : false,
+    rootDir: process.cwd(),
     metadataDir: path.join(projectWorkdir, 'code'),
     tasksDir: path.join(process.cwd(), 'tasks'),
     codeDir: path.join(process.cwd(), 'code'),
