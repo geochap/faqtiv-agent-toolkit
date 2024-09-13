@@ -345,6 +345,19 @@ faqtiv init my_project --runtime python
 
 ### Managing Functions
 
+#### Listing Functions
+
+To list existing functions and libs with their code, use the `list-functions` command:
+
+```bash
+faqtiv list-functions
+```
+
+Options:
+- `--json`: Output the result in JSON format
+
+This command displays all the functions and libraries in the project, including their names and code content.
+
 #### Adding a Function
 To add a new function to the project, use the `add-function` command:
 

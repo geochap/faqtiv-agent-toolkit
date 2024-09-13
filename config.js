@@ -150,6 +150,7 @@ if (isInitCommand || isHelpCommand || isVersionCommand) {
     tasksDir: path.join(process.cwd(), 'tasks'),
     codeDir: path.join(process.cwd(), 'code'),
     functionsDir: path.join(process.cwd(), 'functions'),
+    libsDir: path.join(process.cwd(), 'libs'),
     headerPath: path.join(projectWorkdir, 'functions-header.yml'),
     tmpDir: path.join(projectWorkdir, 'tmp'),
     logsDir: path.join(process.cwd(), 'logs')

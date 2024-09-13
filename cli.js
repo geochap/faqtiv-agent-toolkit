@@ -21,6 +21,7 @@ import exportStandalone from './commands/export-standalone.js';
 import addFunction from './commands/add-function.js';
 import updateInstructions from './commands/update-instructions.js';
 import serve from './commands/serve.js';
+import listFunctions from './commands/list-functions.js';
 
 program
   .version(config.version)
@@ -146,6 +147,12 @@ program
   .command('update-instructions <newInstructions>')
   .description('Update the agent instructions')
   .action(updateInstructions);
+
+program
+  .command('list-functions')
+  .option('--json', 'output to json')
+  .description('List existing functions and libs with their code')
+  .action(listFunctions);
 
 program
   .on('--help', () => {
