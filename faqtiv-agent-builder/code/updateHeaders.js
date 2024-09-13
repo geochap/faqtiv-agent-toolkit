@@ -14,7 +14,7 @@ async function executeAgentCommand(agentDirectoryPath, command) {
   return new Promise((resolve, reject) => {
     exec(`faqtiv ${command}`, { cwd: agentDirectoryPath }, (error, stdout, stderr) => {
       if (error) {
-        reject(new Error(`Error executing command: ${stderr || error.message}`))
+        reject(new Error(`faqtiv command failed: ${stderr || error.message}`))
       } else {
         resolve(stdout)
       }
@@ -28,5 +28,5 @@ async function executeAgentCommand(agentDirectoryPath, command) {
 
 async function doTask(agentDirectoryPath) {
   const result = await executeAgentCommand(agentDirectoryPath, 'update-headers');
-  console.log(JSON.stringify(result));
+  console.log(JSON.stringify({ result }));
 }

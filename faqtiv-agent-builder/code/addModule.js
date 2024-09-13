@@ -14,7 +14,7 @@ async function executeAgentCommand(agentDirectoryPath, command) {
   return new Promise((resolve, reject) => {
     exec(`faqtiv ${command}`, { cwd: agentDirectoryPath }, (error, stdout, stderr) => {
       if (error) {
-        reject(new Error(`Error executing command: ${stderr || error.message}`))
+        reject(new Error(`faqtiv command failed: ${stderr || error.message}`))
       } else {
         resolve(stdout)
       }
@@ -26,7 +26,7 @@ async function executeAgentCommand(agentDirectoryPath, command) {
 * This function is the generated code: it's safe to edit.
  */
 
-async function doTask(agentDirectoryPath, moduleName, alias, version) {
+async function doTask(agentDirectoryPath, moduleName, alias = "", version = "") {
   let command = `add-module ${moduleName}`;
   if (alias) {
     command += ` ${alias}`;
@@ -34,6 +34,7 @@ async function doTask(agentDirectoryPath, moduleName, alias, version) {
   if (version) {
     command += ` ${version}`;
   }
+
   const result = await executeAgentCommand(agentDirectoryPath, command);
-  console.log(JSON.stringify(result));
+  console.log(JSON.stringify({ result }));
 }

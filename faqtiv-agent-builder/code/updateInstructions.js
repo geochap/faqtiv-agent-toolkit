@@ -26,7 +26,7 @@ async function executeAgentCommand(agentDirectoryPath, command) {
 * This function is the generated code: it's safe to edit.
  */
 
-async function doTask(agentDirectoryPath) {
+async function doTask(agentDirectoryPath, instructions) {
   // Escape problematic characters for shell
   const escapedInstructions = instructions
     .replace(/"/g, '\\"')

@@ -27,6 +27,6 @@ async function executeAgentCommand(agentDirectoryPath, command) {
  */
 
 async function doTask(projectRoot, runtime = 'javascript') {
-  const result = await executeAgentCommand(process.cwd(), `init ${projectRoot} --runtime ${runtime}`);
-  console.log(JSON.stringify({ result }));
+  const result = await executeAgentCommand(projectRoot, `init ${projectRoot} --runtime ${runtime}`);
+  console.log(JSON.stringify(result));
 }
