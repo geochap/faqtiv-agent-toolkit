@@ -88,7 +88,7 @@ async function updateMetadata(taskName, codeFile) {
   const metadata = yaml.load(fs.readFileSync(metadataFilePath, 'utf8'));
 
   const usedFunctions = extractFunctionNames(doTaskCode);
-  const functionDependencies = getFunctionDependencies(null, usedFunctions, config.project.functions);
+  const functionDependencies = getFunctionDependencies(usedFunctions, config.project.functions);
   const taskSchema = await generateTaskSchema(taskName, doTaskCode);
 
   metadata.output.functions = functionDependencies;
