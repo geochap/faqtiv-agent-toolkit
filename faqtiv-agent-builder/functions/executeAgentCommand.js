@@ -1,4 +1,5 @@
 const { exec } = require('node:child_process')
+const { existsSync } = require('node:fs')
 
 /**
  * Executes a faqtiv cli command in the specified agent directory.
@@ -10,7 +11,7 @@ const { exec } = require('node:child_process')
  */
 async function executeAgentCommand(agentDirectoryPath, command) {
   return new Promise((resolve, reject) => {
-    exec(`faqtiv ${command}`, { cwd: agentDirectoryPath }, (error, stdout, stderr) => {
+    exec(`faqtiv ${command}`, { cwd: existsSync(agentDirectoryPath)?agentDirectoryPath:undefined, shell:true }, (error, stdout, stderr) => {
       if (error) {
         reject(new Error(`faqtiv command failed: ${stderr || error.message}`))
       } else {
