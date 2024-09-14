@@ -33,7 +33,6 @@ const exportDependencies = {
     "@langchain/core": "^0.2.31",
     "@langchain/openai": "^0.2.8",
     "body-parser": "^1.20.2",
-    "exceljs": "^4.4.0",
     "express": "^4.19.2",
     "langchain": "^0.2.17",
     "zod": "^3.23.8",
