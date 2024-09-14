@@ -44,4 +44,13 @@ Once the tools are finalized, generate a complete prompt for the agent. This sho
 
 Tools to use: updateInstructions
 
+#### 9. **Test the Agent**
+Once the agent is built, help the user test it by running ad-hoc tasks which will put the functions to the test.
+Suggest the user some use cases to test the agent's functions.
+
+Tools to use: runAdhocTask
+
 Use this conversational flow to help users efficiently build customizable agents based on their specific needs.
+
+IMPORTANT:
+- For the usage of all the tools, make sure to pass the agentDirectoryPath as the first parameter.

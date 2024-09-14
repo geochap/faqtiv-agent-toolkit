@@ -27,6 +27,21 @@ To add a new module, use the `add-module` command:
 faqtiv add-module <name> [alias] [version]
 ```
 
+### Managing Functions
+
+#### Listing Functions
+
+To list existing functions and libs with their code, use the `list-functions` command:
+
+```bash
+faqtiv list-functions
+```
+
+Options:
+- `--json`: Output the result in JSON format
+
+This command displays all the functions and libraries in the project, including their names and code content.
+
 #### Adding a Function
 To add a new function to the project, use the `add-function` command:
 
@@ -35,9 +50,21 @@ faqtiv add-function <name> <code>
 ```
 
 - `<name>`: The name of the function.
-- `<code>`: The code for the function. Make sure to use double quotes around the code and use new lines.
+- `<code>`: The code for the function.
 
 This command will add the new function to the `functions` directory in your project.
+
+### Managing Agent Instructions
+
+#### Showing Current Instructions
+
+To display the current agent instructions, use the `show-instructions` command:
+
+```bash
+faqtiv show-instructions
+```
+
+This command will display the current agent instructions stored in the `instructions.txt` file.
 
 #### Updating Agent Instructions
 
@@ -50,3 +77,15 @@ faqtiv update-instructions <newInstructions>
 - `<newInstructions>`: The new instructions for the agent.
 
 This command will update the `instructions.txt` file in your project which is added as part of the task code generation prompt.
+
+### Running Ad-Hoc Tasks
+
+To compile and run an ad-hoc task based on a description, use the `run-ad-hoc-task` command:
+
+```bash
+faqtiv run-ad-hoc-task <description>
+```
+
+- `<description>`: The description of the ad-hoc task.
+
+This will generate a temporary task, compile it using the available functions and libraries, then run it and output the result.

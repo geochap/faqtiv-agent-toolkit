@@ -7,3 +7,6 @@ task_examples:
   - addModule
   - updateHeaders
   - updateInstructions
+  - listFunctions
+  - getInstructions
+  - runAdhocTask
