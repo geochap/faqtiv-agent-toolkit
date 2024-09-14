@@ -370,6 +370,18 @@ faqtiv add-function <name> <code>
 
 This command will add the new function to the `functions` directory in your project.
 
+### Managing Agent Instructions
+
+#### Showing Current Instructions
+
+To display the current agent instructions, use the `show-instructions` command:
+
+```bash
+faqtiv show-instructions
+```
+
+This command will display the current agent instructions stored in the `instructions.txt` file.
+
 #### Updating Agent Instructions
 
 To update the agent instructions, use the `update-instructions` command:

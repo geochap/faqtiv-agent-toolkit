@@ -22,6 +22,7 @@ import addFunction from './commands/add-function.js';
 import updateInstructions from './commands/update-instructions.js';
 import serve from './commands/serve.js';
 import listFunctions from './commands/list-functions.js';
+import showInstructions from './commands/show-instructions.js';
 
 program
   .version(config.version)
@@ -153,6 +154,11 @@ program
   .option('--json', 'output to json')
   .description('List existing functions and libs with their code')
   .action(listFunctions);
+
+program
+  .command('show-instructions')
+  .description('Display the current agent instructions')
+  .action(showInstructions);
 
 program
   .on('--help', () => {
