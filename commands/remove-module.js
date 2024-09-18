@@ -8,7 +8,8 @@ const configPath = path.join('faqtiv_config.yml');
 
 async function uninstallJSModules(name) {
   return await new Promise((resolve, reject) => {
-    const npmCommand = `${config.project.runtime.packageManager} uninstall ${name}`;
+    const installCommand = config.project.runtime.packageManager === 'npm' ? 'uninstall' : 'remove';
+    const npmCommand = `${config.project.runtime.packageManager} ${installCommand} ${name}`;
     
     // Run npm install --save for the module
     exec(npmCommand, (error, stdout, stderr) => {

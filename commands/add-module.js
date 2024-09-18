@@ -8,7 +8,8 @@ const configPath = path.join('faqtiv_config.yml');
 
 async function installJSModules(name, moduleVersion) {
   return await new Promise((resolve, reject) => {
-    const npmCommand = moduleVersion ? `${config.project.runtime.packageManager} install --save ${name}@${moduleVersion}` : `${config.project.runtime.packageManager} install --save ${name}`;
+    const installCommand = config.project.runtime.packageManager === 'npm' ? 'install' : 'add';
+    const npmCommand = moduleVersion ? `${config.project.runtime.packageManager} ${installCommand} ${name}@${moduleVersion}` : `${config.project.runtime.packageManager} ${installCommand} ${name}`;
     
     // Run npm install --save for the module
     exec(npmCommand, (error, stdout, stderr) => {
