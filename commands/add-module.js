@@ -72,7 +72,7 @@ export default async function addModule(name, alias = name, moduleVersion = '') 
 
   if (faqtivConfig.modules.filter((m) => m.name == name || m.alias == alias).length > 0) {
     console.log(`Module "${name}" or alias "${alias}" already exists`);
-    process.exit(1);
+    process.exit(0);
   }
 
   // Add the new module to the array
