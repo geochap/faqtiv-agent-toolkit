@@ -10,3 +10,6 @@ task_examples:
   - listFunctions
   - getInstructions
   - runAdhocTask
+  - setEnvVar
+  - updateFunction
+  - removeFunction

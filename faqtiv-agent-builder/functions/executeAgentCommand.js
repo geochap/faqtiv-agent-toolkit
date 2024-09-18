@@ -15,7 +15,11 @@ async function executeAgentCommand(agentDirectoryPath, command) {
       if (error) {
         reject(new Error(`faqtiv command failed: ${stderr || error.message}`))
       } else {
-        resolve(stdout)
+        if (stdout.length === 0 && stderr.length > 0) {
+          resolve(stderr)
+        } else {
+          resolve(stdout)
+        }
       }
     })
   })

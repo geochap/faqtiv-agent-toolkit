@@ -10,6 +10,21 @@ faqtiv init <projectRoot> --runtime <value>
 - `<projectRoot>`: The root directory of the new project.
 - `--runtime <value>`: The runtime environment, either `javascript` or `python`. Defaults to `javascript`.
 
+### Configuration
+
+#### Setting Environment Variables
+
+To add or update an environment variable in your project's `.env` file, use the `set-env-var` command:
+
+```bash
+faqtiv set-env-var <key> <value>
+``` 
+
+- `<key>`: The key for the environment variable.
+- `<value>`: The value for the environment variable.
+
+This command will add or update the environment variable in your project's `.env` file.
+
 ### Updating Function Headers
 In order to generate code first we need to generate function signature headers for your functions, use the `update-headers` command:
 
@@ -53,6 +68,29 @@ faqtiv add-function <name> <code>
 - `<code>`: The code for the function.
 
 This command will add the new function to the `functions` directory in your project.
+
+#### Removing a Function
+To remove an existing function, use the `remove-function` command:
+
+```bash
+faqtiv remove-function <name>
+```
+
+- `<name>`: The name of the function.
+
+This command will remove the function from the `functions` directory in your project.
+
+#### Updating a Function
+To update an existing function, use the `update-function` command:
+
+```bash
+faqtiv update-function <name> <newCode>
+``` 
+
+- `<name>`: The name of the function.
+- `<newCode>`: The new code for the function.
+
+This command will update the function in the `functions` directory in your project. 
 
 ### Managing Agent Instructions
 

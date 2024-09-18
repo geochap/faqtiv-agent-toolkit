@@ -31,7 +31,7 @@ async function executeAgentCommand(agentDirectoryPath, command) {
 * This function is the generated code: it's safe to edit.
  */
 
-async function doTask(agentDirectoryPath, runtime = 'javascript') {
-  const result = await executeAgentCommand(agentDirectoryPath, `init ${agentDirectoryPath} --runtime ${runtime}`);
+async function doTask(agentDirectoryPath, key, value) {
+  const result = await executeAgentCommand(agentDirectoryPath, `set-env-var "${key}" "${value}"`);
   console.log(JSON.stringify({ result }));
 }

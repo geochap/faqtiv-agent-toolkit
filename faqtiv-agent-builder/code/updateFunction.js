@@ -31,7 +31,13 @@ async function executeAgentCommand(agentDirectoryPath, command) {
 * This function is the generated code: it's safe to edit.
  */
 
-async function doTask(agentDirectoryPath, runtime = 'javascript') {
-  const result = await executeAgentCommand(agentDirectoryPath, `init ${agentDirectoryPath} --runtime ${runtime}`);
+async function doTask(agentDirectoryPath, functionName, newCode) {
+  // Escape problematic characters for shell
+  const escapedFunctionCode = newCode
+    .replace(/"/g, '\\"')
+    .replace(/`/g, '\\`')
+    .replace(/\\n/g, '\n');
+
+  const result = await executeAgentCommand(agentDirectoryPath, `update-function ${functionName} "${escapedFunctionCode}"`);
   console.log(JSON.stringify({ result }));
 }

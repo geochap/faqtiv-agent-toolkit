@@ -4,6 +4,7 @@
  */
 
 const { exec } = require('node:child_process')
+const { existsSync } = require('node:fs')
     
 /**
 * PUBLIC FUNCTIONS
@@ -12,11 +13,15 @@ const { exec } = require('node:child_process')
 
 async function executeAgentCommand(agentDirectoryPath, command) {
   return new Promise((resolve, reject) => {
-    exec(`faqtiv ${command}`, { cwd: agentDirectoryPath }, (error, stdout, stderr) => {
+    exec(`faqtiv ${command}`, { cwd: existsSync(agentDirectoryPath)?agentDirectoryPath:undefined, shell:true }, (error, stdout, stderr) => {
       if (error) {
-        reject(new Error(`Error executing command: ${stderr || error.message}`))
+        reject(new Error(`faqtiv command failed: ${stderr || error.message}`))
       } else {
-        resolve(stdout)
+        if (stdout.length === 0 && stderr.length > 0) {
+          resolve(stderr)
+        } else {
+          resolve(stdout)
+        }
       }
     })
   })
@@ -26,13 +31,13 @@ async function executeAgentCommand(agentDirectoryPath, command) {
 * This function is the generated code: it's safe to edit.
  */
 
-async function doTask(agentDirectoryPath, instructions) {
+async function doTask(agentDirectoryPath, newInstructions) {
   // Escape problematic characters for shell
-  const escapedInstructions = instructions
+  const escapedInstructions = newInstructions
     .replace(/"/g, '\\"')
     .replace(/`/g, '\\`')
     .replace(/\\n/g, '\n');
-    
+
   const result = await executeAgentCommand(agentDirectoryPath, `update-instructions "${escapedInstructions}"`);
-  console.log(JSON.stringify(result));
+  console.log(JSON.stringify({ result }));
 }
