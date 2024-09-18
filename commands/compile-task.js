@@ -89,7 +89,7 @@ async function updateMetadata(taskName, codeFile) {
 
   const usedFunctions = extractFunctionNames(doTaskCode);
   const functionDependencies = getFunctionDependencies(usedFunctions, config.project.functions);
-  const taskSchema = await generateTaskSchema(taskName, doTaskCode);
+  const taskSchema = await generateTaskSchema(doTaskCode, taskName);
 
   metadata.output.functions = functionDependencies;
   metadata.output.task_schema = taskSchema;
