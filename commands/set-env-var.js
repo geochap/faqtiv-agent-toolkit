@@ -9,7 +9,11 @@ async function setEnvVar(key, value) {
   try {
     envContent = await fs.readFile(envPath, 'utf-8');
   } catch (error) {
-    if (error.code !== 'ENOENT') {
+    if (error.code === 'ENOENT') {
+      // File doesn't exist, create an empty one
+      await fs.writeFile(envPath, '');
+      console.log('.env file created.');
+    } else {
       console.error('Error reading .env file:', error);
       return;
     }

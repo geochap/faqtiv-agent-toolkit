@@ -65,7 +65,7 @@ You can set these variables in your project's `.env` file or in your system's en
 
 #### Setting Environment Variables
 
-To add or update an environment variable in your project's `.env` file, you can also use the `add-env-var` command:
+To add or update an environment variable in your project's `.env` file, you can also use the `set-env-var` command:
 
 ```bash
 faqtiv set-env-var <key> <value>
