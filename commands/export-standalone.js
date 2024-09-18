@@ -30,11 +30,11 @@ const exportDependencies = {
     'pyfiglet==1.0.2'
   ],
   javascript: {
-    "@langchain/core": "^0.2.31",
-    "@langchain/openai": "^0.2.8",
+    "@langchain/core": "^0.3.0",
+    "@langchain/openai": "^0.3.0",
     "body-parser": "^1.20.2",
     "express": "^4.19.2",
-    "langchain": "^0.2.17",
+    "langchain": "^0.3.0",
     "zod": "^3.23.8",
     "uuid": "^10.0.0",
     "figlet": "^1.7.0"

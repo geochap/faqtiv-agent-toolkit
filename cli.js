@@ -23,6 +23,9 @@ import updateInstructions from './commands/update-instructions.js';
 import serve from './commands/serve.js';
 import listFunctions from './commands/list-functions.js';
 import showInstructions from './commands/show-instructions.js';
+import removeFunction from './commands/remove-function.js';
+import updateFunction from './commands/update-function.js';
+import setEnvVar from './commands/set-env-var.js';
 
 program
   .version(config.version)
@@ -145,9 +148,14 @@ program
   .action(addFunction);
 
 program
-  .command('update-instructions <newInstructions>')
-  .description('Update the agent instructions')
-  .action(updateInstructions);
+  .command('remove-function <name>')
+  .description('Remove an existing function')
+  .action(removeFunction);
+
+program
+  .command('update-function <name> <newCode>')
+  .description('Update an existing function')
+  .action(updateFunction);
 
 program
   .command('list-functions')
@@ -156,9 +164,19 @@ program
   .action(listFunctions);
 
 program
+  .command('update-instructions <newInstructions>')
+  .description('Update the agent instructions')
+  .action(updateInstructions);
+
+program
   .command('show-instructions')
   .description('Display the current agent instructions')
   .action(showInstructions);
+
+program
+  .command('set-env-var <key> <value>')
+  .description('Add or update an environment variable in .env file')
+  .action(setEnvVar);
 
 program
   .on('--help', () => {

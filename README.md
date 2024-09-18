@@ -63,6 +63,19 @@ The toolkit uses the following environment variables:
 
 You can set these variables in your project's `.env` file or in your system's environment.
 
+#### Setting Environment Variables
+
+To add or update an environment variable in your project's `.env` file, you can also use the `add-env-var` command:
+
+```bash
+faqtiv set-env-var <key> <value>
+``` 
+
+- `<key>`: The key for the environment variable.
+- `<value>`: The value for the environment variable.
+
+This command will add or update the environment variable in your project's `.env` file.
+
 ### Getting started
 
 Start by adding some functions and libs to your project. Functions will be provided to the LLM to use for code generation while libs are private dependencies that your functions may use but the LLM won't use directly. Be verbose in your function and argumaent naming and supply code docs as necessary to make clear to the LLM what the function does.
@@ -310,6 +323,80 @@ To list all existing examples, use the `list-examples` command:
 faqtiv list-examples
 ```
 
+### Managing Functions
+
+#### Listing Functions
+
+To list existing functions and libs with their code, use the `list-functions` command:
+
+```bash
+faqtiv list-functions
+```
+
+Options:
+- `--json`: Output the result in JSON format
+
+This command displays all the functions and libraries in the project, including their names and code content.
+
+#### Adding a Function
+To add a new function to the project, use the `add-function` command:
+
+```
+faqtiv add-function <name> <code>
+```
+
+- `<name>`: The name of the function.
+- `<code>`: The code for the function.
+
+This command will add the new function to the `functions` directory in your project.
+
+#### Removing a Function
+To remove an existing function, use the `remove-function` command:
+
+```bash
+faqtiv remove-function <name>
+```
+
+- `<name>`: The name of the function.
+
+This command will remove the function from the `functions` directory in your project.
+
+#### Updating a Function
+To update an existing function, use the `update-function` command:
+
+```bash
+faqtiv update-function <name> <newCode>
+``` 
+
+- `<name>`: The name of the function.
+- `<newCode>`: The new code for the function.
+
+This command will update the function in the `functions` directory in your project. 
+
+### Managing Agent Instructions
+
+#### Showing Current Instructions
+
+To display the current agent instructions, use the `show-instructions` command:
+
+```bash
+faqtiv show-instructions
+```
+
+This command will display the current agent instructions stored in the `instructions.txt` file.
+
+#### Updating Agent Instructions
+
+To update the agent instructions, use the `update-instructions` command:
+
+```bash
+faqtiv update-instructions <newInstructions>
+```
+
+- `<newInstructions>`: The new instructions for the agent.
+
+This command will update the `instructions.txt` file in your project which is added as part of the task code generation prompt.
+
 ### Exporting Standalone Langchain Agent
 
 To export a standalone agent that can be run independently, use the `export-standalone` command:
@@ -367,54 +454,3 @@ Here is an example of initializing a new project:
 ```bash
 faqtiv init my_project --runtime python
 ```
-
-### Managing Functions
-
-#### Listing Functions
-
-To list existing functions and libs with their code, use the `list-functions` command:
-
-```bash
-faqtiv list-functions
-```
-
-Options:
-- `--json`: Output the result in JSON format
-
-This command displays all the functions and libraries in the project, including their names and code content.
-
-#### Adding a Function
-To add a new function to the project, use the `add-function` command:
-
-```
-faqtiv add-function <name> <code>
-```
-
-- `<name>`: The name of the function.
-- `<code>`: The code for the function.
-
-This command will add the new function to the `functions` directory in your project.
-
-### Managing Agent Instructions
-
-#### Showing Current Instructions
-
-To display the current agent instructions, use the `show-instructions` command:
-
-```bash
-faqtiv show-instructions
-```
-
-This command will display the current agent instructions stored in the `instructions.txt` file.
-
-#### Updating Agent Instructions
-
-To update the agent instructions, use the `update-instructions` command:
-
-```bash
-faqtiv update-instructions <newInstructions>
-```
-
-- `<newInstructions>`: The new instructions for the agent.
-
-This command will update the `instructions.txt` file in your project which is added as part of the task code generation prompt.
