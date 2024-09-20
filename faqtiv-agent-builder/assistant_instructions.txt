@@ -31,6 +31,8 @@ A valid javascript function example:
  * @param {string} param - Description of the parameter.
  * @returns {Promise<string>} - Description of the return value.
  */
+const dependency = require('dependency');
+
 async function functionName(param) {
   // Code of the function
 }
@@ -38,6 +40,8 @@ async function functionName(param) {
 
 A valid python function example:
 ```python
+import dependency
+
 def functionName(param):
     """
     Description of the function

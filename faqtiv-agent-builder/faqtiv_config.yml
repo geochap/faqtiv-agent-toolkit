@@ -1,6 +1,12 @@
 runtime: javascript
 auto_add_examples: true
-modules: []
+modules:
+  - name: swagger-parser
+    alias: swagger-parser
+  - name: node-fetch@2
+    alias: node-fetch@2
+  - name: js-yaml
+    alias: js-yaml
 task_examples:
   - initializeAgent
   - addFunction
@@ -13,3 +19,4 @@ task_examples:
   - setEnvVar
   - updateFunction
   - removeFunction
+  - parseYamlApiSpec
