@@ -515,9 +515,23 @@ async function* streamCompletion(messages) {
   };
 
   try {
+    let insertNewline = false; // Flag to determine if a newline should be inserted
     while (true) {
       let hasToolCalls = false;
       for await (const event of processRequest({ conversation })) {
+        if (insertNewline) {
+          // Insert a newline before processing new tokens
+          const newlineChunk = {
+            id: completionId,
+            object: 'chat.completion.chunk',
+            created: currentTime,
+            model,
+            choices: [{ index: 0, delta: { role: 'assistant', content: '\n' }, finish_reason: null }],
+          };
+          yield newlineChunk;
+          insertNewline = false; // Reset the flag after inserting newline
+        }
+
         if (event.event === 'on_chat_model_stream') {
           const content = event.data.chunk.content;
           if (content) {
@@ -536,6 +550,7 @@ async function* streamCompletion(messages) {
             const toolMessages = await processToolCalls(toolCalls);
             conversation = conversation.concat(toolMessages);
             hasToolCalls = true;
+            insertNewline = true; // Set flag to insert newline before next tokens
           } else {
             const tokenChunk = {
               id: completionId,
