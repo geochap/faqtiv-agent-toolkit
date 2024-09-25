@@ -4,7 +4,7 @@ import yaml from 'js-yaml';
 
 const configPath = path.join('faqtiv_config.yml');
 
-export default async function removeExample(name, options) {
+export default async function removeExample(name, options = {}) {
   if (!fs.existsSync(configPath)) {
     console.log('faqtiv_config.yml not found');
     process.exit(1);

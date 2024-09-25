@@ -20,3 +20,9 @@ task_examples:
   - updateFunction
   - removeFunction
   - parseYamlApiSpec
+  - addTask
+  - compileTask
+  - listTasks
+  - removeTask
+  - runTask
+  - updateTask

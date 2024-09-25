@@ -127,3 +127,74 @@ faqtiv run-ad-hoc-task <description>
 - `<description>`: The description of the ad-hoc task.
 
 This will generate a temporary task, compile it using the available functions and libraries, then run it and output the result.
+
+### Managing Tasks
+Tasks are natural language descriptions of a single unit of work that the agent can perform by utilizing the functions available to it.
+
+#### Adding a Task
+To add a new task, use the `add-task` command:
+
+```bash
+faqtiv add-task <name> <description>
+```
+
+- `<name>`: The name of the task.
+- `<description>`: A brief description of the task.
+
+#### Removing a Task
+To remove an existing task, use the `remove-task` command (not implemented):
+
+```bash
+faqtiv remove-task <name>
+```
+
+- `<name>`: The name of the task.
+
+#### Updating a Task
+To update an existing task, use the `update-task` command (not implemented):
+
+```bash
+faqtiv update-task <name> <description>
+```
+
+- `<name>`: The name of the task.
+- `<description>`: The updated description of the task.
+
+#### Compiling Tasks
+To compile a specific task or all pending tasks, use the `compile-task` command:
+
+```bash
+faqtiv compile-task [taskName] --all
+```
+
+- `[taskName]`: The name of the task (optional).
+- `--all`: Compile all pending tasks.
+
+If the code is manually edited then this command will update the code's metadata without regenerating the code, this is needed to accurately track function dependencies for migrations.
+
+#### Migrating Tasks
+
+The toolkit can detect changes based on the modification dates of functions and task text files in the `./tasks` directory to determine if code regeneration is necessary.
+
+To execute a migration plan, use the `migrate-tasks` command:
+
+```bash
+faqtiv migrate-tasks
+```
+
+### Listing Tasks
+To list all existing tasks, use the `list-tasks` command:
+
+```bash
+faqtiv list-tasks
+```
+
+### Running Tasks
+To run a specific task, use the `run-task` command:
+
+```bash
+faqtiv run-task <taskName> [args...]
+```
+
+- `<taskName>`: The name of the task.
+- `[args...]`: Additional arguments for the task (optional).

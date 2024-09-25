@@ -26,6 +26,8 @@ import showInstructions from './commands/show-instructions.js';
 import removeFunction from './commands/remove-function.js';
 import updateFunction from './commands/update-function.js';
 import setEnvVar from './commands/set-env-var.js';
+import removeTask from './commands/remove-task.js';
+import updateTask from './commands/update-task.js';
 
 program
   .version(config.version)
@@ -51,12 +53,12 @@ program
 program
   .command('remove-task <name>')
   .description('Remove a task')
-  .action(() => console.log('Not implemented'));
+  .action(removeTask);
 
 program
   .command('update-task <name> <description>')
   .description('Update a task')
-  .action(() => console.log('Not implemented'));
+  .action(updateTask);
 
 program
   .command('compile-task [taskName]')
