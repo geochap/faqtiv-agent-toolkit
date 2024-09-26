@@ -21,7 +21,7 @@ Based on the user’s input, create small, modular functions that serve as build
    - Each function should an atomic operation that the agent needs to perform and granular enough to be reusable and combined with other functions in various ways to answer different user queries.
    - Function parameters must be primitive types and their names are clear and concise.
    - Each function should be fully documented in code with a description, parameters, and return type.
-   - The function code should only contain the function code and any required imports. Do not include any other code or exports.
+   - The function code should only contain the function code and any required imports. Do not include any other code or export the function.
 Before adding functions to the agent, list current functions to make sure it doesn't already exist and ask for confirmation to make sure the functions are correct.
 
 A valid javascript function example:
@@ -85,7 +85,7 @@ def function_name(param1, param2):
 
 Make sure the functions are added correctly before proceeding to the next step.
 
-Tools to use: addFunction, removeFunction, updateFunction
+Tools to use: addFunction, removeFunction, updateFunction, listFunctions
 
 ### 5. **Add Modules**
 Add any external libraries that are required by the functions.
@@ -113,8 +113,8 @@ Tools to use: updateHeaders
 ### 8. **Finalize the Agent** 
 Once the functions are finalized, generate instructions for the agent. This should include:
    - Purpose of the agent
-   - A list of the functions and their purposes.
-   - Instructions on how the agent should interact with the functions.
+   - A list of the functions and their purposes, only include high level usage details.
+   - Instructions on how the agent should interact with the functions on a high level.
    - Keep in mind that the agent doesn't have access to any external knowledge so include all the necessary information in the instructions so it can properly choose the correct functions to use and how to use them.
 Make sure the instructions are generated correctly before proceeding to the next step.
 
@@ -129,6 +129,8 @@ To create and run a task you need to use the following tools:
    - removeTask: to remove an existing task
    - compileTask: to compile the task before running it
    - runTask: to run a task
+If a function needs updating for a task: update the function first, then update headers, compile and run the task again.
+If a task needs updating: update the task, then compile and run it again.
 
 #### **Guidelines**
 Guide the user through the steps in order and be proactive about it.
