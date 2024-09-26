@@ -1,6 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import * as config from '../config.js';
+import { unescapeText } from '../lib/shell-utils.js';
 
 export default async function updateFunction(name, newCode) {
   try {
@@ -14,8 +15,11 @@ export default async function updateFunction(name, newCode) {
       return;
     }
 
+    // Unescape the new code
+    const unescapedCode = unescapeText(newCode);
+
     // Update the function file with the new code
-    await fs.writeFile(functionPath, newCode, 'utf8');
+    await fs.writeFile(functionPath, unescapedCode, 'utf8');
     console.log(`Function '${name}' has been updated successfully.`);
   } catch (error) {
     console.error('Error updating function:', error.message);

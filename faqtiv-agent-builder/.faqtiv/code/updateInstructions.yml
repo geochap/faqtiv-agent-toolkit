@@ -2,8 +2,53 @@ id: c33a71e0-e39f-4bf9-9efc-4475611e48f9
 output:
   functions:
     - name: executeAgentCommand
-      code: "async function executeAgentCommand(agentDirectoryPath, args) {\r\n  return new Promise((resolve, reject) => {\r\n    if (args[0] !== 'init' && (!agentDirectoryPath || !existsSync(agentDirectoryPath))) {\r\n      return reject(new Error(\"Agent directory doesn't exist\"));\r\n    }\r\n\r\n    const child = spawn('faqtiv', [...args], {\r\n      cwd: agentDirectoryPath,\r\n      shell: true, // Ensures command is executed within a shell\r\n      windowsHide: true,\r\n    });\r\n\r\n    let stdout = '';\r\n    let stderr = '';\r\n\r\n    child.stdout.on('data', (data) => {\r\n      stdout += data.toString();\r\n    });\r\n\r\n    child.stderr.on('data', (data) => {\r\n      stderr += data.toString();\r\n    });\r\n\r\n    child.on('close', (code) => {\r\n      if (code !== 0) {\r\n        reject(new Error(`faqtiv command failed: ${stderr || 'Unknown error'}`));\r\n      } else {\r\n        if (stdout.length === 0 && stderr.length > 0) {\r\n          resolve(stderr);\r\n        } else {\r\n          resolve(stdout);\r\n        }\r\n      }\r\n    });\r\n\r\n    child.on('error', (error) => {\r\n      reject(new Error(`Failed to start command: ${error.message}`));\r\n    });\r\n  });\r\n}"
-      lastModified: 2024-09-26T07:24:01.637Z
+      code: |-
+        async function executeAgentCommand(agentDirectoryPath, args) {
+          return new Promise((resolve, reject) => {
+            const isInitCommand = args[0] === 'init';
+            let cwd = agentDirectoryPath;
+            if (isInitCommand) {
+              cwd = undefined;
+            } else if (!agentDirectoryPath || !existsSync(agentDirectoryPath)) {
+              return reject(new Error("Agent directory doesn't exist"));
+            }
+            
+
+            const child = spawn('faqtiv', [...args], {
+              cwd,
+              shell: true, // Ensures command is executed within a shell
+              windowsHide: true,
+            });
+
+            let stdout = '';
+            let stderr = '';
+
+            child.stdout.on('data', (data) => {
+              stdout += data.toString();
+            });
+
+            child.stderr.on('data', (data) => {
+              stderr += data.toString();
+            });
+
+            child.on('close', (code) => {
+              if (code !== 0) {
+                reject(new Error(`faqtiv command failed: ${stderr || 'Unknown error'}`));
+              } else {
+                if (stdout.length === 0 && stderr.length > 0) {
+                  resolve(stderr);
+                } else {
+                  resolve(stdout);
+                }
+              }
+            });
+
+            child.on('error', (error) => {
+              reject(new Error(`Failed to start command: ${error.message}`));
+            });
+          });
+        }
+      lastModified: 2024-09-26T22:33:04.252Z
       imports:
         - const { spawn } = require('child_process');
         - const { existsSync } = require('node:fs');
@@ -21,13 +66,13 @@ output:
   task_schema: |-
     {
       "name": "updateInstructions",
-      "description": "Updates the faqtiv agent instructions",
-      "returns_description": "{ result: string }",
+      "description": "Updates the agent's instructions.",
+      "returns_description": "Object with a single key 'result' containing the outcome of the command execution.",
       "schema": z.object({
-        agentDirectoryPath: z.string().describe("the path to the agent's directory"),
-        newInstructions: z.string().describe("the new instructions for the agent")
+        agentDirectoryPath: z.string().describe("The path to the agent's directory."),
+        newInstructions: z.string().describe("The new instructions for the agent.")
       }),
-      "output": "{ result: string }",
+      "output": "Object<{ result: string }>",
       "func": doTask
     }
 embedding: >-

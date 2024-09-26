@@ -1,9 +1,17 @@
+/**
+* DEPENDENCIES
+* Warning: these are extracted from your function files, if you need to make changes edit the function file and recompile this task.
+ */
+
 const { spawn } = require('child_process');
 const { existsSync } = require('node:fs');
-
+const SwaggerParser = require('swagger-parser');
+const fetch = require('node-fetch');
+const yaml = require('js-yaml');
+    
 /**
- * LIBRARY FUNCTIONS
- * Warning: these are common functions, if you need to make changes edit the function file and recompile this task.
+* LIBRARY FUNCTIONS
+* Warning: these are common functions, if you need to make changes edit the function file and recompile this task.
  */
 
 function escapeForShell(text) {
@@ -20,29 +28,33 @@ function escapeForShell(text) {
       .replace(/\n/g, '`n');     // Newline in PowerShell
   } else {
     escapedText = normalizedText
-      .replace(/"/g, '\\"')
-      .replace(/`/g, '\\`')
-      .replace(/\$/g, '\\$')
-      .replace(/\\/g, '\\\\')
-      .replace(/\n/g, '\\n');
+      .replace(/\\/g, '\\\\')    // Escape backslashes first
+      .replace(/"/g, '\\"')      // Then escape double quotes
+      .replace(/`/g, '\\`')      // Then escape backticks
+      .replace(/\$/g, '\\$')     // Then escape dollar signs
+      .replace(/\n/g, '\\n');    // Then replace newlines
   }
 
   return `"${escapedText}"`;
 }
-
 /**
- * PUBLIC FUNCTIONS
- * Warning: these are common functions, if you need to make changes edit the function file and recompile this task.
+* PUBLIC FUNCTIONS
+* Warning: these are common functions, if you need to make changes edit the function file and recompile this task.
  */
 
 async function executeAgentCommand(agentDirectoryPath, args) {
   return new Promise((resolve, reject) => {
-    if (args[0] !== 'init' && (!agentDirectoryPath || !existsSync(agentDirectoryPath))) {
+    const isInitCommand = args[0] === 'init';
+    let cwd = agentDirectoryPath;
+    if (isInitCommand) {
+      cwd = undefined;
+    } else if (!agentDirectoryPath || !existsSync(agentDirectoryPath)) {
       return reject(new Error("Agent directory doesn't exist"));
     }
+    
 
     const child = spawn('faqtiv', [...args], {
-      cwd: agentDirectoryPath,
+      cwd,
       shell: true, // Ensures command is executed within a shell
       windowsHide: true,
     });
@@ -76,20 +88,29 @@ async function executeAgentCommand(agentDirectoryPath, args) {
   });
 }
 
+async function fetchYamlApiSpec(apiUrl) {
+  try {
+    const response = await fetch(apiUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch API spec: ${response.statusText}`);
+    }
+    const apiSpecText = await response.text();
+    const apiSpec = yaml.load(apiSpecText)
+    const parsedSpec = SwaggerParser.parse(apiSpec);
+    return parsedSpec;
+  } catch (error) {
+    console.error(error);
+    throw error;
+  }
+}
 /**
- * GENERATED CODE
- * This function is the generated code: it's safe to edit.
+* GENERATED CODE
+* This function is the generated code: it's safe to edit.
  */
 
 async function doTask(agentDirectoryPath, functionName, functionCode) {
-  const escapedCode = escapeForShell(functionCode);
-
-  // Prepare arguments without manual escaping
-  const args = [
-    'add-function',
-    functionName,
-    escapedCode
-  ];
+  const escapedFunctionCode = escapeForShell(functionCode);
+  const args = ['add-function', functionName, escapedFunctionCode];
 
   try {
     const result = await executeAgentCommand(agentDirectoryPath, args);

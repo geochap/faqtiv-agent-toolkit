@@ -1,6 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import * as config from '../config.js';
+import { unescapeText } from '../lib/shell-utils.js';
 
 async function updateTask(name, description) {
   try {
@@ -14,8 +15,11 @@ async function updateTask(name, description) {
       return;
     }
 
+    // Unescape the description
+    const unescapedDescription = unescapeText(description);
+
     // Update the task file
-    await fs.writeFile(taskFile, description, 'utf8');
+    await fs.writeFile(taskFile, unescapedDescription, 'utf8');
     console.log(`Task "${name}" has been successfully updated.`);
 
   } catch (error) {

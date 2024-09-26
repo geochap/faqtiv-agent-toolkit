@@ -28,11 +28,11 @@ function escapeForShell(text) {
       .replace(/\n/g, '`n');     // Newline in PowerShell
   } else {
     escapedText = normalizedText
-      .replace(/"/g, '\\"')
-      .replace(/`/g, '\\`')
-      .replace(/\$/g, '\\$')
-      .replace(/\\/g, '\\\\')
-      .replace(/\n/g, '\\n');
+      .replace(/\\/g, '\\\\')    // Escape backslashes first
+      .replace(/"/g, '\\"')      // Then escape double quotes
+      .replace(/`/g, '\\`')      // Then escape backticks
+      .replace(/\$/g, '\\$')     // Then escape dollar signs
+      .replace(/\n/g, '\\n');    // Then replace newlines
   }
 
   return `"${escapedText}"`;

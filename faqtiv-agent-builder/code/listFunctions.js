@@ -28,11 +28,11 @@ function escapeForShell(text) {
       .replace(/\n/g, '`n');     // Newline in PowerShell
   } else {
     escapedText = normalizedText
-      .replace(/"/g, '\\"')
-      .replace(/`/g, '\\`')
-      .replace(/\$/g, '\\$')
-      .replace(/\\/g, '\\\\')
-      .replace(/\n/g, '\\n');
+      .replace(/\\/g, '\\\\')    // Escape backslashes first
+      .replace(/"/g, '\\"')      // Then escape double quotes
+      .replace(/`/g, '\\`')      // Then escape backticks
+      .replace(/\$/g, '\\$')     // Then escape dollar signs
+      .replace(/\n/g, '\\n');    // Then replace newlines
   }
 
   return `"${escapedText}"`;
@@ -44,12 +44,17 @@ function escapeForShell(text) {
 
 async function executeAgentCommand(agentDirectoryPath, args) {
   return new Promise((resolve, reject) => {
-    if (args[0] !== 'init' && (!agentDirectoryPath || !existsSync(agentDirectoryPath))) {
+    const isInitCommand = args[0] === 'init';
+    let cwd = agentDirectoryPath;
+    if (isInitCommand) {
+      cwd = undefined;
+    } else if (!agentDirectoryPath || !existsSync(agentDirectoryPath)) {
       return reject(new Error("Agent directory doesn't exist"));
     }
+    
 
     const child = spawn('faqtiv', [...args], {
-      cwd: agentDirectoryPath,
+      cwd,
       shell: true, // Ensures command is executed within a shell
       windowsHide: true,
     });
@@ -108,7 +113,7 @@ async function doTask(agentDirectoryPath) {
 
   try {
     const result = await executeAgentCommand(agentDirectoryPath, args);
-    console.log(JSON.stringify({ result }));
+    console.log(JSON.stringify({ result })); 
   } catch (error) {
     console.log(`Error executing task: ${error.stack}`);
   }

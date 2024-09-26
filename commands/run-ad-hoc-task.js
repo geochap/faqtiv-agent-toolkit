@@ -8,6 +8,7 @@ import * as config from '../config.js';
 import { initializeVectorStore } from '../lib/vector-store.js';
 import { generateAdHocResponse } from '../controllers/code-gen.js';
 import { headersUpToDate } from './update-headers.js';
+import { unescapeText } from '../lib/shell-utils.js';
 
 const tmpdir = config.project.tmpDir;
 const logDir = path.join(config.project.logsDir, 'adhoc-tasks');
@@ -100,12 +101,15 @@ export default async function runAdHocTask(description) {
         return;
       }
 
+      // Unescape the description
+      const unescapedDescription = unescapeText(description);
+
       const vectorStore = await initializeVectorStore();
       response = await generateAdHocResponse(
         vectorStore,
         [
           {
-            message: description,
+            message: unescapedDescription,
             role: 'user'
           }
         ],
