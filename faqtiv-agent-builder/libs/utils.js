@@ -8,8 +8,8 @@ function escapeForShell(text) {
       .replace(/"/g, '""')       // Double double quotes
       .replace(/`/g, '``')       // Double backticks
       .replace(/\$/g, '`$')      // Escape dollar sign with backtick
-      .replace(/\\/g, '\\\\')    // Escape backslashes
-      .replace(/\n/g, '`n');     // Newline in PowerShell
+      .replace(/\n/g, '`n')      // Newline in PowerShell
+      .replace(/\\/g, '\\\\');   // Escape backslashes
   } else {
     escapedText = normalizedText
       .replace(/\\/g, '\\\\')    // Escape backslashes first
