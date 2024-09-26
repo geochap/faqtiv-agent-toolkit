@@ -163,6 +163,7 @@ export default async function exportStandalone(outputDir = process.cwd(), option
   const functionsCode = functions.map(f => f.code);
   const functionsName = functions.map(f => f.name);
   const libsCode = libs.map(l => l.code);
+  const libsNames = libs.map(f => f.name);
   const imports = [...new Set(libs.concat(functions).flatMap(f => f.imports))];
   const { taskFunctions, taskNameMap, taskToolSchemas, taskFunctionNames } = getTaskFunctions();
   const examples = getExamples();
@@ -189,6 +190,7 @@ export default async function exportStandalone(outputDir = process.cwd(), option
   const templateData = {
     imports: imports.join('\n'),
     libs: libsCode.join('\n'),
+    libsNames: libsNames.join(',\n'),
     functions: functionsCode.join('\n'),
     functionNames: functionsName.join(',\n'),
     taskNameMap: JSON.stringify(taskNameMap, null, 2),
@@ -209,9 +211,13 @@ export default async function exportStandalone(outputDir = process.cwd(), option
 
   // Function to replace placeholders in templates
   function replacePlaceholders(template, data) {
-    return Object.entries(data).reduce((acc, [key, value]) => {
-      return acc.replace(new RegExp(`{{\\s*${key}\\s*}}`, 'g'), value);
-    }, template);
+    let result = template;
+    for (const [key, value] of Object.entries(data)) {
+      // Split the template at the placeholder and join with the value
+      const placeholder = `{{ ${key} }}`;
+      result = result.split(placeholder).join(value);
+    }
+    return result;
   }
 
   // Generate files from templates

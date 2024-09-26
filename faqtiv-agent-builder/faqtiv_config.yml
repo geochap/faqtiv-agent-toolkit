@@ -8,21 +8,21 @@ modules:
   - name: js-yaml
     alias: js-yaml
 task_examples:
-  - initializeAgent
   - addFunction
   - addModule
-  - updateHeaders
-  - updateInstructions
-  - listFunctions
-  - getInstructions
-  - runAdhocTask
-  - setEnvVar
-  - updateFunction
-  - removeFunction
-  - parseYamlApiSpec
   - addTask
   - compileTask
+  - getInstructions
+  - initializeAgent
+  - listFunctions
   - listTasks
+  - parseYamlApiSpec
+  - removeFunction
   - removeTask
+  - runAdhocTask
   - runTask
+  - setEnvVar
+  - updateFunction
+  - updateHeaders
+  - updateInstructions
   - updateTask

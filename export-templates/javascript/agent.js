@@ -83,8 +83,9 @@ async function captureAndProcessOutput(func, args = []) {
     // Create a context object with all the necessary functions and variables
     const context = {
       require,
-      console: { log: customLog, warn: console.warn },
+      console: { log: customLog, warn: console.warn, error: console.error },
       // Add all the functions and variables from the local scope that the function might need
+      {{ libsNames }},
       {{ functionNames }}
     };
 

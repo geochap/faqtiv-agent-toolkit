@@ -2,26 +2,11 @@ id: a66c7cb1-2bda-4196-a806-ed74570a99d6
 output:
   functions:
     - name: executeAgentCommand
-      code: |-
-        async function executeAgentCommand(agentDirectoryPath, command) {
-          return new Promise((resolve, reject) => {
-            exec(`faqtiv ${command}`, { cwd: existsSync(agentDirectoryPath)?agentDirectoryPath:undefined, shell:true }, (error, stdout, stderr) => {
-              if (error) {
-                reject(new Error(`faqtiv command failed: ${stderr || error.message}`))
-              } else {
-                if (stdout.length === 0 && stderr.length > 0) {
-                  resolve(stderr)
-                } else {
-                  resolve(stdout)
-                }
-              }
-            })
-          })
-        }
-      lastModified: 2024-09-18T03:34:23.417Z
+      code: "async function executeAgentCommand(agentDirectoryPath, args) {\r\n  return new Promise((resolve, reject) => {\r\n\r\n    const child = spawn('faqtiv', [...args], {\r\n      cwd: existsSync(agentDirectoryPath) ? agentDirectoryPath : undefined,\r\n      shell: true, // Ensures command is executed within a shell\r\n      windowsHide: true,\r\n    });\r\n\r\n    let stdout = '';\r\n    let stderr = '';\r\n\r\n    child.stdout.on('data', (data) => {\r\n      stdout += data.toString();\r\n    });\r\n\r\n    child.stderr.on('data', (data) => {\r\n      stderr += data.toString();\r\n    });\r\n\r\n    child.on('close', (code) => {\r\n      if (code !== 0) {\r\n        reject(new Error(`faqtiv command failed: ${stderr || 'Unknown error'}`));\r\n      } else {\r\n        if (stdout.length === 0 && stderr.length > 0) {\r\n          resolve(stderr);\r\n        } else {\r\n          resolve(stdout);\r\n        }\r\n      }\r\n    });\r\n\r\n    child.on('error', (error) => {\r\n      reject(new Error(`Failed to start command: ${error.message}`));\r\n    });\r\n  });\r\n}"
+      lastModified: 2024-09-26T05:27:08.342Z
       imports:
-        - const { exec } = require('node:child_process')
-        - const { existsSync } = require('node:fs')
+        - const { spawn } = require('child_process');
+        - const { existsSync } = require('node:fs');
   token_usage_logs:
     - agent_id: code-gen
       model_name: gpt-4o
@@ -36,14 +21,14 @@ output:
   task_schema: |-
     {
       "name": "addFunction",
-      "description": "Adds a function to the faqtiv agent with the given name and code",
-      "returns_description": "{ result: string }",
+      "description": "Adds a function to the agent's directory.",
+      "returns_description": "{ result: string | null } containing the result of the command or null in case of an error.",
       "schema": z.object({
-        agentDirectoryPath: z.string().describe("The directory path of the agent"),
-        functionName: z.string().describe("The name of the function to add"),
-        functionCode: z.string().describe("The code of the function to add"),
+        agentDirectoryPath: z.string().describe("Path to the agent's directory."),
+        functionName: z.string().describe("Name of the function to be added."),
+        functionCode: z.string().describe("The source code of the function to be added."),
       }),
-      "output": "{ result: string }",
+      "output": "{ result: string | null }",
       "func": doTask
     }
 embedding: >-

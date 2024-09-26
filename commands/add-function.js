@@ -18,15 +18,38 @@ async function addFunction(name, code) {
       // File doesn't exist, we can proceed
     }
 
-    // Convert literal \n to actual newlines
-    const processedCode = code.replace(/\\n/g, '\n');
+    // Unescape the code based on the operating system
+    const unescapedCode = unescapeCode(code);
+    console.warn(code)
+    console.warn(unescapedCode)
 
-    // Write the processed code to the file
-    await fs.writeFile(filePath, processedCode, { encoding: 'utf8', flag: 'w' });
+    // Write the unescaped code to the file
+    await fs.writeFile(filePath, unescapedCode, { encoding: 'utf8', flag: 'w' });
 
     console.log(`Function '${name}' has been added successfully.`);
   } catch (error) {
     console.error(`Error adding function: ${error.message}`);
+  }
+}
+
+// Helper function to unescape the code
+function unescapeCode(code) {
+  const isWindows = process.platform === 'win32';
+  
+  if (isWindows) {
+    return code
+      .replace(/`n/g, '\n')      // Convert PowerShell newline to actual newline
+      .replace(/``/g, '`')       // Unescape backticks
+      .replace(/""/g, '"')       // Unescape double quotes
+      .replace(/`\$/g, '$')      // Unescape dollar signs
+      .replace(/\\\\/g, '\\');   // Unescape backslashes
+  } else {
+    return code
+      .replace(/\\n/g, '\n')     // Convert escaped newline to actual newline
+      .replace(/\\`/g, '`')      // Unescape backticks
+      .replace(/\\"/g, '"')      // Unescape double quotes
+      .replace(/\\\$/g, '$')     // Unescape dollar signs
+      .replace(/\\\\/g, '\\');   // Unescape backslashes
   }
 }
 

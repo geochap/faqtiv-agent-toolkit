@@ -1,43 +1,100 @@
+const { spawn } = require('child_process');
+const { existsSync } = require('node:fs');
+
 /**
-* DEPENDENCIES
-* Warning: these are extracted from your function files, if you need to make changes edit the function file and recompile this task.
+ * LIBRARY FUNCTIONS
+ * Warning: these are common functions, if you need to make changes edit the function file and recompile this task.
  */
 
-const { exec } = require('node:child_process')
-const { existsSync } = require('node:fs')
-    
+function escapeForShell(text) {
+  const isWindows = process.platform === 'win32';
+  const normalizedText = text.replace(/\r\n/g, '\n');
+
+  let escapedText;
+  if (isWindows) {
+    escapedText = normalizedText
+      .replace(/"/g, '""')       // Double double quotes
+      .replace(/`/g, '``')       // Double backticks
+      .replace(/\$/g, '`$')      // Escape dollar sign with backtick
+      .replace(/\\/g, '\\\\')    // Escape backslashes
+      .replace(/\n/g, '`n');     // Newline in PowerShell
+  } else {
+    escapedText = normalizedText
+      .replace(/"/g, '\\"')
+      .replace(/`/g, '\\`')
+      .replace(/\$/g, '\\$')
+      .replace(/\\/g, '\\\\')
+      .replace(/\n/g, '\\n');
+  }
+
+  return `"${escapedText}"`;
+}
+
 /**
-* PUBLIC FUNCTIONS
-* Warning: these are common functions, if you need to make changes edit the function file and recompile this task.
+ * PUBLIC FUNCTIONS
+ * Warning: these are common functions, if you need to make changes edit the function file and recompile this task.
  */
 
-async function executeAgentCommand(agentDirectoryPath, command) {
+async function executeAgentCommand(agentDirectoryPath, args) {
   return new Promise((resolve, reject) => {
-    exec(`faqtiv ${command}`, { cwd: existsSync(agentDirectoryPath)?agentDirectoryPath:undefined, shell:true }, (error, stdout, stderr) => {
-      if (error) {
-        reject(new Error(`faqtiv command failed: ${stderr || error.message}`))
+    if (args[0] !== 'init' && (!agentDirectoryPath || !existsSync(agentDirectoryPath))) {
+      return reject(new Error("Agent directory doesn't exist"));
+    }
+
+    const child = spawn('faqtiv', [...args], {
+      cwd: agentDirectoryPath,
+      shell: true, // Ensures command is executed within a shell
+      windowsHide: true,
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    child.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+
+    child.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+
+    child.on('close', (code) => {
+      if (code !== 0) {
+        reject(new Error(`faqtiv command failed: ${stderr || 'Unknown error'}`));
       } else {
         if (stdout.length === 0 && stderr.length > 0) {
-          resolve(stderr)
+          resolve(stderr);
         } else {
-          resolve(stdout)
+          resolve(stdout);
         }
       }
-    })
-  })
+    });
+
+    child.on('error', (error) => {
+      reject(new Error(`Failed to start command: ${error.message}`));
+    });
+  });
 }
+
 /**
-* GENERATED CODE
-* This function is the generated code: it's safe to edit.
+ * GENERATED CODE
+ * This function is the generated code: it's safe to edit.
  */
 
 async function doTask(agentDirectoryPath, functionName, functionCode) {
-  // Escape problematic characters for shell
-  const escapedFunctionCode = functionCode
-    .replace(/"/g, '\\"')
-    .replace(/`/g, '\\`')
-    .replace(/\\n/g, '\n');
+  const escapedCode = escapeForShell(functionCode);
 
-  const result = await executeAgentCommand(agentDirectoryPath, `add-function ${functionName} "${escapedFunctionCode}"`);
-  console.log(JSON.stringify({ result }));
+  // Prepare arguments without manual escaping
+  const args = [
+    'add-function',
+    functionName,
+    escapedCode
+  ];
+
+  try {
+    const result = await executeAgentCommand(agentDirectoryPath, args);
+    console.log(JSON.stringify({ result }));
+  } catch (error) {
+    console.log(`Error executing task: ${error.stack}`);
+  }
 }
