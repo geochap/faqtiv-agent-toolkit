@@ -156,7 +156,9 @@ export async function migrateTask(options) {
 
   // First update metadata as these could include examples used for compilation
   for (let t of needToUpdateMetadata) {
+    console.log(`Updating metadata for ${t.taskName}...`);
     await updateMetadata(t.taskName, t.file);
+    console.log('done');
   }
   if (needToUpdateMetadata.length > 0) console.log(`Updated metadata for ${needToUpdateMetadata.length} tasks`);
 
@@ -172,6 +174,7 @@ export async function migrateTask(options) {
       console.log(`Migrating ${task.name}...`);
       const result = await processTask(vectorStore, task);
       writeResult(task, result, false);
+      console.log('done');
     }
   }
 }
