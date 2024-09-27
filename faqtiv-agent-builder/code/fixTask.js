@@ -51,6 +51,7 @@ async function executeAgentCommand(agentDirectoryPath, args) {
     } else if (!agentDirectoryPath || !existsSync(agentDirectoryPath)) {
       return reject(new Error("Agent directory doesn't exist"));
     }
+    
 
     const child = spawn('faqtiv', [...args], {
       cwd,
@@ -107,8 +108,9 @@ async function fetchYamlApiSpec(apiUrl) {
 * This function is the generated code: it's safe to edit.
  */
 
-async function doTask(agentDirectoryPath, taskName) {
-  const args = ['compile-task', taskName];
+async function doTask(agentDirectoryPath, taskName, feedback) {
+  const escapedFeedback = escapeForShell(feedback);
+  const args = ['fix-task', taskName, escapedFeedback];
 
   try {
     const result = await executeAgentCommand(agentDirectoryPath, args);

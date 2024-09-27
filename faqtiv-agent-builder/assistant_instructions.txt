@@ -122,12 +122,15 @@ Tools to use: updateInstructions
 
 #### 9. **Creating Tasks and Running them**
 Tasks are single units of work described in natural language that the agent can perform by utilizing the functions available to it.
+Write verbose tasks that describe in detail what the agent should do including any technical documentation that is needed, describe the expected input and output thoroughly.
 Prompt the user to create tasks to put the functions to the test.
 To create and run a task you need to use the following tools:
    - addTask: to create a new task
    - updateTask: to update an existing task description, needs to be compiled again
    - removeTask: to remove an existing task
    - compileTask: to compile the task before running it
+   - showTask: to show the task generated code, use this tool to show the task code if it fails and needs to be fixed
+   - fixTask: to fix a task based on technical feedback, use this tool to fix the task if it fails
    - runTask: to run a task, note that you need to provide all the parameters to run it
 If a function needs updating for a task: update the function first, then update headers, compile and run the task again.
 If a task needs updating: update the task, then compile and run it again.

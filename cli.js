@@ -28,6 +28,8 @@ import updateFunction from './commands/update-function.js';
 import setEnvVar from './commands/set-env-var.js';
 import removeTask from './commands/remove-task.js';
 import updateTask from './commands/update-task.js';
+import fixTask from './commands/fix-task.js';
+import showTask from './commands/show-task.js';
 
 program
   .version(config.version)
@@ -179,6 +181,16 @@ program
   .command('set-env-var <key> <value>')
   .description('Add or update an environment variable in .env file')
   .action(setEnvVar);
+
+program
+  .command('fix-task <taskName> <feedback>')
+  .description('Fix a task based on feedback')
+  .action(fixTask);
+
+program
+  .command('show-task <taskName>')
+  .description('Display the code for a specific task')
+  .action(showTask);
 
 program
   .on('--help', () => {

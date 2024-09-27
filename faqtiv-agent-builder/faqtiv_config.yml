@@ -26,3 +26,5 @@ task_examples:
   - updateHeaders
   - updateInstructions
   - updateTask
+  - fixTask
+  - showTask

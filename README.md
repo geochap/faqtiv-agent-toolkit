@@ -69,7 +69,7 @@ To add or update an environment variable in your project's `.env` file, you can 
 
 ```bash
 faqtiv set-env-var <key> <value>
-``` 
+```
 
 - `<key>`: The key for the environment variable.
 - `<value>`: The value for the environment variable.
@@ -121,6 +121,16 @@ faqtiv update-task <name> <description>
 - `<name>`: The name of the task.
 - `<description>`: The updated description of the task.
 
+#### Fixing a Task
+To fix an existing task based on feedback, use the `fix-task` command:
+
+```bash
+faqtiv fix-task <name> <feedback>
+```
+
+- `<name>`: The name of the task.
+- `<feedback>`: Feedback on the task's performance.
+
 #### Compiling Tasks
 To compile a specific task or all pending tasks, use the `compile-task` command:
 
@@ -151,6 +161,15 @@ To list all existing tasks, use the `list-tasks` command:
 ```bash
 faqtiv list-tasks
 ```
+
+### Showing a Task's Code
+To display the code for a specific task, use the `show-task` command:
+
+```bash
+faqtiv show-task <taskName>
+```
+
+- `<taskName>`: The name of the task.
 
 ### Running Tasks
 To run a specific task, use the `run-task` command:

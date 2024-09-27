@@ -373,6 +373,7 @@ async function processToolCalls(toolCalls) {
     if (tool) {
       try {
         const toolResult = await tool.func(JSON.parse(toolCall.function.arguments));
+        console.warn("Tool result:", toolResult);
         toolMessages.push(new ToolMessage({
           content: JSON.stringify({
             type: "tool_result",

@@ -172,6 +172,16 @@ faqtiv compile-task [taskName] --all
 
 If the code is manually edited then this command will update the code's metadata without regenerating the code, this is needed to accurately track function dependencies for migrations.
 
+#### Fixing a Task
+To fix an existing task based on feedback, use the `fix-task` command:
+
+```bash
+faqtiv fix-task <name> <feedback>
+```
+
+- `<name>`: The name of the task.
+- `<feedback>`: Feedback on the task's performance.
+
 #### Migrating Tasks
 
 The toolkit can detect changes based on the modification dates of functions and task text files in the `./tasks` directory to determine if code regeneration is necessary.
@@ -181,6 +191,15 @@ To execute a migration plan, use the `migrate-tasks` command:
 ```bash
 faqtiv migrate-tasks
 ```
+
+#### Showing a Task's Code
+To display the code for a specific task, use the `show-task` command:
+
+```bash
+faqtiv show-task <taskName>
+```
+
+- `<taskName>`: The name of the task.
 
 ### Listing Tasks
 To list all existing tasks, use the `list-tasks` command:
