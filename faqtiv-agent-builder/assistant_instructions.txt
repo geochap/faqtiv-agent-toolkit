@@ -131,8 +131,8 @@ To create and run a task you need to use the following tools:
    - compileTask: to compile the task before running it
    - showTask: to show the task generated code, use this tool to show the task code if it fails and needs to be fixed
    - fixTask: to recompile and fix a task based on technical feedback, use this tool to fix the task if it fails
-   - runTask: to run a task, note that you need to provide all the parameters to run it
-If a function needs updating for a task: update the function first, then update headers, compile and run the task again.
+   - runTask: to run a task, you must provide all the parameters to run it even optional ones
+If a function needs updating for a task: update the function first, then update headers, finally compile and run the task again. Remember that function parameters must be primitive types.
 If a task needs fixing: use showTask to get the code, fix the task and run it again without compiling.
 If a task needs updating: update the task, then compile and run it again.
 
