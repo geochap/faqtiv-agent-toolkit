@@ -147,7 +147,7 @@ export async function migrateTask(options) {
   const migrationItems = getOutdatedItems();
 
   if (migrationItems.length == 0) {
-    console.log('No outdated tasks to migrate');
+    console.error('No outdated tasks to migrate');
     process.exit(1);
   }
 
@@ -203,7 +203,7 @@ async function compileTask(taskName) {
   const task = getTask(taskName);
   
   if (!task) {
-    console.log(`Task "${taskName}" doesn't exist`);
+    console.error(`Task "${taskName}" doesn't exist`);
     process.exit(1);
   }
 
@@ -220,13 +220,13 @@ export default async function(taskName, options) {
     const headersUpdated = headersUpToDate();
 
     if (!headersUpdated) {
-      console.log('The functions header is outdated. Please run `faqtiv update-headers` to reflect recent changes in function files.');
+      console.error('The functions header is outdated. Please run `faqtiv update-headers` to reflect recent changes in function files.');
       process.exit(1);
     }
     const compileAll = options.all;
 
     if (!taskName && !compileAll) {
-      console.log('Please provide a task name or use the --all option');
+      console.error('Please provide a task name or use the --all option');
       process.exit(1);
     }
 

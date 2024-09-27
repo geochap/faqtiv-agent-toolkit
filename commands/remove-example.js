@@ -22,7 +22,7 @@ export default async function removeExample(name, options = {}) {
   if (!removeAll) { 
     const index = taskExamples.indexOf(name);
     if (index === -1) {
-      console.log(`Nothing to remove, task "${name}" is not an example`);
+      console.error(`Nothing to remove, task "${name}" is not an example`);
       process.exit(1);
     }
 

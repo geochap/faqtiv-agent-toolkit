@@ -68,7 +68,7 @@ async function uninstallPythonModules(name) {
 
 export default async function removeModule(name) {
   if (!fs.existsSync(configPath)) {
-    console.log('faqtiv_config.yml not found');
+    console.error('faqtiv_config.yml not found');
     process.exit(1);
   }
 
@@ -105,6 +105,7 @@ export default async function removeModule(name) {
       process.exit(1);
     }
   } else {
+    console.error(`Failed to uninstall module "${name}"`);
     process.exit(1);
   }
 }

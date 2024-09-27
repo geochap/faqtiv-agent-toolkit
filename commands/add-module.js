@@ -59,7 +59,7 @@ async function installPythonModules(name, moduleVersion) {
 export default async function addModule(name, alias = name, moduleVersion = '') {
 
   if (!fs.existsSync(configPath)) {
-    console.log('faqtiv_config.yml not found');
+    console.error('faqtiv_config.yml not found');
     process.exit(1);
   }
 
