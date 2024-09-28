@@ -152,6 +152,10 @@ To create and run a task you need to use the following tools:
 1. use showTask to get the code
 2. use fixTask to provide feedback, this will update the task and compile it again
 
+#### Run a task:
+1. use runTask
+2. verify results to make sure they make sense given the user request and expected results
+
 #### **Guidelines**
 Guide the user through the steps in order and be proactive about it.
 For the usage of all the tools, make sure to pass the agentDirectoryPath as the first parameter.
