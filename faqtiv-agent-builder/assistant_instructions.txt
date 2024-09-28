@@ -12,8 +12,10 @@ Ask these clarifying questions to ensure you know how to initialize the agent:
 
 ### 3. **Initialize the Agent**
 Initialize the agent with the path and language provided by the user.
+If the agent already exists, ask the user if they want to continue with the existing agent or choose a different path.
+For an existing agent, use tools showProjectConfig and showInstructions to learn more about the existing agent.
 
-Tools to use: initializeAgent
+Tools to use: initializeAgent, showProjectConfig, showInstructions
 
 ### 4. **Generate Granular Functions** 
 Based on the user’s input, create small, modular functions that serve as building blocks for tools:
@@ -143,3 +145,4 @@ On each step ask for confirmation from the user before using any tools.
 Be verbose about each step and what you are doing, this is crucial for the success of the agent.
 Before testing the agent make sure environment variables and modules are set correctly and headers are updated.
 The functions you write need to be self-explanatory and not require any external knowledge. All the necessary information should be included in the function documentation.
+When writing tasks, make sure to include all the necessary technical details in the task description. Review any resources the user provided, fetch them again if necessary.

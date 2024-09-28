@@ -76,6 +76,31 @@ faqtiv set-env-var <key> <value>
 
 This command will add or update the environment variable in your project's `.env` file.
 
+#### Showing Current Configuration
+
+To display the current configuration from the `faqtiv_config.yml` file, use the `show-config` command:
+
+```bash
+faqtiv show-config
+```
+
+Options:
+- `--json`: Output the configuration in JSON format
+
+This command will display the contents of the `faqtiv_config.yml` file in your project directory. By default, it will show the configuration in YAML format. If you prefer JSON output, use the `--json` option.
+
+Example usage:
+
+```bash
+faqtiv show-config
+```
+
+To get JSON output:
+
+```bash
+faqtiv show-config --json
+```
+
 ### Getting started
 
 Start by adding some functions and libs to your project. Functions will be provided to the LLM to use for code generation while libs are private dependencies that your functions may use but the LLM won't use directly. Be verbose in your function and argumaent naming and supply code docs as necessary to make clear to the LLM what the function does.

@@ -30,6 +30,7 @@ import removeTask from './commands/remove-task.js';
 import updateTask from './commands/update-task.js';
 import fixTask from './commands/fix-task.js';
 import showTask from './commands/show-task.js';
+import showConfig from './commands/show-config.js';
 
 program
   .version(config.version)
@@ -191,6 +192,12 @@ program
   .command('show-task <taskName>')
   .description('Display the code for a specific task')
   .action(showTask);
+
+program
+  .command('show-config')
+  .option('--json', 'Output in JSON format')
+  .description('Display the current configuration from faqtiv_config.yml')
+  .action(showConfig);
 
 program
   .on('--help', () => {

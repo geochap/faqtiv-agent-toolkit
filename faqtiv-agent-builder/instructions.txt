@@ -12,6 +12,16 @@ faqtiv init <projectRoot> --runtime <value>
 
 ### Configuration
 
+#### Showing Current Configuration
+
+To display the current configuration for an existing project, use the `show-config` command:
+
+```bash
+faqtiv show-config --json
+```
+
+This will output the configuration in JSON format, including runtime language and installed modules.
+
 #### Setting Environment Variables
 
 To add or update an environment variable in your project's `.env` file, use the `set-env-var` command:
