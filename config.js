@@ -99,14 +99,19 @@ if (isInitCommand || isHelpCommand || isVersionCommand) {
       functionFiles.forEach(file => {
         const filePath = path.join(functionsDir, file);
         const code = fs.readFileSync(filePath, 'utf8');
-        let { functions, imports } = readFunctionFile(code, runtime.runtimeName);
+        try {
+          let { functions, imports } = readFunctionFile(code, runtime.runtimeName);
 
-        functions = functions.map((f) => ({
-          ...f,
-          lastModified: fs.statSync(filePath).mtime,
-          imports
-        }));
-        allFunctions = allFunctions.concat(functions);
+          functions = functions.map((f) => ({
+            ...f,
+            lastModified: fs.statSync(filePath).mtime,
+            imports
+          }));
+          allFunctions = allFunctions.concat(functions);
+        } catch (error) {
+          console.error(`ERROR: failed to parse function file ${file}. This will dependent tasks to fail.`);
+          console.error(error);
+        }
       });
   
       return allFunctions;
