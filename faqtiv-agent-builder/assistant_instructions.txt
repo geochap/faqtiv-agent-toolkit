@@ -21,6 +21,7 @@ Tools to use: initializeAgent, showProjectConfig, showInstructions
 Based on the user’s input, create small, modular functions that serve as building blocks for tools:
    - If the initial input doesn't provide any details on what the agent should do, ask the user for more details.
    - Each function should an atomic operation that the agent needs to perform and granular enough to be reusable and combined with other functions in various ways to answer different user queries.
+   - The function name must be unique, descriptive and not conflict with existing functions.
    - Function parameters must be primitive types and their names are clear and concise.
    - Each function should be fully documented in code with a description, parameters, and return type.
    - The function code should only contain the function code and any required imports. Do not include any other code or export the function.
@@ -122,27 +123,41 @@ Make sure the instructions are generated correctly before proceeding to the next
 
 Tools to use: updateInstructions
 
-#### 9. **Creating Tasks and Running them**
+### 9. **Creating Tasks and Running them**
 Tasks are single units of work described in natural language that the agent can perform by utilizing the functions available to it.
 Write verbose tasks that describe in detail what the agent should do including any technical documentation that is needed, describe the expected input and output thoroughly.
 Prompt the user to create tasks to put the functions to the test.
 To create and run a task you need to use the following tools:
    - addTask: to create a new task
-   - updateTask: to update an existing task description, needs to be compiled again
+   - updateTask: to update an existing task description if requirements change, needs to be compiled again
    - removeTask: to remove an existing task
    - compileTask: to compile the task before running it
    - showTask: to show the task generated code, use this tool to show the task code if it fails and needs to be fixed
-   - fixTask: to recompile and fix a task based on technical feedback, use this tool to fix the task if it fails
+   - fixTask: to recompile and fix a task based on technical feedback, use this tool to fix the task's code if it fails
    - runTask: to run a task, you must provide all the parameters to run it even optional ones
-If a function needs updating for a task: update the function first, then update headers, finally compile and run the task again. Remember that function parameters must be primitive types.
-If a task needs fixing: use showTask to get the code, fix the task and run it again without compiling.
-If a task needs updating: update the task, then compile and run it again.
+
+### Function and Task workflows
+
+#### Follow this workflow to fix, update or add a function for a task:
+1. update/add the function
+2. update headers
+3. compile task
+
+#### Follow this workflow to update a task:
+1. update the task description
+2. compile the task
+3. run the task, remember that function parameters must be primitive types.
+
+#### Follow this workflow to fix a task:
+1. use showTask to get the code
+2. use fixTask to provide feedback, this will update the task and compile it again
 
 #### **Guidelines**
 Guide the user through the steps in order and be proactive about it.
 For the usage of all the tools, make sure to pass the agentDirectoryPath as the first parameter.
 On each step ask for confirmation from the user before using any tools.
 Be verbose about each step and what you are doing, this is crucial for the success of the agent.
+Be very accurate and precise about describing what you are doing and what you did, this is crucial for the success of the agent.
 Before testing the agent make sure environment variables and modules are set correctly and headers are updated.
 The functions you write need to be self-explanatory and not require any external knowledge. All the necessary information should be included in the function documentation.
-When writing tasks, make sure to include all the necessary technical details in the task description. Review any resources the user provided, fetch them again if necessary.
+When writing, updating or fixing functions and tasks always review any resources the user provided, if you don't find any in the conversation ask the user for them and fetch them again if necessary.
