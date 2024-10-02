@@ -379,6 +379,7 @@ async function processToolCalls(toolCalls) {
             type: "tool_result",
             result: toolResult
           }),
+          name: toolCall.function.name,
           tool_call_id: toolCall.id,
         }));
       } catch (error) {
@@ -388,6 +389,7 @@ async function processToolCalls(toolCalls) {
             type: "tool_result",
             result: { error: errorMessage }
           }),
+          name: toolCall.function.name,
           tool_call_id: toolCall.id,
         }));
       }
@@ -398,6 +400,7 @@ async function processToolCalls(toolCalls) {
           type: "tool_result",
           result: { error: "Tool not found" }
         }),
+        name: toolCall.function.name,
         tool_call_id: toolCall.id,
       }));
     }
@@ -405,11 +408,36 @@ async function processToolCalls(toolCalls) {
   return toolMessages;
 }
 
+function getConversationFromMessagesRequest(messages) {
+  return messages.map(msg => {
+    if (msg.role === 'user') {
+      return new HumanMessage(msg.content);
+    } else if (msg.role === 'assistant') {
+      if (msg.tool_calls) {
+        return new AIMessage({
+          content: msg.content,
+          additional_kwargs: { tool_calls: msg.tool_calls }
+        });
+      } else {
+        return new AIMessage(msg.content);
+      }
+    } else if (msg.role === 'tool') {
+      return new ToolMessage({
+        content: msg.content,
+        tool_call_id: msg.tool_call_id,
+        name: msg.name
+      });
+    } else if (msg.role === 'system') {
+      return new SystemMessage(msg.content);
+    }
+  });
+}
+
 async function generateCompletion(request) {
   const currentTime = Math.floor(Date.now() / 1000);
   const completionId = `cmpl-${uuidv4()}`;
 
-  let conversation = request.messages.map(msg => ({ role: msg.role, content: msg.content }));
+  let conversation = getConversationFromMessagesRequest(request.messages);
   let finalContent = '';
 
   const processRequest = async (inputData) => {
@@ -476,10 +504,27 @@ async function generateCompletion(request) {
   };
 }
 
+function convertAIMessageToOpenAIFormat(aiMessage) {
+  return {
+    role: 'assistant',
+    content: aiMessage.content,
+    tool_calls: aiMessage.additional_kwargs.tool_calls
+  };
+}
+
+function convertToolMessageToOpenAIFormat(toolMessage) {
+  return {
+    role: 'tool',
+    name: toolMessage.name,
+    tool_call_id: toolMessage.tool_call_id,
+    content: toolMessage.content
+  };
+}
+
 async function* streamCompletion(messages) {
   const currentTime = Math.floor(Date.now() / 1000);
   const completionId = `cmpl-${uuidv4()}`;
-  let conversation = messages.map(msg => ({ role: msg.role, content: msg.content }));
+  let conversation = getConversationFromMessagesRequest(messages);
 
   const processRequest = async function* (inputData) {
     try {
@@ -553,6 +598,27 @@ async function* streamCompletion(messages) {
             conversation = conversation.concat(toolMessages);
             hasToolCalls = true;
             insertNewline = true; // Set flag to insert newline before next tokens
+
+            // Yield tool messages
+            for (const message of toolMessages) {
+              let openAIMessage;
+              if (message instanceof AIMessage) {
+                openAIMessage = convertAIMessageToOpenAIFormat(message);
+              } else if (message instanceof ToolMessage) {
+                openAIMessage = convertToolMessageToOpenAIFormat(message);
+              }
+
+              if (openAIMessage) {
+                const messageChunk = {
+                  id: completionId,
+                  object: 'chat.completion.chunk',
+                  created: currentTime,
+                  model,
+                  choices: [{ index: 0, delta: openAIMessage, finish_reason: null }],
+                };
+                yield messageChunk;
+              }
+            }
           } else {
             const tokenChunk = {
               id: completionId,
