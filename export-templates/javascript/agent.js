@@ -246,7 +246,7 @@ async function generateAndExecuteAdhoc(userInput, maxRetries = 3) {
 // http agent
 
 const app = express();
-app.use(bodyParser.json());
+app.use(bodyParser.json({limit: '10mb'}));
 
 // Enable CORS
 app.use((req, res, next) => {
