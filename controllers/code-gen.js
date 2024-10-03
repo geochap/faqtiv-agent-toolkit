@@ -164,7 +164,7 @@ export async function generateAdHocResponse(vectorStore, conversation, retryCoun
       Please address these issues in your response and improve upon the previous code if provided.
     `;
 
-    conversation.push({ role: 'system', message: retryMessage });
+    conversation[conversation.length - 1].message = `${conversation[conversation.length - 1].message}\n\n${retryMessage}`;
   }
 
   const response = await aiAgent.generateResponse(conversation, examples, true);
