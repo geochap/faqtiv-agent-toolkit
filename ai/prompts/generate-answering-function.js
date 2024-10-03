@@ -28,6 +28,7 @@ In a codeblock at the top of your response write a ${runtimeName} function calle
 - Never output anything else to stdout, any messages if needed should be included in the resulting JSON.
 - Do not include any comments or documentation in your code, only the code is needed.
 - If the code can not be generated using the available functions provide this plain text error with no additional formatting: "The request cannot be fulfilled using the available functions".
+- Remember that you can write code to process the function results to filter or summarize them as needed if the function results are not what is needed.
 ${runtimeInstructions[runtimeName]}
 `;
 

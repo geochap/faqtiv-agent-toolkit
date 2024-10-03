@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import CodeAgent from '../ai/code-agent.js';
 import * as config from '../config.js';
 import OpenAIModel from '../ai/models/openai.js';
+import { Xor_exprContext } from 'python-ast';
 
 async function getNearestExamples(vectorStore, taskEmbedding, functionsEmbedding, taskWeight = 0.8, functionWeight = 0.2) {
   const taskResults = await vectorStore.searchByTask(taskEmbedding, 10);
@@ -148,7 +149,13 @@ export async function generateAdHocResponse(vectorStore, conversation, retryCoun
   if (retryCount > 0) {
     let retryMessage = `
       This is retry attempt ${retryCount}.
-      Previous errors: ${retryErrors.join('\n\n')}.
+      Previous errors:
+      ${retryErrors.map((error, index) => {
+        const modifiedError = error.includes("The request cannot be fulfilled using the available functions")
+          ? "Unknown error, please try again"
+          : error;
+        return `\n${index + 1}. ${'-'.repeat(40)}\n${modifiedError}`;
+      }).join('\n')}
     `;
 
     if (previousCode) {
@@ -162,6 +169,7 @@ export async function generateAdHocResponse(vectorStore, conversation, retryCoun
 
     retryMessage += `
       Please address these issues in your response and improve upon the previous code if provided.
+      If error is unknown, carefuly review your instructions and the available functions.
     `;
 
     conversation[conversation.length - 1].message = `${conversation[conversation.length - 1].message}\n\n${retryMessage}`;

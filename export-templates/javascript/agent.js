@@ -192,11 +192,19 @@ async function generateAndExecuteAdhoc(userInput, maxRetries = 3) {
       // Prepare the prompt with error information if available
       let errorContext = "";
       if (errors.length > 0) {
-          errorContext = `Previous attempt failed with error: ${errors[errors.length - 1]}\n`;
-          if (previousCode) {
-            errorContext += `Previous code:\n${previousCode}\n`;
-          }
-          errorContext += "Please fix the issue and try again.\n";
+        errorContext = `Previous attempts failed with the following errors:\n`;
+        errors.forEach((error, index) => {
+          const modifiedError = error.includes("The request cannot be fulfilled using the available functions")
+            ? "Unknown error, please try again"
+            : error;
+          errorContext += `${index + 1}. ${'-'.repeat(40)}\n${modifiedError}\n\n`;
+        });
+        
+        if (previousCode) {
+          errorContext += `Previous code:\n\`\`\`javascript\n${previousCode}\n\`\`\`\n\n`;
+        }
+        
+        errorContext += "Please address these issues, fix the errors, and try again.\n";
       }
 
       const exampleMessages = relevantExamples.flatMap((example) => [
