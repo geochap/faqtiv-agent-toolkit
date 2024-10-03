@@ -313,13 +313,6 @@ const completionTools = [
   ...taskTools
 ];
 
-// Initialize OpenAI LLM for completion agent
-const completionLLM = new ChatOpenAI({
-  apiKey,
-  model,
-})
-.bindTools(completionTools);
-
 const completionPromptText = `{{ getAssistantInstructionsPrompt }}`;
 
 const completionPrompt = ChatPromptTemplate.fromMessages(
@@ -329,10 +322,14 @@ const completionPrompt = ChatPromptTemplate.fromMessages(
   ]
 );
 
-const completionChain = completionPrompt.pipe(completionLLM);
-
 app.post('/completions', async (req, res) => {
-  const { stream = false, messages } = req.body;
+  const { 
+    stream, 
+    messages, 
+    include_tool_messages,
+    max_tokens,
+    temperature
+  } = req.body;
 
   console.log("Completion request: ", messages.length > 0 ? messages[messages.length - 1].content : "")
 
@@ -342,14 +339,14 @@ app.post('/completions', async (req, res) => {
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
     });
-    for await (const chunk of streamCompletion(messages)) {
+    for await (const chunk of streamCompletion(messages, include_tool_messages, max_tokens, temperature)) {
       res.write(`data: ${JSON.stringify(chunk)}\n\n`);
     }
     res.write('data: [DONE]\n\n');
     res.end();
   } else {
     try {
-      const result = await generateCompletion(req.body);
+      const result = await generateCompletion(messages, include_tool_messages, max_tokens, temperature);
       res.json(result);
     } catch (error) {
       res.status(500).json({ error: error.message });
@@ -433,12 +430,38 @@ function getConversationFromMessagesRequest(messages) {
   });
 }
 
-async function generateCompletion(request) {
+function convertAIMessageToOpenAIFormat(aiMessage) {
+  return {
+    role: 'assistant',
+    content: aiMessage.content,
+    tool_calls: aiMessage.additional_kwargs.tool_calls
+  };
+}
+
+function convertToolMessageToOpenAIFormat(toolMessage) {
+  return {
+    role: 'tool',
+    name: toolMessage.name,
+    tool_call_id: toolMessage.tool_call_id,
+    content: toolMessage.content
+  };
+}
+
+async function generateCompletion(messages, includeToolMessages = false, maxTokens, temperature) {
+  const llm = new ChatOpenAI({
+    apiKey,
+    model,
+    maxTokens,
+    temperature
+  }).bindTools(completionTools);
+  const completionChain = completionPrompt.pipe(llm);
+
   const currentTime = Math.floor(Date.now() / 1000);
   const completionId = `cmpl-${uuidv4()}`;
 
-  let conversation = getConversationFromMessagesRequest(request.messages);
+  let conversation = getConversationFromMessagesRequest(messages);
   let finalContent = '';
+  const toolResultsMessages = [];
 
   const processRequest = async (inputData) => {
     try {
@@ -477,6 +500,7 @@ async function generateCompletion(request) {
       if (result.additional_kwargs && result.additional_kwargs.tool_calls && result.additional_kwargs.tool_calls.length > 0) {
         const toolMessages = await processToolCalls(result.additional_kwargs.tool_calls);
         conversation = conversation.concat(toolMessages);
+        toolResultsMessages.push(...toolMessages);
       } else {
         finalContent = result.content;
       }
@@ -486,7 +510,7 @@ async function generateCompletion(request) {
     }
   }
 
-  return {
+  const response = {
     id: completionId,
     object: 'chat.completion',
     created: currentTime,
@@ -500,28 +524,45 @@ async function generateCompletion(request) {
         },
         finish_reason: 'stop',
       },
-    ],
+    ]
   };
+
+  if (includeToolMessages) {
+    const tool_messages = [];
+    for (const message of toolResultsMessages) {
+      let openAIMessage;
+      if (message instanceof AIMessage) {
+        openAIMessage = convertAIMessageToOpenAIFormat(message);
+      } else if (message instanceof ToolMessage) {
+        openAIMessage = convertToolMessageToOpenAIFormat(message);
+      }
+
+      if (openAIMessage) {
+        const messageChunk = {
+          id: completionId,
+          object: 'chat.completion.chunk',
+          created: currentTime,
+          model,
+          choices: [{ index: 0, delta: openAIMessage, finish_reason: null }],
+        };
+        tool_messages.push(messageChunk);
+      }
+    }
+    response.tool_messages = tool_messages;
+  }
+
+  return response;
 }
 
-function convertAIMessageToOpenAIFormat(aiMessage) {
-  return {
-    role: 'assistant',
-    content: aiMessage.content,
-    tool_calls: aiMessage.additional_kwargs.tool_calls
-  };
-}
+async function* streamCompletion(messages, includeToolMessages = false, maxTokens, temperature) {
+  const llm = new ChatOpenAI({
+    apiKey,
+    model,
+    maxTokens,
+    temperature
+  }).bindTools(completionTools);
+  const completionChain = completionPrompt.pipe(llm);
 
-function convertToolMessageToOpenAIFormat(toolMessage) {
-  return {
-    role: 'tool',
-    name: toolMessage.name,
-    tool_call_id: toolMessage.tool_call_id,
-    content: toolMessage.content
-  };
-}
-
-async function* streamCompletion(messages) {
   const currentTime = Math.floor(Date.now() / 1000);
   const completionId = `cmpl-${uuidv4()}`;
   let conversation = getConversationFromMessagesRequest(messages);
@@ -599,24 +640,26 @@ async function* streamCompletion(messages) {
             hasToolCalls = true;
             insertNewline = true; // Set flag to insert newline before next tokens
 
-            // Yield tool messages
-            for (const message of toolMessages) {
-              let openAIMessage;
-              if (message instanceof AIMessage) {
-                openAIMessage = convertAIMessageToOpenAIFormat(message);
-              } else if (message instanceof ToolMessage) {
-                openAIMessage = convertToolMessageToOpenAIFormat(message);
-              }
+            // Include tool messages only if includeToolMessages is true
+            if (includeToolMessages) {
+              for (const message of toolMessages) {
+                let openAIMessage;
+                if (message instanceof AIMessage) {
+                  openAIMessage = convertAIMessageToOpenAIFormat(message);
+                } else if (message instanceof ToolMessage) {
+                  openAIMessage = convertToolMessageToOpenAIFormat(message);
+                }
 
-              if (openAIMessage) {
-                const messageChunk = {
-                  id: completionId,
-                  object: 'chat.completion.chunk',
-                  created: currentTime,
-                  model,
-                  choices: [{ index: 0, delta: openAIMessage, finish_reason: null }],
-                };
-                yield messageChunk;
+                if (openAIMessage) {
+                  const messageChunk = {
+                    id: completionId,
+                    object: 'chat.completion.chunk',
+                    created: currentTime,
+                    model,
+                    choices: [{ index: 0, delta: openAIMessage, finish_reason: null }],
+                  };
+                  yield messageChunk;
+                }
               }
             }
           } else {

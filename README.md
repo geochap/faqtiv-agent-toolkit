@@ -249,11 +249,12 @@ This command starts an HTTP server with three endpoints:
 
 3. `/completions`: Provides a chat-like interface for interacting with the agent.
    - Method: POST
-   - Body: JSON object with `messages`, `max_tokens` (optional), `temperature` (optional), and `stream` (optional).
+   - Body: JSON object with `messages`, `max_tokens` (optional), `temperature` (optional), `stream` (optional), and `include_tool_messages` (optional).
    - `messages`: An array of message objects, each with a `role` ("user" or "assistant") and `content`.
    - `max_tokens` (optional): The maximum number of tokens to generate. Defaults to 1000. Must be between 1 and 4096.
    - `temperature` (optional): Controls randomness in the output. Defaults to 0.7. Must be between 0 and 2.
    - `stream` (optional): If true, the response will be streamed. Defaults to false.
+   - `include_tool_messages` (optional): If true, tool messages will be included in the response. Defaults to false.
    - Response: JSON object with `id`, `object`, `created`, `model`, and `choices` array with the generated message.
 
 Example usage with curl:
@@ -277,7 +278,8 @@ curl -X POST http://localhost:8000/completions \
       {"role": "user", "content": "What is the capital of France?"}
     ],
     "max_tokens": 100,
-    "temperature": 0.7
+    "temperature": 0.7,
+    "includeToolMessages": true
   }'
 ```
 
