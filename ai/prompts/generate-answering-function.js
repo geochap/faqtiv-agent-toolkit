@@ -35,6 +35,7 @@ ${runtimeInstructions[runtimeName]}
 `;
 
 const adHocPrompt = `
+- If none of the examples given to you are useful for generating the doTask function, generate the code to best of your ability based on the instructions and the available functions.
 - doTask must not accept any parameters, hardcode all values.
 - Do not create files unless explicitly requested, otherwise only output plain text JSON data to stdout.
 `;
