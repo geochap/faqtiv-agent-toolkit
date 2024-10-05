@@ -14,7 +14,9 @@ const runtimeInstructions = {
 const basePrompt = `
 You have these globally available public functions:
 
+\`\`\`
 {{functionsSignatures}}
+\`\`\`
 
 Using only these functions execute the following instructions:
 
