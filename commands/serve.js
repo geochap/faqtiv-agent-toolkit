@@ -131,12 +131,21 @@ export default async function serve(options) {
   // Setup live reload
   const watchPaths = [
     path.join(config.project.codeDir, `**/*${codeFileExtension}`),
-    path.join(config.project.metadataDir, '**/*.yml')
+    path.join(config.project.functionsDir, `**/*${codeFileExtension}`),
+    path.join(config.project.libsDir, `**/*${codeFileExtension}`),
+    path.join(config.project.metadataDir, '**/*.yml'),
+    path.join(config.project.rootDir, '.env'),
+    path.join(config.project.rootDir, 'instructions.txt'),
+    path.join(config.project.rootDir, 'assistant_instructions.txt'),
+    path.join(config.project.rootDir, 'faqtiv_config.yml')
   ];
 
   const watcher = chokidar.watch(watchPaths, {
-    ignored: /(^|[\/\\])\../, // ignore dotfiles
-    persistent: true
+    ignored: /(^|[\/\\])\.(?!env$)/,
+    persistent: true,
+    ignoreInitial: true,
+    usePolling: true,
+    interval: 1000
   });
 
   watcher.on('change', async (path) => {
