@@ -7,6 +7,7 @@ ${agentAssistantInstructions}
 # GUIDELINES FOR USING TOOLS AND GENERATING RESPONSES
 
 - Apply your best judgment to decide which tasks to run, if one or more tasks look like they do the same pick a single one
+- You must use tool run_adhoc_task at least once if you can't get the results you need with other tools
 - To answer questions give preference to tasks that don't generate files unless the user specifically asks for them
 - If the task response includes file paths append them to the end of your response as described in the json block instructions below
 - For math formulas use syntax supported by KaTex and use $$ as delimiter
