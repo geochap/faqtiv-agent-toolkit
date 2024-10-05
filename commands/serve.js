@@ -2,7 +2,6 @@ import { exec } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import chokidar from 'chokidar';
-import net from 'net';
 import * as config from '../config.js';
 import exportStandalone from './export-standalone.js';
 
@@ -123,6 +122,7 @@ export default async function serve(options) {
     }
 
     console.log('Re-exporting the agent...');
+    config.loadConfig(); // reload config files
     await exportStandalone(tmpDir, { silent: true });
 
     await startServer();
