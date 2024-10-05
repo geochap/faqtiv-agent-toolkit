@@ -55,7 +55,7 @@ export function generateAnsweringFunctionPrompt(instructions, functionsSignature
   prompt += adHoc ? adHocPrompt : compilePrompt;
   
   if (instructions) {
-    prompt += `\nTASK INSTRUCTIONS:\n${instructions}`;
+    prompt += `\nTASK CODE GENERATION INSTRUCTIONS AND ADDITIONAL INFORMATION:\n${instructions}`;
   }
 
   return prompt;
