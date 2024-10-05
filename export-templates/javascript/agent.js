@@ -212,7 +212,7 @@ async function generateAndExecuteAdhoc(userInput, maxRetries = 3) {
           errorContext += `Previous code:\n\`\`\`javascript\n${previousCode}\n\`\`\`\n\n`;
         }
         
-        errorContext += "Please address these issues, fix the errors, and try again.\n";
+        errorContext += "Please address these issues, fix the errors, and try again";
       }
 
       const exampleMessages = relevantExamples.flatMap((example) => [
@@ -222,9 +222,10 @@ async function generateAndExecuteAdhoc(userInput, maxRetries = 3) {
 
       // Use the generic language model for the completion
       const messages = [
-        new SystemMessage(adhocPromptText),
+        new SystemMessage("You are a useful technical assistant."),
+        new AIMessage(adhocPromptText),
         ...exampleMessages,
-        new HumanMessage(`${errorContext}${userInput}`)
+        new HumanMessage(`${userInput}\n\n${errorContext}`)
       ];
 
       const response = await adhocLLM.invoke(messages);

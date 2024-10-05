@@ -2,7 +2,6 @@ import { v4 as uuidv4 } from 'uuid';
 import CodeAgent from '../ai/code-agent.js';
 import * as config from '../config.js';
 import OpenAIModel from '../ai/models/openai.js';
-import { Xor_exprContext } from 'python-ast';
 
 async function getNearestExamples(vectorStore, taskEmbedding, functionsEmbedding, taskWeight = 0.8, functionWeight = 0.2) {
   const taskResults = await vectorStore.searchByTask(taskEmbedding, 10);
