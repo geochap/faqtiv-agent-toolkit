@@ -164,6 +164,14 @@ let adhocPromptText = `
 const apiKey = process.env.OPENAI_API_KEY;
 const model = process.env.OPENAI_MODEL;
 
+if (!apiKey) {
+  throw new Error("OPENAI_API_KEY environment variable is not set");
+}
+
+if (!model) {
+  throw new Error("OPENAI_MODEL environment variable is not set");
+}
+
 // Initialize the adhoc language model
 const adhocLLM = new ChatOpenAI({
   apiKey,
