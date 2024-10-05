@@ -87,7 +87,7 @@ async function captureAndProcessOutput(func, args = []) {
       require,
       console: { log: customLog, warn: console.warn, error: console.error },
       // Add all the functions and variables from the local scope that the function might need
-      {{ libsNames }},
+      {{ libsNames }}
       {{ functionNames }}
     };
 

@@ -165,7 +165,7 @@ export default async function exportStandalone(outputDir = process.cwd(), option
 
   const runtimeConfig = runtimeConfigs[runtimeName];
   const functionsCode = functions.map(f => f.code);
-  const functionsName = functions.map(f => f.name);
+  const functionsNames = functions.map(f => f.name);
   const libsCode = libs.map(l => l.code);
   const libsNames = libs.map(f => f.name);
   const imports = [...new Set(libs.concat(functions).flatMap(f => f.imports))];
@@ -194,9 +194,9 @@ export default async function exportStandalone(outputDir = process.cwd(), option
   const templateData = {
     imports: imports.join('\n'),
     libs: libsCode.join('\n'),
-    libsNames: libsNames.join(',\n'),
+    libsNames: libsNames.length > 0 ? libsNames.join(',\n') + ',' : '',
     functions: functionsCode.join('\n'),
-    functionNames: functionsName.join(',\n'),
+    functionNames: functionsNames.length > 0 ? functionsNames.join(',\n') + ',' : '',
     taskNameMap: JSON.stringify(taskNameMap, null, 2),
     tasks: taskFunctions.join('\n\n'),
     taskToolSchemas: taskToolSchemas.join(',\n'),
