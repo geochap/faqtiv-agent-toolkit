@@ -9,6 +9,8 @@ const bodyParser = require('body-parser');
 const { v4: uuidv4 } = require('uuid');
 const readline = require('readline');
 const figlet = require('figlet');
+const { parse } = require('@babel/parser');
+const traverse = require('@babel/traverse').default;
 
 // Agent lib and functions dependencies
 {{ imports }}
@@ -155,10 +157,7 @@ function createToolsFromSchemas(schemas) {
 // Create tools from schemas
 const taskTools = createToolsFromSchemas(taskToolSchemas);
 
-let adhocPromptText = `
-{{ generateAnsweringFunctionPrompt }}
-- Wrap the single doTask function in a javascript code block
-`;
+let adhocPromptText = `{{ generateAnsweringFunctionPrompt }}`;
 
 // Read the API key and model from environment variables
 const apiKey = process.env.OPENAI_API_KEY;
@@ -178,16 +177,42 @@ const adhocLLM = new ChatOpenAI({
   model,
 });
 
-function extractFunctionCode(response) {
-  const start = response.indexOf("```javascript");
-  const end = response.indexOf("```", start + 1);
-  if (start !== -1 && end !== -1) {
-      return response.slice(start + 13, end).trim();
-  }
-  return null;
+function cleanCodeBlock(block) {
+  return block
+    .replace(/```[\w]*\n?/, '') // Remove the opening code block tag and optional language identifier
+    .replace(/```\s*$/, '') // Remove the closing code block tag
+    .trim();
 }
 
-async function generateAndExecuteAdhoc(userInput, maxRetries = 3) {
+function extractFunctionCode(inputText, targetFunctionName = 'doTask') {
+  const cleanedText = cleanCodeBlock(inputText);
+  const ast = parse(cleanedText, {
+    sourceType: "module",
+    plugins: ["asyncGenerators"]
+  });
+  let functionCode = '';
+
+  traverse(ast, {
+    FunctionDeclaration(path) {
+      if (path.node.id.name === targetFunctionName) {
+        functionCode = cleanedText.substring(path.node.start, path.node.end);
+      }
+    },
+    ArrowFunctionExpression(path) {
+      if (path.node.id && path.node.id.name === targetFunctionName) {
+        functionCode = cleanedText.substring(path.node.start, path.node.end);
+      }
+    },
+    FunctionExpression(path) {
+      if (path.node.id && path.node.id.name === targetFunctionName) {
+        functionCode = cleanedText.substring(path.node.start, path.node.end);
+      }
+    },
+  });
+  return functionCode;
+}
+
+async function generateAndExecuteAdhoc(userInput, maxRetries = 5) {
   let retryCount = 0;
   const errors = [];
   let previousCode = null;
@@ -195,7 +220,7 @@ async function generateAndExecuteAdhoc(userInput, maxRetries = 3) {
   // Get relevant examples
   const relevantExamples = await getRelevantExamples(userInput);
 
-  while (retryCount <= maxRetries) {
+  while (retryCount < maxRetries) {
     try {
       // Prepare the prompt with error information if available
       let errorContext = "";
@@ -203,7 +228,7 @@ async function generateAndExecuteAdhoc(userInput, maxRetries = 3) {
         errorContext = `Previous attempts failed with the following errors:\n`;
         errors.forEach((error, index) => {
           const modifiedError = error.includes("The request cannot be fulfilled using the available functions")
-            ? "Unknown error, please try again"
+            ? "Syntax error" // faking a syntax error seems to improve the retry success rate
             : error;
           errorContext += `${index + 1}. ${'-'.repeat(40)}\n${modifiedError}\n\n`;
         });
@@ -211,8 +236,7 @@ async function generateAndExecuteAdhoc(userInput, maxRetries = 3) {
         if (previousCode) {
           errorContext += `Previous code:\n\`\`\`javascript\n${previousCode}\n\`\`\`\n\n`;
         }
-        
-        errorContext += "Please address these issues, fix the errors, and try again";
+        errorContext += `Please address these issues in your response and improve upon the previous code if provided.`;
       }
 
       const exampleMessages = relevantExamples.flatMap((example) => [
@@ -229,6 +253,10 @@ async function generateAndExecuteAdhoc(userInput, maxRetries = 3) {
       ];
 
       const response = await adhocLLM.invoke(messages);
+
+      if (response.content.includes('The request cannot be fulfilled using the available functions')) {
+        throw new Error(response.content);
+      }
 
       const functionCode = extractFunctionCode(response.content);
 
@@ -247,10 +275,12 @@ async function generateAndExecuteAdhoc(userInput, maxRetries = 3) {
       errors.push(errorMessage);
       retryCount++;
 
-      if (retryCount > maxRetries) {
+      if (retryCount === maxRetries) {
         console.error(`Max retries (${maxRetries}) reached. Aborting.`);
         throw new Error(`Max retries reached. Last error: ${errorMessage}`);
       }
+
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       console.log(`Retrying... (attempt ${retryCount} of ${maxRetries})`);
     }

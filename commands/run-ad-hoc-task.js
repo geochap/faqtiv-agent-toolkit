@@ -82,13 +82,13 @@ function createLogFile(description, code, result, error = null) {
 }
 
 export default async function runAdHocTask(description) {
-  const maxRetries = 3;
+  const maxRetries = 5;
   let retryCount = 0;
   let errors = [];
   let previousCode = null;
   let response = null;
 
-  while (retryCount <= maxRetries) {
+  while (retryCount < maxRetries) {
     try {
       const headersUpdated = headersUpToDate();
 
@@ -144,10 +144,10 @@ export default async function runAdHocTask(description) {
       errors.push(error.message);
       retryCount++;
 
-      if (retryCount > maxRetries) {
+      if (retryCount === maxRetries) {
         console.error(`Max retries (${maxRetries}) reached. Aborting.`);
         createLogFile(description, response ? response.output.code : 'N/A', 'N/A', error);
-        throw error;
+        process.exit(1);
       }
 
       console.warn(`Retrying... (attempt ${retryCount} of ${maxRetries})`);
@@ -155,6 +155,8 @@ export default async function runAdHocTask(description) {
         previousCode = response.output.code;
         response = null;
       }
+
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
   }
 }

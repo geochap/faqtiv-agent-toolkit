@@ -37,7 +37,11 @@ const exportDependencies = {
     "langchain": "^0.3.0",
     "zod": "^3.23.8",
     "uuid": "^10.0.0",
-    "figlet": "^1.7.0"
+    "figlet": "^1.7.0",
+    "@babel/core": "^7.24.5",
+    "@babel/parser": "^7.24.5",
+    "@babel/preset-env": "^7.24.5",
+    "@babel/traverse": "^7.24.5",
   }
 };
 
