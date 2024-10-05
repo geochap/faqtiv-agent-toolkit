@@ -201,8 +201,8 @@ export default async function exportStandalone(outputDir = process.cwd(), option
       ? generateAnsweringFunctionPrompt(instructions, functionsHeader.signatures, true).replace(/`/g, '\\`')
       : generateAnsweringFunctionPrompt(instructions, functionsHeader.signatures, true),
     getAssistantInstructionsPrompt: runtimeName === 'javascript'
-      ? getAssistantInstructionsPrompt(assistantInstructions, instructions).replace(/`/g, '\\`')
-      : getAssistantInstructionsPrompt(assistantInstructions, instructions),
+      ? getAssistantInstructionsPrompt(assistantInstructions).replace(/`/g, '\\`')
+      : getAssistantInstructionsPrompt(assistantInstructions),
     installCommand: runtimeConfig.installCommand,
     cliAgentCommand: runtimeConfig.cliCommand,
     httpServerCommand: runtimeConfig.httpCommand,
