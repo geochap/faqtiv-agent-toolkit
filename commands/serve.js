@@ -4,6 +4,8 @@ import fs from 'fs';
 import chokidar from 'chokidar';
 import * as config from '../config.js';
 import exportStandalone from './export-standalone.js';
+import { v4 as uuidv4 } from 'uuid';
+import axios from 'axios';
 
 const { runtimeName, codeFileExtension } = config.project.runtime;
 
@@ -73,10 +75,13 @@ export default async function serve(options) {
   }
 
   let serverProcess;
+  let shutdownKey;
 
   async function startServer() {
     console.log('Starting the standalone agent server...');
     const agentPath = path.join(tmpDir, `agent${codeFileExtension}`);
+    
+    shutdownKey = uuidv4();
     
     let agentCommand;
     if (runtimeName === 'python') {
@@ -93,7 +98,8 @@ export default async function serve(options) {
         ...process.env,
         OPENAI_API_KEY: config.openai.apiKey,
         OPENAI_MODEL: config.openai.model,
-        PORT: port.toString()
+        PORT: port.toString(),
+        SHUTDOWN_KEY: shutdownKey
       },
       cwd: tmpDir,
       shell: true
@@ -117,7 +123,13 @@ export default async function serve(options) {
   async function restartServer() {
     if (serverProcess) {
       console.log('Stopping the current server...');
-      serverProcess.kill('SIGKILL');
+      try {
+        console.log(`http://localhost:${port}/shutdown`);
+        await axios.post(`http://localhost:${port}/shutdown`, { key: shutdownKey });
+      } catch (error) {
+        console.error('Error stopping server:', error.message);
+        process.exit(1);
+      }
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
 

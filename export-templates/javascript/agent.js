@@ -3,6 +3,7 @@ const { ChatPromptTemplate, MessagesPlaceholder } = require('@langchain/core/pro
 const { ChatOpenAI, OpenAIEmbeddings } = require('@langchain/openai');
 const { AIMessage, HumanMessage, SystemMessage, ToolMessage } = require('@langchain/core/messages');
 const { MemoryVectorStore } = require('langchain/vectorstores/memory');
+const http = require('http');
 const z = require('zod');
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -793,13 +794,43 @@ async function cliAgent() {
   }
 }
 
+function shutdownServer(server) {
+  return new Promise((resolve) => {
+    server.close(() => {
+      console.log('Server shut down gracefully');
+      resolve();
+    });
+  });
+}
+
 if (require.main === module) {
   console.log(figlet.textSync("FAQtiv"));
 
   const args = process.argv.slice(2);
   if (args.includes('--http')) {
     const port = process.env.PORT || 8000;
-    app.listen(port, () => {
+    const shutdownKey = process.env.SHUTDOWN_KEY;
+
+    const server = http.createServer(app);
+
+    if (shutdownKey) {
+      app.post('/shutdown', (req, res) => {
+        const { key } = req.body;
+
+        console.log('Received shutdown request');
+
+        if (key === shutdownKey) {
+          res.status(200).send('Shutting down server');
+          shutdownServer(server).then(() => {
+            process.exit(0);
+          });
+        } else {
+          res.status(403).send('Invalid shutdown key');
+        }
+      });
+    }
+
+    server.listen(port, () => {
       console.log(`HTTP server running on port ${port}`);
     });
   } else {
