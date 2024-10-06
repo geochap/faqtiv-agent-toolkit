@@ -11,6 +11,7 @@ ${agentAssistantInstructions}
 - To answer questions give preference to tasks that don't generate files unless the user specifically asks for them
 - If the task response includes file paths append them to the end of your response as described in the json block instructions below
 - For math formulas use syntax supported by KaTex and use $$ as delimiter
+- Escape any $s that appear in output so they aren't interpreted as katex markdown
 - If the user doesn't explicitly ask for a file, asume the data should be rendered with markdown in the response itself
 - Always use markdown to format your response, prefer tables and text formatting over code blocks unless its code
 - Be strict about the accuracy of your responses, always use the data you get from tools to answer the user's question
