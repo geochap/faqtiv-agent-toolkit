@@ -8,6 +8,8 @@ import { getAssistantInstructionsPrompt } from '../ai/prompts/assistant-instruct
 import * as config from '../config.js';
 import { getAllFiles } from '../lib/file-utils.js';
 import { extractFunctionCode } from '../lib/parse-utils.js';
+import { getOutdatedItems } from './migrate-dry.js';
+import { headersUpToDate } from './update-headers.js';
 
 const { runtimeName, codeFileExtension } = config.project.runtime;
 const { codeDir, metadataDir, tasksDir } = config.project;
@@ -154,13 +156,18 @@ function getDependenciesFile(runtimeName, existingDependencies) {
 
 export default async function exportStandalone(outputDir = process.cwd(), options = {}) {
   const { silent = false } = options;
-  const log = silent ? () => {} : console.error;
+  const log = silent ? () => {} : console.log;
 
   const { instructions, assistantInstructions, libs, functions, functionsHeader } = config.project;
 
   if (!runtimeConfigs[runtimeName]) {
-    log(`Standalone export is not supported for ${runtimeName}.`);
-    return;
+    console.error(`Error: Standalone export is not supported for ${runtimeName}.`);
+    process.exit(1);
+  }
+
+  if (outputDir !== process.cwd() && !fs.existsSync(outputDir)) {
+    console.error(`Error: The specified output directory does not exist: ${outputDir}`);
+    process.exit(1);
   }
 
   const runtimeConfig = runtimeConfigs[runtimeName];
@@ -238,4 +245,15 @@ export default async function exportStandalone(outputDir = process.cwd(), option
   log(`- ${runtimeConfig.agentFile}`);
   log(`- ${runtimeConfig.dependenciesFile}`);
   log('- README.md');
+
+  // Check headers up to date
+  if (!headersUpToDate()) {
+    console.warn('WARNING: Function headers are out of date, this could cause unexpected issues with the exported agent. It is recommended to run "faqtiv update-headers" before exporting.');
+  }
+
+  // Check for pending migrations
+  const pendingMigrations = getOutdatedItems();
+  if (pendingMigrations.length > 0) {
+    console.warn('WARNING: There are pending task migrations, this could cause unexpected issues with the exported agent. It is recommended to run "faqtiv migrate-tasks" before exporting.');
+  }
 }
