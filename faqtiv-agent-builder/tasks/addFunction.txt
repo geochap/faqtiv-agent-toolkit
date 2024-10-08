@@ -1,0 +1,1 @@
+Adds a function to the faqtiv agent with name and code.

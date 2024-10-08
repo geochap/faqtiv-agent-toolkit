@@ -1,0 +1,231 @@
+Use function executeAgentCommand to execute faqtiv cli commands in the agent directory:
+
+### Initializing a New Project
+To initialize a new project, use the `init` command:
+
+```bash
+faqtiv init <projectRoot> --runtime <value>
+```
+
+- `<projectRoot>`: The root directory of the new project.
+- `--runtime <value>`: The runtime environment, either `javascript` or `python`. Defaults to `javascript`.
+
+### Configuration
+
+#### Showing Current Configuration
+
+To display the current configuration for an existing project, use the `show-config` command:
+
+```bash
+faqtiv show-config --json
+```
+
+This will output the configuration in JSON format, including runtime language and installed modules.
+
+#### Setting Environment Variables
+
+To add or update an environment variable in your project's `.env` file, use the `set-env-var` command:
+
+```bash
+faqtiv set-env-var <key> <value>
+``` 
+
+- `<key>`: The key for the environment variable.
+- `<value>`: The value for the environment variable.
+
+This command will add or update the environment variable in your project's `.env` file.
+
+### Updating Function Headers
+In order to generate code first we need to generate function signature headers for your functions, use the `update-headers` command:
+
+```bash
+faqtiv update-headers
+```
+
+### Managing Modules
+Modules are external javascript or python libraries that are required by your function libraries.
+
+#### Adding a Module
+To add a new module, use the `add-module` command:
+
+```bash
+faqtiv add-module <name> [alias] [version]
+```
+
+### Managing Functions
+
+#### Listing Functions
+
+To list existing functions and libs with their code, use the `list-functions` command:
+
+```bash
+faqtiv list-functions
+```
+
+Options:
+- `--json`: Output the result in JSON format
+
+This command displays all the functions and libraries in the project, including their names and code content.
+
+#### Adding a Function
+To add a new function to the project, use the `add-function` command:
+
+```
+faqtiv add-function <name> <code>
+```
+
+- `<name>`: The name of the function.
+- `<code>`: The code for the function.
+
+This command will add the new function to the `functions` directory in your project.
+
+#### Removing a Function
+To remove an existing function, use the `remove-function` command:
+
+```bash
+faqtiv remove-function <name>
+```
+
+- `<name>`: The name of the function.
+
+This command will remove the function from the `functions` directory in your project.
+
+#### Updating a Function
+To update an existing function, use the `update-function` command:
+
+```bash
+faqtiv update-function <name> <newCode>
+``` 
+
+- `<name>`: The name of the function.
+- `<newCode>`: The new code for the function.
+
+This command will update the function in the `functions` directory in your project. 
+
+### Managing Agent Instructions
+
+#### Showing Current Instructions
+
+To display the current agent instructions, use the `show-instructions` command:
+
+```bash
+faqtiv show-instructions
+```
+
+This command will display the current agent instructions stored in the `instructions.txt` file.
+
+#### Updating Agent Instructions
+
+To update the agent instructions, use the `update-instructions` command:
+
+```bash
+faqtiv update-instructions <newInstructions>
+```
+
+- `<newInstructions>`: The new instructions for the agent.
+
+This command will update the `instructions.txt` file in your project which is added as part of the task code generation prompt.
+
+### Running Ad-Hoc Tasks
+
+To compile and run an ad-hoc task based on a description, use the `run-ad-hoc-task` command:
+
+```bash
+faqtiv run-ad-hoc-task <description>
+```
+
+- `<description>`: The description of the ad-hoc task.
+
+This will generate a temporary task, compile it using the available functions and libraries, then run it and output the result.
+
+### Managing Tasks
+Tasks are natural language descriptions of a single unit of work that the agent can perform by utilizing the functions available to it.
+
+#### Adding a Task
+To add a new task, use the `add-task` command:
+
+```bash
+faqtiv add-task <name> <description>
+```
+
+- `<name>`: The name of the task.
+- `<description>`: A brief description of the task.
+
+#### Removing a Task
+To remove an existing task, use the `remove-task` command (not implemented):
+
+```bash
+faqtiv remove-task <name>
+```
+
+- `<name>`: The name of the task.
+
+#### Updating a Task
+To update an existing task, use the `update-task` command (not implemented):
+
+```bash
+faqtiv update-task <name> <description>
+```
+
+- `<name>`: The name of the task.
+- `<description>`: The updated description of the task.
+
+#### Compiling Tasks
+To compile a specific task or all pending tasks, use the `compile-task` command:
+
+```bash
+faqtiv compile-task [taskName] --all
+```
+
+- `[taskName]`: The name of the task (optional).
+- `--all`: Compile all pending tasks.
+
+If the code is manually edited then this command will update the code's metadata without regenerating the code, this is needed to accurately track function dependencies for migrations.
+
+#### Fixing a Task
+To fix an existing task based on feedback, use the `fix-task` command:
+
+```bash
+faqtiv fix-task <name> <feedback>
+```
+
+- `<name>`: The name of the task.
+- `<feedback>`: Feedback on the task's performance.
+
+#### Migrating Tasks
+
+The toolkit can detect changes based on the modification dates of functions and task text files in the `./tasks` directory to determine if code regeneration is necessary.
+
+To execute a migration plan, use the `migrate-tasks` command:
+
+```bash
+faqtiv migrate-tasks --dry
+```
+
+- `--dry`: Display the migration plan without executing it.
+
+#### Showing a Task's Code
+To display the code for a specific task, use the `show-task` command:
+
+```bash
+faqtiv show-task <taskName>
+```
+
+- `<taskName>`: The name of the task.
+
+### Listing Tasks
+To list all existing tasks, use the `list-tasks` command:
+
+```bash
+faqtiv list-tasks
+```
+
+### Running Tasks
+To run a specific task, use the `run-task` command:
+
+```bash
+faqtiv run-task <taskName> [args...]
+```
+
+- `<taskName>`: The name of the task.
+- `[args...]`: Additional arguments for the task (optional).

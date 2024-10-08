@@ -4,7 +4,7 @@ import yaml from 'js-yaml';
 
 const configPath = path.join('faqtiv_config.yml');
 
-export default async function removeExample(name, options) {
+export default async function removeExample(name, options = {}) {
   if (!fs.existsSync(configPath)) {
     console.log('faqtiv_config.yml not found');
     process.exit(1);
@@ -22,7 +22,7 @@ export default async function removeExample(name, options) {
   if (!removeAll) { 
     const index = taskExamples.indexOf(name);
     if (index === -1) {
-      console.log(`Nothing to remove, task "${name}" is not an example`);
+      console.error(`Nothing to remove, task "${name}" is not an example`);
       process.exit(1);
     }
 

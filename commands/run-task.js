@@ -6,6 +6,7 @@ import { mkdirpSync } from 'mkdirp';
 import * as config from '../config.js';
 import { extractFunctionCode, getFunctionParameters } from '../lib/parse-utils.js';
 import { log, logErr } from '../lib/log4j.js';
+import { unescapeText } from '../lib/shell-utils.js';
 
 const tmpdir = config.project.tmpDir;
 const faqtivCodeMetadataDir = config.project.metadataDir;
@@ -126,7 +127,7 @@ async function executeCodeAsync(taskName, code, runParameters, outputFilePath, e
 }
 
 export default async function(taskName, ...args) {
-  const runParameters = args[0];
+  const runParameters = args[0].map(param => unescapeText(param));
   const options = args[1];
   const outputFilePath = options.output || null;
   const errorFilePath = options.error || null;

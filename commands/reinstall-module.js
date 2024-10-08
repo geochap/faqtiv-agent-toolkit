@@ -50,6 +50,7 @@ export default async function updateInterpreter() {
   try {
     await updateFn();
   } catch(e) {
+    console.error('Failed to install modules:', e.message);
     process.exit(1);
   }
 }

@@ -1,0 +1,1 @@
+Removes a function with a given name

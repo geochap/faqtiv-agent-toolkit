@@ -30,7 +30,7 @@ const examplesByRuntime = {
 
 const runtimeInstructions = {
   'python': `- In args_schema for any third party types, use the type by providing the correct import.`,
-  'javascript': ''
+  'javascript': '- Make sure the schema property is a valid Zod schema object.'
 };
 
 

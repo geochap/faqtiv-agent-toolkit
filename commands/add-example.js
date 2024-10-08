@@ -14,7 +14,7 @@ export default function addExample(taskName, options) {
   const supressLogs = options.supressLogs;
 
   if (!fs.existsSync(configPath)) {
-    console.log('faqtiv_config.yml not found');
+    console.error('faqtiv_config.yml not found');
     process.exit(1);
   }
 

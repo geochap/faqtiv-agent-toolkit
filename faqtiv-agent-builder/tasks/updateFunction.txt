@@ -1,0 +1,1 @@
+Updates a function with a given name and code

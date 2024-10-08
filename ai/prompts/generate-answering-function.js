@@ -14,7 +14,9 @@ const runtimeInstructions = {
 const basePrompt = `
 You have these globally available public functions:
 
+\`\`\`
 {{functionsSignatures}}
+\`\`\`
 
 Using only these functions execute the following instructions:
 
@@ -28,10 +30,12 @@ In a codeblock at the top of your response write a ${runtimeName} function calle
 - Never output anything else to stdout, any messages if needed should be included in the resulting JSON.
 - Do not include any comments or documentation in your code, only the code is needed.
 - If the code can not be generated using the available functions provide this plain text error with no additional formatting: "The request cannot be fulfilled using the available functions".
+- Remember that you can write code to process the function results to filter or summarize them as needed if the function results are not what is needed.
 ${runtimeInstructions[runtimeName]}
 `;
 
 const adHocPrompt = `
+- If none of the examples given to you are useful for generating the doTask function, generate the code to best of your ability based on the instructions and the available functions.
 - doTask must not accept any parameters, hardcode all values.
 - Do not create files unless explicitly requested, otherwise only output plain text JSON data to stdout.
 `;
@@ -52,7 +56,7 @@ export function generateAnsweringFunctionPrompt(instructions, functionsSignature
   prompt += adHoc ? adHocPrompt : compilePrompt;
   
   if (instructions) {
-    prompt += `\nTASK INSTRUCTIONS:\n${instructions}`;
+    prompt += `\n# TASK CODE GENERATION INSTRUCTIONS AND ADDITIONAL INFORMATION:\n${instructions}`;
   }
 
   return prompt;
