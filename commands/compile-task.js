@@ -154,13 +154,16 @@ export async function migrateTask(options) {
   const needToRecompile = migrationItems.filter(i => i.reasons.functionsAreNewerThanCode || i.reasons.libsAreNewerThanCode);
   const needToUpdateMetadata = migrationItems.filter(i => i.reasons.codeIsNewerThanMetadada);
 
-  // First update metadata as these could include examples used for compilation
-  for (let t of needToUpdateMetadata) {
+  // Separate tasks that only need metadata update
+  const onlyUpdateMetadata = needToUpdateMetadata.filter(item => !needToRecompile.some(r => r.taskName === item.taskName));
+
+  // Update metadata for tasks that don't need recompilation
+  for (let t of onlyUpdateMetadata) {
     console.log(`Updating metadata for ${t.taskName}...`);
     await updateMetadata(t.taskName, t.file);
     console.log('done');
   }
-  if (needToUpdateMetadata.length > 0) console.log(`Updated metadata for ${needToUpdateMetadata.length} tasks`);
+  if (onlyUpdateMetadata.length > 0) console.log(`Updated metadata for ${onlyUpdateMetadata.length} tasks`);
 
   if (needToRecompile.length > 0) {
     const vectorStore = await initializeVectorStore();
@@ -171,11 +174,12 @@ export async function migrateTask(options) {
         content: fs.readFileSync(path.join(tasksDir, item.file.relativePath.replace(codeFileExtension, '.txt')), 'utf8')
       };
 
-      console.log(`Migrating ${task.name}...`);
+      console.log(`Recompiling ${task.name}...`);
       const result = await processTask(vectorStore, task);
       writeResult(task, result, false);
       console.log('done');
     }
+    console.log(`Recompiled ${needToRecompile.length} tasks`);
   }
 }
 
