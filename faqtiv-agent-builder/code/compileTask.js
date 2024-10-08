@@ -51,6 +51,7 @@ async function executeAgentCommand(agentDirectoryPath, args) {
     } else if (!agentDirectoryPath || !existsSync(agentDirectoryPath)) {
       return reject(new Error("Agent directory doesn't exist"));
     }
+    
 
     const child = spawn('faqtiv', [...args], {
       cwd,

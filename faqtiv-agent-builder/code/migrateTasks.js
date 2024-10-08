@@ -108,10 +108,11 @@ async function fetchYamlApiSpec(apiUrl) {
 * This function is the generated code: it's safe to edit.
  */
 
-async function doTask(agentDirectoryPath, moduleName, alias, version) {
-  const args = ['add-module', moduleName];
-  if (alias) args.push(alias);
-  if (version) args.push(version);
+async function doTask(agentDirectoryPath, dry = false) {
+  const args = ['migrate-tasks'];
+  if (dry) {
+    args.push('--dry');
+  }
 
   try {
     const result = await executeAgentCommand(agentDirectoryPath, args);

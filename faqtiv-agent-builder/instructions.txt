@@ -199,8 +199,10 @@ The toolkit can detect changes based on the modification dates of functions and 
 To execute a migration plan, use the `migrate-tasks` command:
 
 ```bash
-faqtiv migrate-tasks
+faqtiv migrate-tasks --dry
 ```
+
+- `--dry`: Display the migration plan without executing it.
 
 #### Showing a Task's Code
 To display the code for a specific task, use the `show-task` command:

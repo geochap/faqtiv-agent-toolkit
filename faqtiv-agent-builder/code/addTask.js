@@ -108,9 +108,9 @@ async function fetchYamlApiSpec(apiUrl) {
 * This function is the generated code: it's safe to edit.
  */
 
-async function doTask(agentDirectoryPath, taskName, taskDescription) {
-  const escapedTaskDescription = escapeForShell(taskDescription);
-  const args = ['add-task', taskName, escapedTaskDescription];
+async function doTask(agentDirectoryPath, taskName, description) {
+  const escapedDescription = escapeForShell(description);
+  const args = ['add-task', taskName, escapedDescription];
 
   try {
     const result = await executeAgentCommand(agentDirectoryPath, args);

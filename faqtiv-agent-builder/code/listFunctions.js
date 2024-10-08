@@ -113,7 +113,7 @@ async function doTask(agentDirectoryPath) {
 
   try {
     const result = await executeAgentCommand(agentDirectoryPath, args);
-    console.log(JSON.stringify({ result })); 
+    console.log(result);
   } catch (error) {
     console.log(`Error executing task: ${error.stack}`);
   }

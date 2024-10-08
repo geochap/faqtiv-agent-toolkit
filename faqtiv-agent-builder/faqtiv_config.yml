@@ -30,3 +30,4 @@ task_examples:
   - showTask
   - showProjectConfig
   - showInstructions
+  - migrateTasks

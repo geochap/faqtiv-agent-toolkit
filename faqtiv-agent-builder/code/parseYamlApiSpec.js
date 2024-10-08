@@ -109,10 +109,6 @@ async function fetchYamlApiSpec(apiUrl) {
  */
 
 async function doTask(apiUrl) {
-  try {
-    const apiSpec = await fetchYamlApiSpec(apiUrl);
-    console.log(JSON.stringify(apiSpec));
-  } catch (error) {
-    console.log(`Error fetching API spec: ${error.stack}`);
-  }
+  const result = await fetchYamlApiSpec(apiUrl);
+  console.log(JSON.stringify(result));
 }

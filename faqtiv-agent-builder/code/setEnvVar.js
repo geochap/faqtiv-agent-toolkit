@@ -109,7 +109,8 @@ async function fetchYamlApiSpec(apiUrl) {
  */
 
 async function doTask(agentDirectoryPath, key, value) {
-  const args = ['set-env-var', key, value];
+  const escapedValue = escapeForShell(value);
+  const args = ['set-env-var', key, escapedValue];
 
   try {
     const result = await executeAgentCommand(agentDirectoryPath, args);
