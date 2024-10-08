@@ -44,6 +44,8 @@ const exportDependencies = {
     "@babel/parser": "^7.24.5",
     "@babel/preset-env": "^7.24.5",
     "@babel/traverse": "^7.24.5",
+    "log4js": "^6.9.1",
+    "mkdirp": "^3.0.1"
   }
 };
 

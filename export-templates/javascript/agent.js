@@ -3,6 +3,10 @@ const { ChatPromptTemplate, MessagesPlaceholder } = require('@langchain/core/pro
 const { ChatOpenAI, OpenAIEmbeddings } = require('@langchain/openai');
 const { AIMessage, HumanMessage, SystemMessage, ToolMessage } = require('@langchain/core/messages');
 const { MemoryVectorStore } = require('langchain/vectorstores/memory');
+const fs = require('fs');
+const path = require('path');
+const { mkdirpSync } = require('mkdirp');
+const log4js = require('log4js');
 const http = require('http');
 const z = require('zod');
 const express = require('express');
@@ -178,6 +182,7 @@ const adhocLLM = new ChatOpenAI({
   model,
 });
 
+// Parsing functions
 function cleanCodeBlock(block) {
   return block
     .replace(/```[\w]*\n?/, '') // Remove the opening code block tag and optional language identifier
@@ -213,6 +218,92 @@ function extractFunctionCode(inputText, targetFunctionName = 'doTask') {
   return functionCode;
 }
 
+// Logging
+const logDir = path.join(process.cwd(), 'logs');
+const logsFilePath = `${logDir}/app.log`;
+const errorLogsFilePath = `${logDir}/err.log`;
+
+mkdirpSync(logDir);
+
+log4js.addLayout('json', function(config) {
+  return function(logEvent) { 
+    return JSON.stringify(logEvent) + config.separator; 
+  }
+});
+
+const log4jsConfig = {
+    appenders: {
+      file: { 
+        type: 'file',
+        filename: logsFilePath,
+        layout: { type: 'json', separator: ',' }
+      },
+      errorFile: {
+        type: 'file',
+        filename: errorLogsFilePath,
+        layout: { type: 'json', separator: ',' }
+      }
+    },
+    categories: {
+      default: { 
+        appenders: ['file'], 
+        level: 'info' 
+      },
+      error: {
+        appenders: ['errorFile'],
+        level: 'error'
+      }
+    }
+};
+log4js.configure(log4jsConfig);
+
+const appLogger = log4js.getLogger('default');
+const log = (command, event, body) => {
+  appLogger.info({
+    command,
+    event,
+    body
+  });
+}
+const logErr = (command, event, body, error) => {
+  const logError = error ? (error.stack || error.toString()) : null;
+  const errorLogger = log4js.getLogger('error');
+
+  errorLogger.error({
+    command,
+    event,
+    body,
+    error: logError
+  });
+}
+
+function createAdhocLogFile(description, code, result, error = null) {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const logFileName = path.join(logDir, `adhoc-${timestamp}${error ? '-error' : ''}.log`);
+  
+  const delimiter = '\n\n---\n\n';
+
+  let prettyResult;
+  try {
+    const parsedResult = JSON.parse(result);
+    prettyResult = JSON.stringify(parsedResult, null, 2);
+  } catch (e) {
+    prettyResult = result;
+  }
+
+  const logContent = [
+    `Description: \n\n ${description}`,
+    delimiter,
+    `Code: \n\n ${code}`,
+    delimiter,
+    `Result: \n\n ${prettyResult}`,
+    error ? `${delimiter}Error: ${error.stack}` : ''
+  ].join('');
+
+  fs.writeFileSync(logFileName, logContent);
+}
+
+// Adhoc task execution
 async function generateAndExecuteAdhoc(userInput, maxRetries = 5) {
   let retryCount = 0;
   const errors = [];
@@ -269,7 +360,11 @@ async function generateAndExecuteAdhoc(userInput, maxRetries = 5) {
 
       console.log("Generated code:", functionCode);
 
-      return await captureAndProcessOutput(functionCode);
+      const result = await captureAndProcessOutput(functionCode);
+      
+      createAdhocLogFile(userInput, functionCode, result);
+      
+      return result;
     } catch (e) {
       const errorMessage = e.message;
       console.error(`Error during execution (attempt ${retryCount + 1}): ${errorMessage}`);
@@ -278,6 +373,7 @@ async function generateAndExecuteAdhoc(userInput, maxRetries = 5) {
 
       if (retryCount === maxRetries) {
         console.error(`Max retries (${maxRetries}) reached. Aborting.`);
+        createAdhocLogFile(userInput, previousCode, '', new Error(`Max retries reached. Last error: ${errorMessage}`));
         throw new Error(`Max retries reached. Last error: ${errorMessage}`);
       }
 
@@ -306,6 +402,8 @@ app.use((req, res, next) => {
 
 // Run adhoc task endpoint
 app.post('/run_adhoc', async (req, res) => {
+  log('run_adhoc', 'run_adhoc', req.body);
+
   try {
     const { input } = req.body;
     let result = await generateAndExecuteAdhoc(input);
@@ -316,6 +414,7 @@ app.post('/run_adhoc', async (req, res) => {
 
     res.json({ result });
   } catch (error) {
+    logErr('run_adhoc', 'run_adhoc', req.body, error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -325,9 +424,12 @@ app.post('/run_task/:taskName', async (req, res) => {
   const { taskName } = req.params;
   const args = req.body.args || {};
 
+  log('run_task', taskName, req.body);
+
   const validTaskName = taskNameMap[taskName] || taskName;
 
   if (typeof taskFunctions[validTaskName] !== 'function') {
+    logErr('run_task', taskName, req.body, 'Not found');
     return res.status(404).json({ error: `Task '${taskName}' not found` });
   }
 
@@ -336,6 +438,7 @@ app.post('/run_task/:taskName', async (req, res) => {
     const result = await captureAndProcessOutput(taskFunctions[validTaskName], Object.values(args));
     res.json({ result });
   } catch (error) {
+    logErr('run_task', taskName, req.body, error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -378,6 +481,17 @@ app.post('/completions', async (req, res) => {
     max_tokens,
     temperature
   } = req.body;
+  const completionId = `cmpl-${uuidv4()}`;
+
+  log('completions', 'completions', { 
+    id: completionId,
+    stream,
+    prompt: messages.length > 0 ? messages[messages.length - 1].content : "",
+    messageCount: messages.length, 
+    include_tool_messages, 
+    max_tokens, 
+    temperature 
+  });
 
   console.log("Completion request: ", messages.length > 0 ? messages[messages.length - 1].content : "")
 
@@ -387,16 +501,17 @@ app.post('/completions', async (req, res) => {
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
     });
-    for await (const chunk of streamCompletion(messages, include_tool_messages, max_tokens, temperature)) {
+    for await (const chunk of streamCompletion(completionId, messages, include_tool_messages, max_tokens, temperature)) {
       res.write(`data: ${JSON.stringify(chunk)}\n\n`);
     }
     res.write('data: [DONE]\n\n');
     res.end();
   } else {
     try {
-      const result = await generateCompletion(messages, include_tool_messages, max_tokens, temperature);
+      const result = await generateCompletion(completionId, messages, include_tool_messages, max_tokens, temperature);
       res.json(result);
     } catch (error) {
+      logErr('completions', 'completions', req.body, error);
       res.status(500).json({ error: error.message });
     }
   }
@@ -495,7 +610,7 @@ function convertToolMessageToOpenAIFormat(toolMessage) {
   };
 }
 
-async function generateCompletion(messages, includeToolMessages = false, maxTokens, temperature) {
+async function generateCompletion(completionId, messages, includeToolMessages = false, maxTokens, temperature) {
   const llm = new ChatOpenAI({
     apiKey,
     model,
@@ -505,7 +620,6 @@ async function generateCompletion(messages, includeToolMessages = false, maxToke
   const completionChain = completionPrompt.pipe(llm);
 
   const currentTime = Math.floor(Date.now() / 1000);
-  const completionId = `cmpl-${uuidv4()}`;
 
   let conversation = getConversationFromMessagesRequest(messages);
   let finalContent = '';
@@ -602,7 +716,7 @@ async function generateCompletion(messages, includeToolMessages = false, maxToke
   return response;
 }
 
-async function* streamCompletion(messages, includeToolMessages = false, maxTokens, temperature) {
+async function* streamCompletion(completionId, messages, includeToolMessages = false, maxTokens, temperature) {
   const llm = new ChatOpenAI({
     apiKey,
     model,
@@ -612,7 +726,6 @@ async function* streamCompletion(messages, includeToolMessages = false, maxToken
   const completionChain = completionPrompt.pipe(llm);
 
   const currentTime = Math.floor(Date.now() / 1000);
-  const completionId = `cmpl-${uuidv4()}`;
   let conversation = getConversationFromMessagesRequest(messages);
 
   const processRequest = async function* (inputData) {
@@ -727,6 +840,7 @@ async function* streamCompletion(messages, includeToolMessages = false, maxToken
     }
   } catch (error) {
     console.error(`Error during streaming: ${error}`);
+    logErr('completions', 'completions', {}, error);
     const errorChunk = {
       id: completionId,
       object: 'chat.completion.chunk',
