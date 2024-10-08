@@ -402,7 +402,8 @@ app.use((req, res, next) => {
 
 // Run adhoc task endpoint
 app.post('/run_adhoc', async (req, res) => {
-  log('run_adhoc', 'run_adhoc', req.body);
+  const requestId = `run-adhoc-${uuidv4()}`;
+  log('run_adhoc', 'run_adhoc', { id: requestId, ...req.body });
 
   try {
     const { input } = req.body;
@@ -414,7 +415,7 @@ app.post('/run_adhoc', async (req, res) => {
 
     res.json({ result });
   } catch (error) {
-    logErr('run_adhoc', 'run_adhoc', req.body, error);
+    logErr('run_adhoc', 'run_adhoc', { id: requestId, ...req.body }, error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -423,8 +424,9 @@ app.post('/run_adhoc', async (req, res) => {
 app.post('/run_task/:taskName', async (req, res) => {
   const { taskName } = req.params;
   const args = req.body.args || {};
+  const requestId = `run-task-${uuidv4()}`;
 
-  log('run_task', taskName, req.body);
+  log('run_task', taskName, { id: requestId, ...req.body });
 
   const validTaskName = taskNameMap[taskName] || taskName;
 
@@ -438,7 +440,7 @@ app.post('/run_task/:taskName', async (req, res) => {
     const result = await captureAndProcessOutput(taskFunctions[validTaskName], Object.values(args));
     res.json({ result });
   } catch (error) {
-    logErr('run_task', taskName, req.body, error);
+    logErr('run_task', taskName, { id: requestId, ...req.body }, error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -482,8 +484,7 @@ app.post('/completions', async (req, res) => {
     temperature
   } = req.body;
   const completionId = `cmpl-${uuidv4()}`;
-
-  log('completions', 'completions', { 
+  const logBody = {
     id: completionId,
     stream,
     prompt: messages.length > 0 ? messages[messages.length - 1].content : "",
@@ -491,7 +492,8 @@ app.post('/completions', async (req, res) => {
     include_tool_messages, 
     max_tokens, 
     temperature 
-  });
+  };
+  log('completions', 'completions', logBody);
 
   console.log("Completion request: ", messages.length > 0 ? messages[messages.length - 1].content : "")
 
@@ -511,7 +513,7 @@ app.post('/completions', async (req, res) => {
       const result = await generateCompletion(completionId, messages, include_tool_messages, max_tokens, temperature);
       res.json(result);
     } catch (error) {
-      logErr('completions', 'completions', req.body, error);
+      logErr('completions', 'completions', logBody, error);
       res.status(500).json({ error: error.message });
     }
   }
@@ -840,7 +842,7 @@ async function* streamCompletion(completionId, messages, includeToolMessages = f
     }
   } catch (error) {
     console.error(`Error during streaming: ${error}`);
-    logErr('completions', 'completions', {}, error);
+    logErr('completions', 'completions', { id: completionId }, error);
     const errorChunk = {
       id: completionId,
       object: 'chat.completion.chunk',
