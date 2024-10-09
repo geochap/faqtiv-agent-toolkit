@@ -280,6 +280,11 @@ app.add_middleware(
     allow_methods=["*"],  # Allows all methods
     allow_headers=["*"],  # Allows all headers
 )
+@app.middleware("http")
+async def increase_request_body_size(request: Request, call_next):
+    request.scope["max_body_size"] = 10 * 1024 * 1024  # 10MB in bytes
+    response = await call_next(request)
+    return response
 
 @app.post("/run_adhoc")
 async def run_adhoc_endpoint(request: Request):
@@ -313,13 +318,18 @@ async def run_task_endpoint(task_name: str, request: Request):
 
 class Message(BaseModel):
     role: str
+    name: Optional[str] = None
     content: str
+    tool_calls: Optional[List[Dict[str, Any]]] = None
+    tool_call_id: Optional[str] = None
+    additional_kwargs: Optional[Dict[str, Any]] = None
 
 class CompletionRequest(BaseModel):
     messages: List[Message]
     max_tokens: Optional[int] = Field(default=1000, ge=1, le=4096)
     temperature: Optional[float] = Field(default=0.7, ge=0, le=2)
     stream: Optional[bool] = False
+    include_tool_messages: Optional[bool] = False
 
 class CompletionResponse(BaseModel):
     id: str
@@ -358,8 +368,6 @@ completion_tool_schemas = {
 adhoc_tool = create_tools_from_schemas(completion_tool_schemas)
 completion_tools = adhoc_tool + task_tools
 
-# Initialize OpenAI LLM for completion agent
-completion_llm = ChatOpenAI(model=model).bind_tools(completion_tools)
 completion_promptText = """{{ getAssistantInstructionsPrompt }}"""
 completion_prompt = ChatPromptTemplate.from_messages(
     [
@@ -367,18 +375,25 @@ completion_prompt = ChatPromptTemplate.from_messages(
         MessagesPlaceholder("conversation")
     ]
 )
-completion_chain = completion_prompt.pipe(completion_llm)
 
 @app.post("/completions")
 async def completions_endpoint(request: CompletionRequest):
-    print("Completion request: ", request.messages[-1].content if request.messages else "", flush=True)
+    completion_id = f"cmpl-{uuid.uuid4()}"
+    stream = request.stream
+    messages = request.messages
+    include_tool_messages = request.include_tool_messages
+    max_tokens = request.max_tokens
+    temperature = request.temperature
+
+    print("Completion request: ", messages[-1].content if messages else "", flush=True)
 
     try:
-        if request.stream:
-            return StreamingResponse(stream_completion_wrapper(request), media_type="text/event-stream")
+        if stream:
+            return StreamingResponse(stream_completion_wrapper(completion_id, messages, include_tool_messages, max_tokens, temperature), media_type="text/event-stream")
         else:
-            return await generate_completion(request)
+            return await generate_completion(completion_id, messages, include_tool_messages, max_tokens, temperature)
     except Exception as e:
+        print(f"Error during completion: {e}", flush=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 async def process_tool_calls(tool_calls):
@@ -396,8 +411,10 @@ async def process_tool_calls(tool_calls):
         if tool:
             try:
                 tool_result = await tool.coroutine(json.loads(tool_call["function"]["arguments"]))
+                print("Tool result:", tool_result, flush=True)
             except Exception as e:
                 error_message = f"Error in tool '{tool_call['function']['name']}': {str(e)}"
+                print("Error in tool:", error_message, flush=True)
                 tool_result = {"error": error_message}
             
             tool_messages.append(
@@ -423,12 +440,52 @@ async def process_tool_calls(tool_calls):
     
     return tool_messages
 
-async def generate_completion(request: CompletionRequest):
-    current_time = int(time.time())
-    completion_id = f"cmpl-{uuid.uuid4()}"
+def get_conversation_from_messages_request(messages):
+    def create_ai_message(msg):
+        content = msg.content
+        additional_kwargs = {}
+        if hasattr(msg, 'tool_calls') and msg.tool_calls:
+            additional_kwargs['tool_calls'] = msg.tool_calls
+        return AIMessage(content=content, additional_kwargs=additional_kwargs)
 
-    conversation = [{"role": msg.role, "content": msg.content} for msg in request.messages]
+    return [
+        HumanMessage(msg.content) if msg.role == 'user'
+        else create_ai_message(msg) if msg.role == 'assistant'
+        else ToolMessage(content=msg.content, tool_call_id=msg.tool_call_id, name=msg.name) if msg.role == 'tool'
+        else SystemMessage(msg.content) if msg.role == 'system'
+        else None
+        for msg in messages
+        if msg is not None
+    ]
+
+def convert_ai_message_to_openai_format(ai_message):
+    return {
+        "role": "assistant",
+        "content": ai_message.content,
+        "tool_calls": ai_message.additional_kwargs.get("tool_calls", [])
+    }
+
+def convert_tool_message_to_openai_format(tool_message):
+    return {
+        "role": "tool",
+        "name": tool_message.name,
+        "tool_call_id": tool_message.tool_call_id,
+        "content": tool_message.content
+    }
+
+async def generate_completion(completion_id, messages, include_tool_messages, max_tokens, temperature):
+    llm = ChatOpenAI(
+        api_key=api_key,
+        model=model,
+        max_tokens=max_tokens,
+        temperature=temperature
+    ).bind_tools(completion_tools)
+    completion_chain = completion_prompt.pipe(llm)
+
+    current_time = int(time.time())
+    conversation = get_conversation_from_messages_request(messages)
     final_content = ''
+    tool_results_messages = []
 
     async def process_request(input_data):
         try:
@@ -465,6 +522,7 @@ async def generate_completion(request: CompletionRequest):
             if result.additional_kwargs and result.additional_kwargs.get("tool_calls"):
                 tool_messages = await process_tool_calls(result.additional_kwargs["tool_calls"])
                 conversation.extend(tool_messages)
+                tool_results_messages.extend(tool_messages)
             else:
                 final_content = result.content
 
@@ -473,7 +531,7 @@ async def generate_completion(request: CompletionRequest):
             traceback.print_exc()
             raise HTTPException(status_code=500, detail=str(e))
 
-    completion_response = CompletionResponse(
+    response = CompletionResponse(
         id=completion_id,
         object="chat.completion",
         created=current_time,
@@ -489,17 +547,45 @@ async def generate_completion(request: CompletionRequest):
             }
         ]
     )
-    
-    return JSONResponse(content=completion_response.dict())
 
-async def stream_completion_wrapper(request: CompletionRequest):
-    async for event in stream_completion(request):
+    if include_tool_messages:
+        tool_messages = []
+        for message in tool_results_messages:
+            openai_message = None
+            if isinstance(message, AIMessage):
+                openai_message = convert_ai_message_to_openai_format(message)
+            elif isinstance(message, ToolMessage):
+                openai_message = convert_tool_message_to_openai_format(message)
+
+            if openai_message:
+                message_chunk = {
+                    "id": completion_id,
+                    "object": "chat.completion.chunk",
+                    "created": current_time,
+                    "model": model,
+                    "choices": [{"index": 0, "delta": openai_message, "finish_reason": None}],
+                }
+                tool_messages.append(message_chunk)
+        
+        response.tool_messages = tool_messages
+
+    return JSONResponse(content=response.dict())
+
+async def stream_completion_wrapper(completion_id, messages, include_tool_messages, max_tokens, temperature):
+    async for event in stream_completion(completion_id, messages, include_tool_messages, max_tokens, temperature):
         yield event
 
-async def stream_completion(request: CompletionRequest):
+async def stream_completion(completion_id, messages, include_tool_messages, max_tokens, temperature):
+    llm = ChatOpenAI(
+        api_key=api_key,
+        model=model,
+        max_tokens=max_tokens,
+        temperature=temperature
+    ).bind_tools(completion_tools)
+    completion_chain = completion_prompt.pipe(llm)
+
     current_time = int(time.time())
-    completion_id = f"cmpl-{uuid.uuid4()}"
-    conversation = [{"role": msg.role, "content": msg.content} for msg in request.messages]
+    conversation = get_conversation_from_messages_request(messages)
 
     async def process_request(input_data):
         try:
@@ -531,10 +617,23 @@ async def stream_completion(request: CompletionRequest):
                 raise
 
     try:
+        insert_newline = False
         while True:
             events = process_request({"conversation": conversation})
             has_tool_calls = False
             async for event in events:
+                if insert_newline:
+                    # insert a newline before processing new tokens
+                    newline_chunk = {
+                        'id': completion_id,
+                        'object': 'chat.completion.chunk',
+                        'created': current_time,
+                        'model': model,
+                        'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': '\n'}, 'finish_reason': None}]
+                    }
+                    yield f"data: {json.dumps(newline_chunk)}\n\n"
+                    insert_newline = False # reset the flag after inserting newline
+
                 if event['event'] == 'on_chat_model_stream':
                     content = event['data']['chunk'].content
                     if content:
@@ -552,6 +651,26 @@ async def stream_completion(request: CompletionRequest):
                         tool_messages = await process_tool_calls(tool_calls)
                         conversation.extend(tool_messages)
                         has_tool_calls = True
+                        insert_newline = True # set flag to insert newline before next tokens
+
+                        # Include tool messages only if includeToolMessages is true
+                        if include_tool_messages:
+                            for message in tool_messages:
+                                openai_message = None
+                                if isinstance(message, AIMessage):
+                                    openai_message = convert_ai_message_to_openai_format(message)
+                                elif isinstance(message, ToolMessage):
+                                    openai_message = convert_tool_message_to_openai_format(message)
+
+                                if openai_message:
+                                    message_chunk = {
+                                        "id": completion_id,
+                                        "object": "chat.completion.chunk",
+                                        "created": current_time,
+                                        "model": model,
+                                        "choices": [{'index': 0, 'delta': openai_message, 'finish_reason': None}],
+                                    }   
+                                    yield f"data: {json.dumps(message_chunk)}\n\n"
                     else:
                         final_chunk = {
                             'id': completion_id,

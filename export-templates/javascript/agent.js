@@ -546,6 +546,7 @@ async function processToolCalls(toolCalls) {
         }));
       } catch (error) {
         const errorMessage = `Error in tool '${toolCall.function.name}': ${error.message}`;
+        console.warn("Error in tool:", errorMessage);
         toolMessages.push(new ToolMessage({
           content: JSON.stringify({
             type: "tool_result",
