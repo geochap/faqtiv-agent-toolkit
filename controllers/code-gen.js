@@ -150,10 +150,7 @@ export async function generateAdHocResponse(vectorStore, conversation, retryCoun
       This is retry attempt ${retryCount}.
       Previous errors:
       ${retryErrors.map((error, index) => {
-        const modifiedError = error.includes("The request cannot be fulfilled using the available functions")
-          ? "Syntax error" // faking a syntax error seems to improve the retry success rate
-          : error;
-        return `\n${index + 1}. ${'-'.repeat(40)}\n${modifiedError}`;
+        return `\n${index + 1}. ${'-'.repeat(40)}\n${error}`;
       }).join('\n')}
     `;
 
@@ -167,7 +164,9 @@ export async function generateAdHocResponse(vectorStore, conversation, retryCoun
     }
 
     retryMessage += `
-      Please address these issues in your response and improve upon the previous code if provided.
+      The previously generated code failed because of these issues, please re-write the code to address them.
+      If the errors are not clear or useful please write the code again based on the instructions and available functions.
+      Assume you are more capable than the agent that generated the previous attempt and you can make better decisions.
     `;
 
     conversation[conversation.length - 1].message = `${conversation[conversation.length - 1].message}\n\n${retryMessage}`;

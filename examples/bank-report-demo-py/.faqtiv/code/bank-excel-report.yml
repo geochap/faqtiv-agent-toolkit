@@ -8,7 +8,7 @@ output:
             response = requests.get(url)
             response_data = response.json()
             return response_data['data'][0]['data']['ID']
-      lastModified: 2024-07-17T23:29:07.722Z
+      lastModified: 2024-09-09T23:58:15.382Z
       imports: &ref_0
         - import requests
     - name: get_bank_financials
@@ -24,7 +24,7 @@ output:
                 } for r in response_data['data']
             ]
 
-      lastModified: 2024-07-17T23:29:07.722Z
+      lastModified: 2024-09-09T23:58:15.382Z
       imports: *ref_0
     - name: create_workbook
       code: |+
@@ -94,14 +94,14 @@ output:
       created_at: 2024-08-23T23:44:06.085Z
   task_schema: |-
     "bank-excel-report": {
-      "description": "Generates a financial report for a specific bank and writes it to an .xlsx workbook file.",
-      "returns_description": "{ result: string; files: { path: string; mimeType: string; }[] }",
+      "description": "Generates a financial report in Excel format for a specified bank.",
+      "returns_description": "Object<{ result: string; files: List<{ path: string; mimeType: string }> }>",
       "input": {"bank_name": str},
       "args_schema": create_model(
         "BankExcelReport",
-        bank_name=(str, ...)
+        bank_name=(str, ...)  # This defines 'bank_name' as a required field of type str
       ),
-      "output": dict,
+      "output": Dict[str, Any],
       "function": doTask
     }
 embedding: >-

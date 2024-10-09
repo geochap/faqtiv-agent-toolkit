@@ -317,18 +317,15 @@ async function generateAndExecuteAdhoc(userInput, maxRetries = 5) {
       // Prepare the prompt with error information if available
       let errorContext = "";
       if (errors.length > 0) {
-        errorContext = `Previous attempts failed with the following errors:\n`;
+        errorContext = `This is retry attempt ${retryCount}.\nPrevious errors:\n`;
         errors.forEach((error, index) => {
-          const modifiedError = error.includes("The request cannot be fulfilled using the available functions")
-            ? "Syntax error" // faking a syntax error seems to improve the retry success rate
-            : error;
-          errorContext += `${index + 1}. ${'-'.repeat(40)}\n${modifiedError}\n\n`;
+          errorContext += `${index + 1}. ${'-'.repeat(40)}\n${error}\n\n`;
         });
         
         if (previousCode) {
           errorContext += `Previous code:\n\`\`\`javascript\n${previousCode}\n\`\`\`\n\n`;
         }
-        errorContext += `Please address these issues in your response and improve upon the previous code if provided.`;
+        errorContext += `The previously generated code failed because of these issues, please re-write the code to address them.\nIf the errors are not clear or useful please write the code again based on the instructions and available functions.\nAssume you are more capable than the agent that generated the previous attempt and you can make better decisions.`;
       }
 
       const exampleMessages = relevantExamples.flatMap((example) => [
@@ -339,21 +336,17 @@ async function generateAndExecuteAdhoc(userInput, maxRetries = 5) {
       // Use the generic language model for the completion
       const messages = [
         new SystemMessage("You are a useful technical assistant."),
-        new AIMessage(adhocPromptText),
+        new SystemMessage(adhocPromptText),
         ...exampleMessages,
         new HumanMessage(`${userInput}\n\n${errorContext}`)
       ];
 
       const response = await adhocLLM.invoke(messages);
 
-      if (response.content.includes('The request cannot be fulfilled using the available functions')) {
-        throw new Error(response.content);
-      }
-
       const functionCode = extractFunctionCode(response.content);
 
       if (!functionCode) {
-        throw new Error("Failed to generate function code");
+        throw new Error(`Failed to parse function code: ${response.content}`);
       }
 
       previousCode = functionCode;

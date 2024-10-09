@@ -26,6 +26,8 @@ from langchain.chat_models.base import BaseChatModel
 from langchain.schema import SystemMessage, HumanMessage, AIMessage
 from langchain_core.messages import ToolMessage
 import pyfiglet
+import re
+import ast
 
 EXPECTED_EMBEDDING_DIMENSION = 1536
 
@@ -94,6 +96,7 @@ def get_relevant_examples(query: str, k: int = 10) -> List[Dict]:
     
     return relevant_examples
 
+# todo: do we need to handle warn and error logs?
 async def capture_and_process_output(func, *args, **kwargs):
     f = io.StringIO()
     try:
@@ -149,10 +152,7 @@ def create_tools_from_schemas(schemas: Dict[str, Dict[str, Any]]) -> List[Struct
 # Create tools from schemas
 task_tools = create_tools_from_schemas(task_tool_schemas)
 
-adhoc_promptText = """
-{{ generateAnsweringFunctionPrompt }}
-- Wrap the single doTask function in a python code block
-"""
+adhoc_promptText = """{{ generateAnsweringFunctionPrompt }}"""
 
 # Read the API key and model from environment variables
 api_key = os.getenv('OPENAI_API_KEY')
@@ -161,13 +161,22 @@ model = os.getenv('OPENAI_MODEL')
 # Initialize the adhoc language model
 adhoc_llm: BaseChatModel = ChatOpenAI(model=model)
 
-def extract_function_code(response):
-    # Extract the code block from the response
-    start = response.find("```python")
-    end = response.find("```", start + 1)
-    if start != -1 and end != -1:
-        return response[start+9:end].strip()
-    return None
+def clean_code_block(block):
+    # Remove the opening code block tag and optional language identifier
+    block = re.sub(r'```[\w]*\n?', '', block)
+    # Remove the closing code block tag
+    block = re.sub(r'```\s*$', '', block)
+    return block.strip()
+
+def extract_function_code(input_text, target_function_name='doTask'):
+    cleaned_text = clean_code_block(input_text)
+    tree = ast.parse(cleaned_text)
+    
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == target_function_name:
+            return ast.get_source_segment(cleaned_text, node)
+    
+    return ''
 
 async def execute_generated_function(function_code):
     # Create a temporary module to execute the function
@@ -189,7 +198,8 @@ async def execute_generated_function(function_code):
     
     return result
 
-async def generate_and_execute_adhoc(user_input: str, max_retries: int = 3):
+# Adhoc task execution
+async def generate_and_execute_adhoc(user_input: str, max_retries: int = 5):
     retry_count = 0
     errors = []
     previous_code = None
@@ -197,15 +207,19 @@ async def generate_and_execute_adhoc(user_input: str, max_retries: int = 3):
     # Get relevant examples
     relevant_examples = get_relevant_examples(user_input)
 
-    while retry_count <= max_retries:
+    while retry_count < max_retries:
         try:
             # Prepare the prompt with error information if available
             error_context = ""
             if errors:
-                error_context = f"Previous attempt failed with error: {errors[-1]}\n"
+                error_context = f"This is retry attempt {retry_count}.\nPrevious errors:\n"
+                for index, error in enumerate(errors, 1):
+                    error_context += f"{index}. {'-' * 40}\n{error}\n\n"
+                
                 if previous_code:
-                    error_context += f"Previous code:\n{previous_code}\n"
-                error_context += "Please fix the issue and try again.\n"
+                    error_context += f"Previous code:\n```python\n{previous_code}\n```\n\n"
+                
+                error_context += "The previously generated code failed because of these issues, please re-write the code to address them.\nIf the errors are not clear or useful please write the code again based on the instructions and available functions.\nAssume you are more capable than the agent that generated the previous attempt and you can make better decisions."
             
             example_messages = [
                 {"role": "human" if i % 2 == 0 else "assistant", "content": content}
@@ -215,31 +229,32 @@ async def generate_and_execute_adhoc(user_input: str, max_retries: int = 3):
             
             # Use the generic language model for the completion
             messages = [
-                SystemMessage(content=adhoc_promptText),
+                SystemMessage("You are a useful technical assistant."),
+                SystemMessage(adhoc_promptText),
                 *[HumanMessage(content=msg["content"]) if msg["role"] == "human" else AIMessage(content=msg["content"]) for msg in example_messages],
-                HumanMessage(content=f"{error_context}{user_input}")
+                HumanMessage(content=f"{user_input}\n\n{error_context}")
             ]
             response = await adhoc_llm.agenerate([messages])
-            
+
             function_code = extract_function_code(response.generations[0][0].text)
 
             if not function_code:
-                raise ValueError("Failed to generate function code")
-            if function_code:
-                previous_code = function_code
+                raise ValueError(f"Failed to parse function code: {response.generations[0][0].text}")
+            
+            previous_code = function_code
 
             print("Generated code:", function_code, flush=True)
 
             result = await capture_and_process_output(execute_generated_function, function_code)
-            return result
 
+            return result
         except Exception as e:
             error_message = str(e)
             print(f"Error during execution (attempt {retry_count + 1}): {error_message}", flush=True)
             errors.append(error_message)
             retry_count += 1
 
-            if retry_count > max_retries:
+            if retry_count == max_retries:
                 print(f"Max retries ({max_retries}) reached. Aborting.", flush=True)
                 raise ValueError(f"Max retries reached. Last error: {error_message}")
 
