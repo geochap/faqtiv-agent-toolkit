@@ -46,7 +46,6 @@ async function executeCode(code) {
     const { stdout, stderr } = await executeCodeFn(tempFileName);
     return { stdout, stderr };
   } catch (error) {
-    console.error(error);
     throw error;
   } finally {
     fs.unlinkSync(tempFileName);
@@ -140,7 +139,7 @@ export default async function runAdHocTask(description) {
       createLogFile(description, response.output.code, stdout.toString());
       return result;
     } catch (error) {
-      console.error(`Error during execution (attempt ${retryCount + 1}):`, error);
+      console.error(`Error during execution (attempt ${retryCount + 1}):`, error.message);
       errors.push(error.message);
       retryCount++;
 

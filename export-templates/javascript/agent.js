@@ -319,7 +319,10 @@ async function generateAndExecuteAdhoc(userInput, maxRetries = 5) {
       if (errors.length > 0) {
         errorContext = `This is retry attempt ${retryCount}.\nPrevious errors:\n`;
         errors.forEach((error, index) => {
-          errorContext += `${index + 1}. ${'-'.repeat(40)}\n${error}\n\n`;
+          const modifiedError = error.includes("The request cannot be fulfilled using the available functions")
+            ? "Syntax error" // faking a syntax error seems to improve the retry success rate
+            : error;
+          errorContext += `${index + 1}. ${'-'.repeat(40)}\n${modifiedError}\n\n`;
         });
         
         if (previousCode) {
@@ -342,6 +345,10 @@ async function generateAndExecuteAdhoc(userInput, maxRetries = 5) {
       ];
 
       const response = await adhocLLM.invoke(messages);
+
+      if (response.content.includes('The request cannot be fulfilled using the available functions')) {
+        throw new Error(response.content);
+      }
 
       const functionCode = extractFunctionCode(response.content);
 

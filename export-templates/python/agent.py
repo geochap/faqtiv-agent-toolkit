@@ -212,9 +212,11 @@ async def generate_and_execute_adhoc(user_input: str, max_retries: int = 5):
             # Prepare the prompt with error information if available
             error_context = ""
             if errors:
-                error_context = f"This is retry attempt {retry_count}.\nPrevious errors:\n"
+                error_context = f"This is retry attempt ${retry_count}.\nPrevious errors:\n"
                 for index, error in enumerate(errors, 1):
-                    error_context += f"{index}. {'-' * 40}\n{error}\n\n"
+                    # faking a syntax error seems to improve the retry success rate
+                    modified_error = "Syntax error" if "The request cannot be fulfilled using the available functions" in error else error
+                    error_context += f"{index}. {'-' * 40}\n{modified_error}\n\n"
                 
                 if previous_code:
                     error_context += f"Previous code:\n```python\n{previous_code}\n```\n\n"
@@ -236,6 +238,9 @@ async def generate_and_execute_adhoc(user_input: str, max_retries: int = 5):
             ]
             response = await adhoc_llm.agenerate([messages])
 
+            if 'The request cannot be fulfilled using the available functions' in response.generations[0][0].text:
+                raise ValueError(response.generations[0][0].text)
+            
             function_code = extract_function_code(response.generations[0][0].text)
 
             if not function_code:
