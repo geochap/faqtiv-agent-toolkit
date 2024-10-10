@@ -332,8 +332,8 @@ async function generateAndExecuteAdhoc(userInput, maxRetries = 5) {
       }
 
       const exampleMessages = relevantExamples.flatMap((example) => [
-          new HumanMessage(example.task),
-          new AIMessage(example.code)
+        new HumanMessage(example.task),
+        new AIMessage(example.code)
       ]);
 
       // Use the generic language model for the completion

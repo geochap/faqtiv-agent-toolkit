@@ -28,6 +28,9 @@ from langchain_core.messages import ToolMessage
 import pyfiglet
 import re
 import ast
+import logging
+from logging.handlers import RotatingFileHandler
+from datetime import datetime
 
 EXPECTED_EMBEDDING_DIMENSION = 1536
 
@@ -198,6 +201,82 @@ async def execute_generated_function(function_code):
     
     return result
 
+# Logging
+log_dir = os.path.join(os.getcwd(), 'logs')
+logs_file_path = os.path.join(log_dir, 'app.log')
+error_logs_file_path = os.path.join(log_dir, 'err.log')
+
+os.makedirs(log_dir, exist_ok=True)
+
+class JsonFormatter(logging.Formatter):
+    def format(self, record):
+        log_record = {
+            'timestamp': self.formatTime(record, self.datefmt),
+            'level': record.levelname,
+            'message': record.getMessage(),
+        }
+        if record.exc_info:
+            log_record['exception'] = self.formatException(record.exc_info)
+        return json.dumps(log_record)
+
+app_logger = logging.getLogger('app')
+app_logger.setLevel(logging.INFO)
+app_logger.propagate = False
+
+error_logger = logging.getLogger('error')
+error_logger.setLevel(logging.ERROR)
+error_logger.propagate = False
+
+app_file_handler = RotatingFileHandler(logs_file_path, maxBytes=10*1024*1024, backupCount=5)
+app_file_handler.setFormatter(JsonFormatter())
+app_logger.addHandler(app_file_handler)
+
+error_file_handler = RotatingFileHandler(error_logs_file_path, maxBytes=10*1024*1024, backupCount=5)
+error_file_handler.setFormatter(JsonFormatter())
+error_logger.addHandler(error_file_handler)
+
+def log(command, event, body):
+    app_logger.info(json.dumps({
+        'command': command,
+        'event': event,
+        'body': body
+    }))
+
+def log_err(command, event, body, error):
+    log_error = str(error) if error else None
+    error_logger.error(json.dumps({
+        'command': command,
+        'event': event,
+        'body': body,
+        'error': log_error
+    }))
+
+def create_adhoc_log_file(description, code, result, error=None):
+    timestamp = datetime.now().isoformat().replace(':', '-').replace('.', '-')
+    log_file_name = os.path.join(log_dir, f"adhoc-{timestamp}{'-error' if error else ''}.log")
+    
+    delimiter = '\n\n---\n\n'
+
+    if isinstance(result, dict):
+        pretty_result = json.dumps(result, indent=2)
+    else:
+        try:
+            # Try to parse result as JSON if it's a string
+            pretty_result = json.dumps(json.loads(result), indent=2)
+        except (json.JSONDecodeError, TypeError):
+            # If parsing fails or result is not a string, use it as is
+            pretty_result = str(result)
+
+    log_content = delimiter.join([
+        f"Description: \n\n {description}",
+        f"Code: \n\n {code}",
+        f"Result: \n\n {pretty_result}",
+        f"Error: {error}" if error else ''
+    ])
+
+    with open(log_file_name, 'w') as f:
+        f.write(log_content)
+
 # Adhoc task execution
 async def generate_and_execute_adhoc(user_input: str, max_retries: int = 5):
     retry_count = 0
@@ -251,7 +330,9 @@ async def generate_and_execute_adhoc(user_input: str, max_retries: int = 5):
             print("Generated code:", function_code, flush=True)
 
             result = await capture_and_process_output(execute_generated_function, function_code)
-
+            
+            create_adhoc_log_file(user_input, function_code, result)
+            
             return result
         except Exception as e:
             error_message = str(e)
@@ -261,6 +342,7 @@ async def generate_and_execute_adhoc(user_input: str, max_retries: int = 5):
 
             if retry_count == max_retries:
                 print(f"Max retries ({max_retries}) reached. Aborting.", flush=True)
+                create_adhoc_log_file(user_input, previous_code, '', error=f"Max retries reached. Last error: {error_message}")
                 raise ValueError(f"Max retries reached. Last error: {error_message}")
 
             print(f"Retrying... (attempt {retry_count} of {max_retries})", flush=True)
@@ -290,21 +372,28 @@ async def increase_request_body_size(request: Request, call_next):
 async def run_adhoc_endpoint(request: Request):
     data = await request.json()
     user_input = data["input"]
+    request_id = f"run-adhoc-{uuid.uuid4()}"
+    log('run_adhoc', 'run_adhoc', {'id': request_id, **data})
     
     try:
         result = await generate_and_execute_adhoc(user_input)
         return JSONResponse(content={"result": result})
     except Exception as e:
+        log_err('run_adhoc', 'run_adhoc', {'id': request_id, **data}, e)
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
 @app.post("/run_task/{task_name}")
 async def run_task_endpoint(task_name: str, request: Request):
     data = await request.json()
     args = data.get("args", {})
+    request_id = f"run-task-{uuid.uuid4()}"
+    
+    log('run_task', task_name, {'id': request_id, **data})
     
     valid_task_name = task_name_map.get(task_name, task_name)
     
     if valid_task_name not in globals():
+        log_err('run_task', task_name, {'id': request_id, **data}, 'Not found')
         return {"error": f"Task '{task_name}' not found"}
     
     task_function = globals()[valid_task_name]
@@ -314,6 +403,7 @@ async def run_task_endpoint(task_name: str, request: Request):
         result = await capture_and_process_output(task_function, **args)
         return {"result": result}
     except Exception as e:
+        log_err('run_task', task_name, {'id': request_id, **data}, e)
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
 class Message(BaseModel):
@@ -385,6 +475,17 @@ async def completions_endpoint(request: CompletionRequest):
     max_tokens = request.max_tokens
     temperature = request.temperature
 
+    log_body = {
+        'id': completion_id,
+        'stream': stream,
+        'prompt': messages[-1].content if messages else "",
+        'messageCount': len(messages),
+        'include_tool_messages': include_tool_messages,
+        'max_tokens': max_tokens,
+        'temperature': temperature
+    }
+    log('completions', 'completions', log_body)
+
     print("Completion request: ", messages[-1].content if messages else "", flush=True)
 
     try:
@@ -394,6 +495,7 @@ async def completions_endpoint(request: CompletionRequest):
             return await generate_completion(completion_id, messages, include_tool_messages, max_tokens, temperature)
     except Exception as e:
         print(f"Error during completion: {e}", flush=True)
+        log_err('completions', 'completions', log_body, e)
         raise HTTPException(status_code=500, detail=str(e))
 
 async def process_tool_calls(tool_calls):
@@ -689,6 +791,7 @@ async def stream_completion(completion_id, messages, include_tool_messages, max_
     except Exception as error:
         print(f"Error during streaming: {error}", flush=True)
         traceback.print_exc()
+        log_err('completions', 'completions', {'id': completion_id}, error)
         error_chunk = {
             'id': completion_id,
             'object': 'chat.completion.chunk',
