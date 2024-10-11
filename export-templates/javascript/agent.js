@@ -85,8 +85,23 @@ const TOOL_TIMEOUT = parseInt(process.env.TOOL_TIMEOUT || '60000');
 
 async function captureAndProcessOutput(func, args = []) {
   return new Promise((resolve, reject) => {
-    const customLog = (...args) => {
-      resolve(args.join(' ').trim());
+    const customLog = (arg) => {
+      // Assuming we only need the first argument as tasks return a single object
+      let result = arg;
+
+      if (typeof result === 'string') {
+        try {
+          result = JSON.parse(result);
+        } catch (error) {
+          // If parsing fails, keep it as a string
+          // No need to do anything here as result is already a string
+        }
+      } else {
+        // Convert non-string types to string
+        result = String(result);
+      }
+      
+      resolve(result);
     };
 
     // Create a context object with all the necessary functions and variables
