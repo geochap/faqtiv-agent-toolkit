@@ -81,6 +81,8 @@ async function getRelevantExamples(query, k = 10) {
   return relevantExamples;
 }
 
+const TOOL_TIMEOUT = parseInt(process.env.TOOL_TIMEOUT || '60000');
+
 async function captureAndProcessOutput(func, args = []) {
   return new Promise((resolve, reject) => {
     const customLog = (...args) => {
@@ -115,10 +117,9 @@ async function captureAndProcessOutput(func, args = []) {
       // Execute the function with the provided arguments
       contextFunction(...args).then(resolve).catch(reject);
 
-      // Set a timeout in case customLog is never called
       setTimeout(() => {
-        reject(new Error("Function execution timed out"));
-      }, 30000); // 30 seconds timeout
+        reject(new Error(`Function execution timed out after ${TOOL_TIMEOUT} ms`));
+      }, TOOL_TIMEOUT);
     } catch (error) {
       reject(error);
     }

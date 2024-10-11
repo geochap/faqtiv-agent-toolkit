@@ -99,13 +99,21 @@ def get_relevant_examples(query: str, k: int = 10) -> List[Dict]:
     
     return relevant_examples
 
+TOOL_TIMEOUT = int(os.getenv('TOOL_TIMEOUT', 60000)) / 1000
+
 # todo: do we need to handle warn and error logs?
 async def capture_and_process_output(func, *args, **kwargs):
     f = io.StringIO()
     try:
-        with redirect_stdout(f):
-            result = await func(*args, **kwargs) if asyncio.iscoroutinefunction(func) else func(*args, **kwargs)
-        
+        async def execute():
+            with redirect_stdout(f):
+                if asyncio.iscoroutinefunction(func):
+                    return await func(*args, **kwargs)
+                else:
+                    return func(*args, **kwargs)
+
+        result = await asyncio.wait_for(execute(), timeout=TOOL_TIMEOUT)
+
         output = f.getvalue()
         
         try:
@@ -114,6 +122,9 @@ async def capture_and_process_output(func, *args, **kwargs):
             processed_result = output.strip()
         
         return processed_result
+    except asyncio.TimeoutError:
+        print(f"Execution timed out after {TOOL_TIMEOUT} seconds", file=sys.stderr)
+        raise
     except Exception as e:
         print(f"Error executing tool:", file=sys.stderr)
         traceback.print_exc()
