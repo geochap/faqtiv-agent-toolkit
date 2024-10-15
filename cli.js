@@ -18,7 +18,19 @@ import removeModule from './commands/remove-module.js';
 import listModules from './commands/list-modules.js';
 import setupInterpreter from './commands/setup-interpreter.js';
 import exportStandalone from './commands/export-standalone.js';
+import addFunction from './commands/add-function.js';
+import updateInstructions from './commands/update-instructions.js';
 import serve from './commands/serve.js';
+import listFunctions from './commands/list-functions.js';
+import showInstructions from './commands/show-instructions.js';
+import removeFunction from './commands/remove-function.js';
+import updateFunction from './commands/update-function.js';
+import setEnvVar from './commands/set-env-var.js';
+import removeTask from './commands/remove-task.js';
+import updateTask from './commands/update-task.js';
+import fixTask from './commands/fix-task.js';
+import showTask from './commands/show-task.js';
+import showConfig from './commands/show-config.js';
 
 program
   .version(config.version)
@@ -44,12 +56,12 @@ program
 program
   .command('remove-task <name>')
   .description('Remove a task')
-  .action(() => console.log('Not implemented'));
+  .action(removeTask);
 
 program
   .command('update-task <name> <description>')
   .description('Update a task')
-  .action(() => console.log('Not implemented'));
+  .action(updateTask);
 
 program
   .command('compile-task [taskName]')
@@ -134,6 +146,58 @@ program
   .option('--port <number>', 'Port number for the server', 8000)
   .description('Start a server with run_task and run_adhoc endpoints')
   .action(serve);
+
+program
+  .command('add-function <name> <code>')
+  .description('Add a new function')
+  .action(addFunction);
+
+program
+  .command('remove-function <name>')
+  .description('Remove an existing function')
+  .action(removeFunction);
+
+program
+  .command('update-function <name> <newCode>')
+  .description('Update an existing function')
+  .action(updateFunction);
+
+program
+  .command('list-functions')
+  .option('--json', 'output to json')
+  .description('List existing functions and libs with their code')
+  .action(listFunctions);
+
+program
+  .command('update-instructions <newInstructions>')
+  .description('Update the agent instructions')
+  .action(updateInstructions);
+
+program
+  .command('show-instructions')
+  .description('Display the current agent instructions')
+  .action(showInstructions);
+
+program
+  .command('set-env-var <key> <value>')
+  .description('Add or update an environment variable in .env file')
+  .action(setEnvVar);
+
+program
+  .command('fix-task <taskName> <feedback>')
+  .description('Fix a task based on feedback')
+  .action(fixTask);
+
+program
+  .command('show-task <taskName>')
+  .description('Display the code for a specific task')
+  .action(showTask);
+
+program
+  .command('show-config')
+  .option('--json', 'Output in JSON format')
+  .description('Display the current configuration from faqtiv_config.yml')
+  .action(showConfig);
 
 program
   .on('--help', () => {

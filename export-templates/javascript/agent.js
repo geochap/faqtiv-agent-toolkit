@@ -3,12 +3,19 @@ const { ChatPromptTemplate, MessagesPlaceholder } = require('@langchain/core/pro
 const { ChatOpenAI, OpenAIEmbeddings } = require('@langchain/openai');
 const { AIMessage, HumanMessage, SystemMessage, ToolMessage } = require('@langchain/core/messages');
 const { MemoryVectorStore } = require('langchain/vectorstores/memory');
+const fs = require('fs');
+const path = require('path');
+const { mkdirpSync } = require('mkdirp');
+const log4js = require('log4js');
+const http = require('http');
 const z = require('zod');
 const express = require('express');
 const bodyParser = require('body-parser');
 const { v4: uuidv4 } = require('uuid');
 const readline = require('readline');
 const figlet = require('figlet');
+const { parse } = require('@babel/parser');
+const traverse = require('@babel/traverse').default;
 
 // Agent lib and functions dependencies
 {{ imports }}
@@ -74,17 +81,35 @@ async function getRelevantExamples(query, k = 10) {
   return relevantExamples;
 }
 
+const TOOL_TIMEOUT = parseInt(process.env.TOOL_TIMEOUT || '60000');
+
 async function captureAndProcessOutput(func, args = []) {
   return new Promise((resolve, reject) => {
-    const customLog = (...args) => {
-      resolve(args.join(' ').trim());
+    const customLog = (arg) => {
+      // Assuming we only need the first argument as tasks return a single object
+      let result = arg;
+
+      if (typeof result === 'string') {
+        try {
+          result = JSON.parse(result);
+        } catch (error) {
+          // If parsing fails, keep it as a string
+          // No need to do anything here as result is already a string
+        }
+      } else {
+        // Convert non-string types to string
+        result = String(result);
+      }
+      
+      resolve(result);
     };
 
     // Create a context object with all the necessary functions and variables
     const context = {
       require,
-      console: { log: customLog, warn: console.warn },
+      console: { log: customLog, warn: console.warn, error: console.error },
       // Add all the functions and variables from the local scope that the function might need
+      {{ libsNames }}
       {{ functionNames }}
     };
 
@@ -107,10 +132,9 @@ async function captureAndProcessOutput(func, args = []) {
       // Execute the function with the provided arguments
       contextFunction(...args).then(resolve).catch(reject);
 
-      // Set a timeout in case customLog is never called
       setTimeout(() => {
-        reject(new Error("Function execution timed out"));
-      }, 30000); // 30 seconds timeout
+        reject(new Error(`Function execution timed out after ${TOOL_TIMEOUT} ms`));
+      }, TOOL_TIMEOUT);
     } catch (error) {
       reject(error);
     }
@@ -154,14 +178,19 @@ function createToolsFromSchemas(schemas) {
 // Create tools from schemas
 const taskTools = createToolsFromSchemas(taskToolSchemas);
 
-let adhocPromptText = `
-{{ generateAnsweringFunctionPrompt }}
-- Wrap the single doTask function in a javascript code block
-`;
+let adhocPromptText = `{{ generateAnsweringFunctionPrompt }}`;
 
 // Read the API key and model from environment variables
 const apiKey = process.env.OPENAI_API_KEY;
 const model = process.env.OPENAI_MODEL;
+
+if (!apiKey) {
+  throw new Error("OPENAI_API_KEY environment variable is not set");
+}
+
+if (!model) {
+  throw new Error("OPENAI_MODEL environment variable is not set");
+}
 
 // Initialize the adhoc language model
 const adhocLLM = new ChatOpenAI({
@@ -169,16 +198,129 @@ const adhocLLM = new ChatOpenAI({
   model,
 });
 
-function extractFunctionCode(response) {
-  const start = response.indexOf("```javascript");
-  const end = response.indexOf("```", start + 1);
-  if (start !== -1 && end !== -1) {
-      return response.slice(start + 13, end).trim();
-  }
-  return null;
+// Parsing functions
+function cleanCodeBlock(block) {
+  return block
+    .replace(/```[\w]*\n?/, '') // Remove the opening code block tag and optional language identifier
+    .replace(/```\s*$/, '') // Remove the closing code block tag
+    .trim();
 }
 
-async function generateAndExecuteAdhoc(userInput, maxRetries = 3) {
+function extractFunctionCode(inputText, targetFunctionName = 'doTask') {
+  const cleanedText = cleanCodeBlock(inputText);
+  const ast = parse(cleanedText, {
+    sourceType: "module",
+    plugins: ["asyncGenerators"]
+  });
+  let functionCode = '';
+
+  traverse(ast, {
+    FunctionDeclaration(path) {
+      if (path.node.id.name === targetFunctionName) {
+        functionCode = cleanedText.substring(path.node.start, path.node.end);
+      }
+    },
+    ArrowFunctionExpression(path) {
+      if (path.node.id && path.node.id.name === targetFunctionName) {
+        functionCode = cleanedText.substring(path.node.start, path.node.end);
+      }
+    },
+    FunctionExpression(path) {
+      if (path.node.id && path.node.id.name === targetFunctionName) {
+        functionCode = cleanedText.substring(path.node.start, path.node.end);
+      }
+    },
+  });
+  return functionCode;
+}
+
+// Logging
+const logDir = path.join(process.cwd(), 'logs');
+const logsFilePath = `${logDir}/app.log`;
+const errorLogsFilePath = `${logDir}/err.log`;
+
+mkdirpSync(logDir);
+
+log4js.addLayout('json', function(config) {
+  return function(logEvent) { 
+    return JSON.stringify(logEvent) + config.separator; 
+  }
+});
+
+const log4jsConfig = {
+    appenders: {
+      file: { 
+        type: 'file',
+        filename: logsFilePath,
+        layout: { type: 'json', separator: ',' }
+      },
+      errorFile: {
+        type: 'file',
+        filename: errorLogsFilePath,
+        layout: { type: 'json', separator: ',' }
+      }
+    },
+    categories: {
+      default: { 
+        appenders: ['file'], 
+        level: 'info' 
+      },
+      error: {
+        appenders: ['errorFile'],
+        level: 'error'
+      }
+    }
+};
+log4js.configure(log4jsConfig);
+
+const appLogger = log4js.getLogger('default');
+const log = (command, event, body) => {
+  appLogger.info({
+    command,
+    event,
+    body
+  });
+}
+const logErr = (command, event, body, error) => {
+  const logError = error ? (error.stack || error.toString()) : null;
+  const errorLogger = log4js.getLogger('error');
+
+  errorLogger.error({
+    command,
+    event,
+    body,
+    error: logError
+  });
+}
+
+function createAdhocLogFile(description, code, result, error = null) {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const logFileName = path.join(logDir, `adhoc-${timestamp}${error ? '-error' : ''}.log`);
+  
+  const delimiter = '\n\n---\n\n';
+
+  let prettyResult;
+  try {
+    const parsedResult = JSON.parse(result);
+    prettyResult = JSON.stringify(parsedResult, null, 2);
+  } catch (e) {
+    prettyResult = result;
+  }
+
+  const logContent = [
+    `Description: \n\n ${description}`,
+    delimiter,
+    `Code: \n\n ${code}`,
+    delimiter,
+    `Result: \n\n ${prettyResult}`,
+    error ? `${delimiter}Error: ${error.stack}` : ''
+  ].join('');
+
+  fs.writeFileSync(logFileName, logContent);
+}
+
+// Adhoc task execution
+async function generateAndExecuteAdhoc(userInput, maxRetries = 5) {
   let retryCount = 0;
   const errors = [];
   let previousCode = null;
@@ -186,53 +328,72 @@ async function generateAndExecuteAdhoc(userInput, maxRetries = 3) {
   // Get relevant examples
   const relevantExamples = await getRelevantExamples(userInput);
 
-  while (retryCount <= maxRetries) {
+  while (retryCount < maxRetries) {
     try {
       // Prepare the prompt with error information if available
       let errorContext = "";
       if (errors.length > 0) {
-          errorContext = `Previous attempt failed with error: ${errors[errors.length - 1]}\n`;
-          if (previousCode) {
-            errorContext += `Previous code:\n${previousCode}\n`;
-          }
-          errorContext += "Please fix the issue and try again.\n";
+        errorContext = `This is retry attempt ${retryCount}.\nPrevious errors:\n`;
+        errors.forEach((error, index) => {
+          const modifiedError = error.includes("The request cannot be fulfilled using the available functions")
+            ? "Syntax error" // faking a syntax error seems to improve the retry success rate
+            : error;
+          errorContext += `${index + 1}. ${'-'.repeat(40)}\n${modifiedError}\n\n`;
+        });
+        
+        if (previousCode) {
+          errorContext += `Previous code:\n\`\`\`javascript\n${previousCode}\n\`\`\`\n\n`;
+        }
+        errorContext += `The previously generated code failed because of these issues, please re-write the code to address them.\nIf the errors are not clear or useful please write the code again based on the instructions and available functions.\nAssume you are more capable than the agent that generated the previous attempt and you can make better decisions.`;
       }
 
       const exampleMessages = relevantExamples.flatMap((example) => [
-          new HumanMessage(example.task),
-          new AIMessage(example.code)
+        new HumanMessage(example.task),
+        new AIMessage(example.code)
       ]);
 
       // Use the generic language model for the completion
       const messages = [
+        new SystemMessage("You are a useful technical assistant."),
         new SystemMessage(adhocPromptText),
         ...exampleMessages,
-        new HumanMessage(`${errorContext}${userInput}`)
+        new HumanMessage(`${userInput}\n\n${errorContext}`)
       ];
 
       const response = await adhocLLM.invoke(messages);
 
+      if (response.content.includes('The request cannot be fulfilled using the available functions')) {
+        throw new Error(response.content);
+      }
+
       const functionCode = extractFunctionCode(response.content);
 
       if (!functionCode) {
-        throw new Error("Failed to generate function code");
+        throw new Error(`Failed to parse function code: ${response.content}`);
       }
 
       previousCode = functionCode;
 
       console.log("Generated code:", functionCode);
 
-      return await captureAndProcessOutput(functionCode);
+      const result = await captureAndProcessOutput(functionCode);
+      
+      createAdhocLogFile(userInput, functionCode, result);
+      
+      return result;
     } catch (e) {
       const errorMessage = e.message;
       console.error(`Error during execution (attempt ${retryCount + 1}): ${errorMessage}`);
       errors.push(errorMessage);
       retryCount++;
 
-      if (retryCount > maxRetries) {
+      if (retryCount === maxRetries) {
         console.error(`Max retries (${maxRetries}) reached. Aborting.`);
+        createAdhocLogFile(userInput, previousCode, '', new Error(`Max retries reached. Last error: ${errorMessage}`));
         throw new Error(`Max retries reached. Last error: ${errorMessage}`);
       }
+
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       console.log(`Retrying... (attempt ${retryCount} of ${maxRetries})`);
     }
@@ -245,7 +406,7 @@ async function generateAndExecuteAdhoc(userInput, maxRetries = 3) {
 // http agent
 
 const app = express();
-app.use(bodyParser.json());
+app.use(bodyParser.json({limit: '10mb'}));
 
 // Enable CORS
 app.use((req, res, next) => {
@@ -257,6 +418,9 @@ app.use((req, res, next) => {
 
 // Run adhoc task endpoint
 app.post('/run_adhoc', async (req, res) => {
+  const requestId = `run-adhoc-${uuidv4()}`;
+  log('run_adhoc', 'run_adhoc', { id: requestId, ...req.body });
+
   try {
     const { input } = req.body;
     let result = await generateAndExecuteAdhoc(input);
@@ -267,6 +431,7 @@ app.post('/run_adhoc', async (req, res) => {
 
     res.json({ result });
   } catch (error) {
+    logErr('run_adhoc', 'run_adhoc', { id: requestId, ...req.body }, error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -275,10 +440,14 @@ app.post('/run_adhoc', async (req, res) => {
 app.post('/run_task/:taskName', async (req, res) => {
   const { taskName } = req.params;
   const args = req.body.args || {};
+  const requestId = `run-task-${uuidv4()}`;
+
+  log('run_task', taskName, { id: requestId, ...req.body });
 
   const validTaskName = taskNameMap[taskName] || taskName;
 
   if (typeof taskFunctions[validTaskName] !== 'function') {
+    logErr('run_task', taskName, req.body, 'Not found');
     return res.status(404).json({ error: `Task '${taskName}' not found` });
   }
 
@@ -287,6 +456,7 @@ app.post('/run_task/:taskName', async (req, res) => {
     const result = await captureAndProcessOutput(taskFunctions[validTaskName], Object.values(args));
     res.json({ result });
   } catch (error) {
+    logErr('run_task', taskName, { id: requestId, ...req.body }, error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -312,13 +482,6 @@ const completionTools = [
   ...taskTools
 ];
 
-// Initialize OpenAI LLM for completion agent
-const completionLLM = new ChatOpenAI({
-  apiKey,
-  model,
-})
-.bindTools(completionTools);
-
 const completionPromptText = `{{ getAssistantInstructionsPrompt }}`;
 
 const completionPrompt = ChatPromptTemplate.fromMessages(
@@ -328,10 +491,25 @@ const completionPrompt = ChatPromptTemplate.fromMessages(
   ]
 );
 
-const completionChain = completionPrompt.pipe(completionLLM);
-
 app.post('/completions', async (req, res) => {
-  const { stream = false, messages } = req.body;
+  const { 
+    stream, 
+    messages, 
+    include_tool_messages,
+    max_tokens,
+    temperature
+  } = req.body;
+  const completionId = `cmpl-${uuidv4()}`;
+  const logBody = {
+    id: completionId,
+    stream,
+    prompt: messages.length > 0 ? messages[messages.length - 1].content : "",
+    messageCount: messages.length, 
+    include_tool_messages, 
+    max_tokens, 
+    temperature 
+  };
+  log('completions', 'completions', logBody);
 
   console.log("Completion request: ", messages.length > 0 ? messages[messages.length - 1].content : "")
 
@@ -341,16 +519,17 @@ app.post('/completions', async (req, res) => {
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
     });
-    for await (const chunk of streamCompletion(messages)) {
+    for await (const chunk of streamCompletion(completionId, messages, include_tool_messages, max_tokens, temperature)) {
       res.write(`data: ${JSON.stringify(chunk)}\n\n`);
     }
     res.write('data: [DONE]\n\n');
     res.end();
   } else {
     try {
-      const result = await generateCompletion(req.body);
+      const result = await generateCompletion(completionId, messages, include_tool_messages, max_tokens, temperature);
       res.json(result);
     } catch (error) {
+      logErr('completions', 'completions', logBody, error);
       res.status(500).json({ error: error.message });
     }
   }
@@ -372,20 +551,24 @@ async function processToolCalls(toolCalls) {
     if (tool) {
       try {
         const toolResult = await tool.func(JSON.parse(toolCall.function.arguments));
+        console.warn("Tool result:", toolResult);
         toolMessages.push(new ToolMessage({
           content: JSON.stringify({
             type: "tool_result",
             result: toolResult
           }),
+          name: toolCall.function.name,
           tool_call_id: toolCall.id,
         }));
       } catch (error) {
         const errorMessage = `Error in tool '${toolCall.function.name}': ${error.message}`;
+        console.warn("Error in tool:", errorMessage);
         toolMessages.push(new ToolMessage({
           content: JSON.stringify({
             type: "tool_result",
             result: { error: errorMessage }
           }),
+          name: toolCall.function.name,
           tool_call_id: toolCall.id,
         }));
       }
@@ -396,6 +579,7 @@ async function processToolCalls(toolCalls) {
           type: "tool_result",
           result: { error: "Tool not found" }
         }),
+        name: toolCall.function.name,
         tool_call_id: toolCall.id,
       }));
     }
@@ -403,12 +587,62 @@ async function processToolCalls(toolCalls) {
   return toolMessages;
 }
 
-async function generateCompletion(request) {
-  const currentTime = Math.floor(Date.now() / 1000);
-  const completionId = `cmpl-${uuidv4()}`;
+function getConversationFromMessagesRequest(messages) {
+  return messages.map(msg => {
+    if (msg.role === 'user') {
+      return new HumanMessage(msg.content);
+    } else if (msg.role === 'assistant') {
+      if (msg.tool_calls) {
+        return new AIMessage({
+          content: msg.content,
+          additional_kwargs: { tool_calls: msg.tool_calls }
+        });
+      } else {
+        return new AIMessage(msg.content);
+      }
+    } else if (msg.role === 'tool') {
+      return new ToolMessage({
+        content: msg.content,
+        tool_call_id: msg.tool_call_id,
+        name: msg.name
+      });
+    } else if (msg.role === 'system') {
+      return new SystemMessage(msg.content);
+    }
+  });
+}
 
-  let conversation = request.messages.map(msg => ({ role: msg.role, content: msg.content }));
+function convertAIMessageToOpenAIFormat(aiMessage) {
+  return {
+    role: 'assistant',
+    content: aiMessage.content,
+    tool_calls: aiMessage.additional_kwargs.tool_calls
+  };
+}
+
+function convertToolMessageToOpenAIFormat(toolMessage) {
+  return {
+    role: 'tool',
+    name: toolMessage.name,
+    tool_call_id: toolMessage.tool_call_id,
+    content: toolMessage.content
+  };
+}
+
+async function generateCompletion(completionId, messages, includeToolMessages = false, maxTokens, temperature) {
+  const llm = new ChatOpenAI({
+    apiKey,
+    model,
+    maxTokens,
+    temperature
+  }).bindTools(completionTools);
+  const completionChain = completionPrompt.pipe(llm);
+
+  const currentTime = Math.floor(Date.now() / 1000);
+
+  let conversation = getConversationFromMessagesRequest(messages);
   let finalContent = '';
+  const toolResultsMessages = [];
 
   const processRequest = async (inputData) => {
     try {
@@ -447,6 +681,7 @@ async function generateCompletion(request) {
       if (result.additional_kwargs && result.additional_kwargs.tool_calls && result.additional_kwargs.tool_calls.length > 0) {
         const toolMessages = await processToolCalls(result.additional_kwargs.tool_calls);
         conversation = conversation.concat(toolMessages);
+        toolResultsMessages.push(...toolMessages);
       } else {
         finalContent = result.content;
       }
@@ -456,7 +691,7 @@ async function generateCompletion(request) {
     }
   }
 
-  return {
+  const response = {
     id: completionId,
     object: 'chat.completion',
     created: currentTime,
@@ -470,14 +705,47 @@ async function generateCompletion(request) {
         },
         finish_reason: 'stop',
       },
-    ],
+    ]
   };
+
+  if (includeToolMessages) {
+    const tool_messages = [];
+    for (const message of toolResultsMessages) {
+      let openAIMessage;
+      if (message instanceof AIMessage) {
+        openAIMessage = convertAIMessageToOpenAIFormat(message);
+      } else if (message instanceof ToolMessage) {
+        openAIMessage = convertToolMessageToOpenAIFormat(message);
+      }
+
+      if (openAIMessage) {
+        const messageChunk = {
+          id: completionId,
+          object: 'chat.completion.chunk',
+          created: currentTime,
+          model,
+          choices: [{ index: 0, delta: openAIMessage, finish_reason: null }],
+        };
+        tool_messages.push(messageChunk);
+      }
+    }
+    response.tool_messages = tool_messages;
+  }
+
+  return response;
 }
 
-async function* streamCompletion(messages) {
+async function* streamCompletion(completionId, messages, includeToolMessages = false, maxTokens, temperature) {
+  const llm = new ChatOpenAI({
+    apiKey,
+    model,
+    maxTokens,
+    temperature
+  }).bindTools(completionTools);
+  const completionChain = completionPrompt.pipe(llm);
+
   const currentTime = Math.floor(Date.now() / 1000);
-  const completionId = `cmpl-${uuidv4()}`;
-  let conversation = messages.map(msg => ({ role: msg.role, content: msg.content }));
+  let conversation = getConversationFromMessagesRequest(messages);
 
   const processRequest = async function* (inputData) {
     try {
@@ -515,9 +783,23 @@ async function* streamCompletion(messages) {
   };
 
   try {
+    let insertNewline = false; // Flag to determine if a newline should be inserted
     while (true) {
       let hasToolCalls = false;
       for await (const event of processRequest({ conversation })) {
+        if (insertNewline) {
+          // Insert a newline before processing new tokens
+          const newlineChunk = {
+            id: completionId,
+            object: 'chat.completion.chunk',
+            created: currentTime,
+            model,
+            choices: [{ index: 0, delta: { role: 'assistant', content: '\n' }, finish_reason: null }],
+          };
+          yield newlineChunk;
+          insertNewline = false; // Reset the flag after inserting newline
+        }
+
         if (event.event === 'on_chat_model_stream') {
           const content = event.data.chunk.content;
           if (content) {
@@ -536,6 +818,30 @@ async function* streamCompletion(messages) {
             const toolMessages = await processToolCalls(toolCalls);
             conversation = conversation.concat(toolMessages);
             hasToolCalls = true;
+            insertNewline = true; // Set flag to insert newline before next tokens
+
+            // Include tool messages only if includeToolMessages is true
+            if (includeToolMessages) {
+              for (const message of toolMessages) {
+                let openAIMessage;
+                if (message instanceof AIMessage) {
+                  openAIMessage = convertAIMessageToOpenAIFormat(message);
+                } else if (message instanceof ToolMessage) {
+                  openAIMessage = convertToolMessageToOpenAIFormat(message);
+                }
+
+                if (openAIMessage) {
+                  const messageChunk = {
+                    id: completionId,
+                    object: 'chat.completion.chunk',
+                    created: currentTime,
+                    model,
+                    choices: [{ index: 0, delta: openAIMessage, finish_reason: null }],
+                  };
+                  yield messageChunk;
+                }
+              }
+            }
           } else {
             const tokenChunk = {
               id: completionId,
@@ -553,6 +859,7 @@ async function* streamCompletion(messages) {
     }
   } catch (error) {
     console.error(`Error during streaming: ${error}`);
+    logErr('completions', 'completions', { id: completionId }, error);
     const errorChunk = {
       id: completionId,
       object: 'chat.completion.chunk',
@@ -620,13 +927,43 @@ async function cliAgent() {
   }
 }
 
+function shutdownServer(server) {
+  return new Promise((resolve) => {
+    server.close(() => {
+      console.log('Server shut down gracefully');
+      resolve();
+    });
+  });
+}
+
 if (require.main === module) {
   console.log(figlet.textSync("FAQtiv"));
 
   const args = process.argv.slice(2);
   if (args.includes('--http')) {
     const port = process.env.PORT || 8000;
-    app.listen(port, () => {
+    const shutdownKey = process.env.SHUTDOWN_KEY;
+
+    const server = http.createServer(app);
+
+    if (shutdownKey) {
+      app.post('/shutdown', (req, res) => {
+        const { key } = req.body;
+
+        console.log('Received shutdown request');
+
+        if (key === shutdownKey) {
+          res.status(200).send('Shutting down server');
+          shutdownServer(server).then(() => {
+            process.exit(0);
+          });
+        } else {
+          res.status(403).send('Invalid shutdown key');
+        }
+      });
+    }
+
+    server.listen(port, () => {
       console.log(`HTTP server running on port ${port}`);
     });
   } else {

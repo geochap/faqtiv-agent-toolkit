@@ -2,9 +2,10 @@ import { exec } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import chokidar from 'chokidar';
-import net from 'net';
 import * as config from '../config.js';
 import exportStandalone from './export-standalone.js';
+import { v4 as uuidv4 } from 'uuid';
+import axios from 'axios';
 
 const { runtimeName, codeFileExtension } = config.project.runtime;
 
@@ -74,10 +75,13 @@ export default async function serve(options) {
   }
 
   let serverProcess;
+  let shutdownKey;
 
   async function startServer() {
     console.log('Starting the standalone agent server...');
     const agentPath = path.join(tmpDir, `agent${codeFileExtension}`);
+    
+    shutdownKey = uuidv4();
     
     let agentCommand;
     if (runtimeName === 'python') {
@@ -94,7 +98,8 @@ export default async function serve(options) {
         ...process.env,
         OPENAI_API_KEY: config.openai.apiKey,
         OPENAI_MODEL: config.openai.model,
-        PORT: port.toString()
+        PORT: port.toString(),
+        SHUTDOWN_KEY: shutdownKey
       },
       cwd: tmpDir,
       shell: true
@@ -118,11 +123,18 @@ export default async function serve(options) {
   async function restartServer() {
     if (serverProcess) {
       console.log('Stopping the current server...');
-      serverProcess.kill('SIGKILL');
+      try {
+        console.log(`http://localhost:${port}/shutdown`);
+        await axios.post(`http://localhost:${port}/shutdown`, { key: shutdownKey });
+      } catch (error) {
+        console.error('Error stopping server:', error.message);
+        process.exit(1);
+      }
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
 
     console.log('Re-exporting the agent...');
+    config.loadConfig(); // reload config files
     await exportStandalone(tmpDir, { silent: true });
 
     await startServer();
@@ -131,12 +143,21 @@ export default async function serve(options) {
   // Setup live reload
   const watchPaths = [
     path.join(config.project.codeDir, `**/*${codeFileExtension}`),
-    path.join(config.project.metadataDir, '**/*.yml')
+    path.join(config.project.functionsDir, `**/*${codeFileExtension}`),
+    path.join(config.project.libsDir, `**/*${codeFileExtension}`),
+    path.join(config.project.metadataDir, '**/*.yml'),
+    path.join(config.project.rootDir, '.env'),
+    path.join(config.project.rootDir, 'instructions.txt'),
+    path.join(config.project.rootDir, 'assistant_instructions.txt'),
+    path.join(config.project.rootDir, 'faqtiv_config.yml')
   ];
 
   const watcher = chokidar.watch(watchPaths, {
-    ignored: /(^|[\/\\])\../, // ignore dotfiles
-    persistent: true
+    ignored: /(^|[\/\\])\.(?!env$)/,
+    persistent: true,
+    ignoreInitial: true,
+    usePolling: true,
+    interval: 1000
   });
 
   watcher.on('change', async (path) => {

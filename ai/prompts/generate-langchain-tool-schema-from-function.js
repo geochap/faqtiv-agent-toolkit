@@ -29,8 +29,14 @@ const examplesByRuntime = {
 };
 
 const runtimeInstructions = {
-  'python': `- In args_schema for any third party types, use the type by providing the correct import.`,
-  'javascript': ''
+  'python': `
+- In args_schema for any third party types, use the type by providing the correct import.
+- For the function use the function name.
+`,
+  'javascript': `
+- Make sure the schema property is a valid Zod schema object.
+- For func use the function name.
+`
 };
 
 
@@ -49,7 +55,6 @@ Generate a langchain tool schema for this function applying the following criter
 
 - Fill in the signature components as best as you can based on the doTask and its function dependencies.
 - For the tool name use ${taskName}.
-- For the function use the function name.
 - For the model name use create a model name from the tool name.
 - For the function description keep as short as possible without leaving out any important details, do not mention stdout or console.
 - Include a returns_description code doc property that must describe the return type as thoroughly as possible so to the best of your abilities infer the types from the code, for example "array" or "object" are not acceptable types unless their items or content properties are defined.

@@ -17,6 +17,10 @@ This is a standalone version of a FAQtiv agent. It includes all the necessary co
    export OPENAI_MODEL=gpt-4o
    ```
 
+### Other environment variables
+
+- `TOOL_TIMEOUT`: The timeout for tool execution in milliseconds. Defaults to 60000 (60 seconds).
+
 ## Running the Agent
 
 You can run the agent in two modes:

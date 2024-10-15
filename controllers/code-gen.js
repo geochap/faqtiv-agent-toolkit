@@ -148,7 +148,10 @@ export async function generateAdHocResponse(vectorStore, conversation, retryCoun
   if (retryCount > 0) {
     let retryMessage = `
       This is retry attempt ${retryCount}.
-      Previous errors: ${retryErrors.join('\n\n')}.
+      Previous errors:
+      ${retryErrors.map((error, index) => {
+        return `\n${index + 1}. ${'-'.repeat(40)}\n${error}`;
+      }).join('\n')}
     `;
 
     if (previousCode) {
@@ -161,10 +164,12 @@ export async function generateAdHocResponse(vectorStore, conversation, retryCoun
     }
 
     retryMessage += `
-      Please address these issues in your response and improve upon the previous code if provided.
+      The previously generated code failed because of these issues, please re-write the code to address them.
+      If the errors are not clear or useful please write the code again based on the instructions and available functions.
+      Assume you are more capable than the agent that generated the previous attempt and you can make better decisions.
     `;
 
-    conversation.push({ role: 'system', message: retryMessage });
+    conversation[conversation.length - 1].message = `${conversation[conversation.length - 1].message}\n\n${retryMessage}`;
   }
 
   const response = await aiAgent.generateResponse(conversation, examples, true);

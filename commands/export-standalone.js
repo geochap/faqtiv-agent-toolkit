@@ -8,6 +8,8 @@ import { getAssistantInstructionsPrompt } from '../ai/prompts/assistant-instruct
 import * as config from '../config.js';
 import { getAllFiles } from '../lib/file-utils.js';
 import { extractFunctionCode } from '../lib/parse-utils.js';
+import { getOutdatedItems } from './migrate-dry.js';
+import { headersUpToDate } from './update-headers.js';
 
 const { runtimeName, codeFileExtension } = config.project.runtime;
 const { codeDir, metadataDir, tasksDir } = config.project;
@@ -16,13 +18,13 @@ const exportDependencies = {
   python: [
     'faiss-cpu==1.8.0.post1',
     'fastapi==0.112.0',
-    'langchain==0.2.12',
-    'langchain-community==0.2.11',
-    'langchain-core==0.2.28',
-    'langchain-openai==0.1.20',
-    'langchain-text-splitters==0.2.2',
+    'langchain==0.3.3',
+    'langchain-community==0.3.2',
+    'langchain-core==0.3.10',
+    'langchain-openai==0.2.2',
+    'langchain-text-splitters==0.3.0',
     'numpy==1.26.4',
-    'openai==1.38.0',
+    'openai==1.51.2',
     'pydantic==2.8.2',
     'pydantic_core==2.20.1',
     'requests==2.32.3',
@@ -30,15 +32,20 @@ const exportDependencies = {
     'pyfiglet==1.0.2'
   ],
   javascript: {
-    "@langchain/core": "^0.2.31",
-    "@langchain/openai": "^0.2.8",
+    "@langchain/core": "^0.3.0",
+    "@langchain/openai": "^0.3.0",
     "body-parser": "^1.20.2",
-    "exceljs": "^4.4.0",
     "express": "^4.19.2",
-    "langchain": "^0.2.17",
+    "langchain": "^0.3.0",
     "zod": "^3.23.8",
     "uuid": "^10.0.0",
-    "figlet": "^1.7.0"
+    "figlet": "^1.7.0",
+    "@babel/core": "^7.24.5",
+    "@babel/parser": "^7.24.5",
+    "@babel/preset-env": "^7.24.5",
+    "@babel/traverse": "^7.24.5",
+    "log4js": "^6.9.1",
+    "mkdirp": "^3.0.1"
   }
 };
 
@@ -151,19 +158,25 @@ function getDependenciesFile(runtimeName, existingDependencies) {
 
 export default async function exportStandalone(outputDir = process.cwd(), options = {}) {
   const { silent = false } = options;
-  const log = silent ? () => {} : console.error;
+  const log = silent ? () => {} : console.log;
 
   const { instructions, assistantInstructions, libs, functions, functionsHeader } = config.project;
 
   if (!runtimeConfigs[runtimeName]) {
-    log(`Standalone export is not supported for ${runtimeName}.`);
-    return;
+    console.error(`Error: Standalone export is not supported for ${runtimeName}.`);
+    process.exit(1);
+  }
+
+  if (outputDir !== process.cwd() && !fs.existsSync(outputDir)) {
+    console.error(`Error: The specified output directory does not exist: ${outputDir}`);
+    process.exit(1);
   }
 
   const runtimeConfig = runtimeConfigs[runtimeName];
   const functionsCode = functions.map(f => f.code);
-  const functionsName = functions.map(f => f.name);
+  const functionsNames = functions.map(f => f.name);
   const libsCode = libs.map(l => l.code);
+  const libsNames = libs.map(f => f.name);
   const imports = [...new Set(libs.concat(functions).flatMap(f => f.imports))];
   const { taskFunctions, taskNameMap, taskToolSchemas, taskFunctionNames } = getTaskFunctions();
   const examples = getExamples();
@@ -190,14 +203,19 @@ export default async function exportStandalone(outputDir = process.cwd(), option
   const templateData = {
     imports: imports.join('\n'),
     libs: libsCode.join('\n'),
+    libsNames: libsNames.length > 0 ? libsNames.join(',\n') + ',' : '',
     functions: functionsCode.join('\n'),
-    functionNames: functionsName.join(',\n'),
+    functionNames: functionsNames.length > 0 ? functionsNames.join(',\n') + ',' : '',
     taskNameMap: JSON.stringify(taskNameMap, null, 2),
     tasks: taskFunctions.join('\n\n'),
     taskToolSchemas: taskToolSchemas.join(',\n'),
     examples: JSON.stringify(examples, null, 2),
-    generateAnsweringFunctionPrompt: generateAnsweringFunctionPrompt(instructions, functionsHeader.signatures, true),
-    getAssistantInstructionsPrompt: getAssistantInstructionsPrompt(assistantInstructions, instructions),
+    generateAnsweringFunctionPrompt: runtimeName === 'javascript' 
+      ? generateAnsweringFunctionPrompt(instructions, functionsHeader.signatures, true).replace(/`/g, '\\`')
+      : generateAnsweringFunctionPrompt(instructions, functionsHeader.signatures, true),
+    getAssistantInstructionsPrompt: runtimeName === 'javascript'
+      ? getAssistantInstructionsPrompt(assistantInstructions).replace(/`/g, '\\`')
+      : getAssistantInstructionsPrompt(assistantInstructions),
     installCommand: runtimeConfig.installCommand,
     cliAgentCommand: runtimeConfig.cliCommand,
     httpServerCommand: runtimeConfig.httpCommand,
@@ -206,9 +224,13 @@ export default async function exportStandalone(outputDir = process.cwd(), option
 
   // Function to replace placeholders in templates
   function replacePlaceholders(template, data) {
-    return Object.entries(data).reduce((acc, [key, value]) => {
-      return acc.replace(new RegExp(`{{\\s*${key}\\s*}}`, 'g'), value);
-    }, template);
+    let result = template;
+    for (const [key, value] of Object.entries(data)) {
+      // Split the template at the placeholder and join with the value
+      const placeholder = `{{ ${key} }}`;
+      result = result.split(placeholder).join(value);
+    }
+    return result;
   }
 
   // Generate files from templates
@@ -225,4 +247,15 @@ export default async function exportStandalone(outputDir = process.cwd(), option
   log(`- ${runtimeConfig.agentFile}`);
   log(`- ${runtimeConfig.dependenciesFile}`);
   log('- README.md');
+
+  // Check headers up to date
+  if (!headersUpToDate()) {
+    console.warn('WARNING: Function headers are out of date, this could cause unexpected issues with the exported agent. It is recommended to run "faqtiv update-headers" before exporting.');
+  }
+
+  // Check for pending migrations
+  const pendingMigrations = getOutdatedItems();
+  if (pendingMigrations.length > 0) {
+    console.warn('WARNING: There are pending task migrations, this could cause unexpected issues with the exported agent. It is recommended to run "faqtiv migrate-tasks" before exporting.');
+  }
 }

@@ -88,8 +88,8 @@ async function updateMetadata(taskName, codeFile) {
   const metadata = yaml.load(fs.readFileSync(metadataFilePath, 'utf8'));
 
   const usedFunctions = extractFunctionNames(doTaskCode);
-  const functionDependencies = getFunctionDependencies(null, usedFunctions, config.project.functions);
-  const taskSchema = await generateTaskSchema(taskName, doTaskCode);
+  const functionDependencies = getFunctionDependencies(usedFunctions, config.project.functions);
+  const taskSchema = await generateTaskSchema(doTaskCode, taskName);
 
   metadata.output.functions = functionDependencies;
   metadata.output.task_schema = taskSchema;
@@ -147,18 +147,23 @@ export async function migrateTask(options) {
   const migrationItems = getOutdatedItems();
 
   if (migrationItems.length == 0) {
-    console.log('No outdated tasks to migrate');
+    console.error('No outdated tasks to migrate');
     process.exit(1);
   }
 
   const needToRecompile = migrationItems.filter(i => i.reasons.functionsAreNewerThanCode || i.reasons.libsAreNewerThanCode);
   const needToUpdateMetadata = migrationItems.filter(i => i.reasons.codeIsNewerThanMetadada);
 
-  // First update metadata as these could include examples used for compilation
-  for (let t of needToUpdateMetadata) {
+  // Separate tasks that only need metadata update
+  const onlyUpdateMetadata = needToUpdateMetadata.filter(item => !needToRecompile.some(r => r.taskName === item.taskName));
+
+  // Update metadata for tasks that don't need recompilation
+  for (let t of onlyUpdateMetadata) {
+    console.log(`Updating metadata for ${t.taskName}...`);
     await updateMetadata(t.taskName, t.file);
+    console.log('done');
   }
-  if (needToUpdateMetadata.length > 0) console.log(`Updated metadata for ${needToUpdateMetadata.length} tasks`);
+  if (onlyUpdateMetadata.length > 0) console.log(`Updated metadata for ${onlyUpdateMetadata.length} tasks`);
 
   if (needToRecompile.length > 0) {
     const vectorStore = await initializeVectorStore();
@@ -169,10 +174,12 @@ export async function migrateTask(options) {
         content: fs.readFileSync(path.join(tasksDir, item.file.relativePath.replace(codeFileExtension, '.txt')), 'utf8')
       };
 
-      console.log(`Migrating ${task.name}...`);
+      console.log(`Recompiling ${task.name}...`);
       const result = await processTask(vectorStore, task);
       writeResult(task, result, false);
+      console.log('done');
     }
+    console.log(`Recompiled ${needToRecompile.length} tasks`);
   }
 }
 
@@ -200,7 +207,7 @@ async function compileTask(taskName) {
   const task = getTask(taskName);
   
   if (!task) {
-    console.log(`Task "${taskName}" doesn't exist`);
+    console.error(`Task "${taskName}" doesn't exist`);
     process.exit(1);
   }
 
@@ -217,13 +224,13 @@ export default async function(taskName, options) {
     const headersUpdated = headersUpToDate();
 
     if (!headersUpdated) {
-      console.log('The functions header is outdated. Please run `faqtiv update-headers` to reflect recent changes in function files.');
+      console.error('The functions header is outdated. Please run `faqtiv update-headers` to reflect recent changes in function files.');
       process.exit(1);
     }
     const compileAll = options.all;
 
     if (!taskName && !compileAll) {
-      console.log('Please provide a task name or use the --all option');
+      console.error('Please provide a task name or use the --all option');
       process.exit(1);
     }
 

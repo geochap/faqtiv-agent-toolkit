@@ -8,7 +8,8 @@ const configPath = path.join('faqtiv_config.yml');
 
 async function uninstallJSModules(name) {
   return await new Promise((resolve, reject) => {
-    const npmCommand = `${config.project.runtime.packageManager} uninstall ${name}`;
+    const installCommand = config.project.runtime.packageManager === 'npm' ? 'uninstall' : 'remove';
+    const npmCommand = `${config.project.runtime.packageManager} ${installCommand} ${name}`;
     
     // Run npm install --save for the module
     exec(npmCommand, (error, stdout, stderr) => {
@@ -67,7 +68,7 @@ async function uninstallPythonModules(name) {
 
 export default async function removeModule(name) {
   if (!fs.existsSync(configPath)) {
-    console.log('faqtiv_config.yml not found');
+    console.error('faqtiv_config.yml not found');
     process.exit(1);
   }
 
@@ -104,6 +105,7 @@ export default async function removeModule(name) {
       process.exit(1);
     }
   } else {
+    console.error(`Failed to uninstall module "${name}"`);
     process.exit(1);
   }
 }

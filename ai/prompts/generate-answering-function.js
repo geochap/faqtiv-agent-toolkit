@@ -14,12 +14,16 @@ const runtimeInstructions = {
 const basePrompt = `
 You have these globally available public functions:
 
+\`\`\`
 {{functionsSignatures}}
+\`\`\`
 
 Using only these functions execute the following instructions:
 
 In a codeblock at the top of your response write a ${runtimeName} function called doTask that fulfills the given requirements:
 
+- Your only task is to write code for doTask and return the code with no text before or after it.
+- You are limited to using only the functions described above and the data they return, otherwise reply with "The request cannot be fulfilled using the available functions".
 - When calling the functions only use parameters included in the function definition and be careful to use await only if the function is async.
 - Your answer is limited to a single function that only calls the public functions described above, do not use any other functions not included in this set but you don't need to use all of them.
 - If you need to import any dependencies for your doTask code always do so inside the doTask function.
@@ -27,12 +31,14 @@ In a codeblock at the top of your response write a ${runtimeName} function calle
 - If there are no errors doTask must always finish by writing its result as JSON to stdout.
 - Never output anything else to stdout, any messages if needed should be included in the resulting JSON.
 - Do not include any comments or documentation in your code, only the code is needed.
-- If the code can not be generated using the available functions provide this plain text error with no additional formatting: "The request cannot be fulfilled using the available functions".
+- Remember that you can write code to process the function results to filter or summarize them as needed if the function results are not what is needed.
+- If none of the examples given to you are useful for generating the doTask function, generate the code to best of your ability based on the instructions and the available functions.
 ${runtimeInstructions[runtimeName]}
 `;
 
 const adHocPrompt = `
-- doTask must not accept any parameters, hardcode all values.
+- Any values mentioned in the task description should be declared as constants inside the function doTask.
+- Be very flexible and proactive, make reasonable assumptions or guesses to extract the parameters needed for the doTask function from the task description and fill in any missing information.
 - Do not create files unless explicitly requested, otherwise only output plain text JSON data to stdout.
 `;
 
@@ -52,7 +58,7 @@ export function generateAnsweringFunctionPrompt(instructions, functionsSignature
   prompt += adHoc ? adHocPrompt : compilePrompt;
   
   if (instructions) {
-    prompt += `\nTASK INSTRUCTIONS:\n${instructions}`;
+    prompt += `\n# TASK CODE GENERATION INSTRUCTIONS AND ADDITIONAL INFORMATION:\n${instructions}`;
   }
 
   return prompt;
