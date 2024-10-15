@@ -106,15 +106,13 @@ def add_table_header(worksheet, row, col, column_names):
 
 def doTask(bank_name: str):
     import json
-
-    # Get the bank ID based on the given bank name
+    
     bank_id = get_bank_id_by_name(bank_name)
-
-    # Retrieve financial records for the selected bank
     financials = get_bank_financials(bank_id)
-
-    # Prepare the final result in JSON format
-    result = [{"Report Date": record["report_date"], "Total Deposits": record["total_deposits"]} for record in financials]
-
-    # Output the result
-    print(json.dumps(result))
+    
+    report = [
+        {"Report Date": record["report_date"], "Total Deposits": record["total_deposits"]}
+        for record in financials
+    ]
+    
+    print(json.dumps(report))

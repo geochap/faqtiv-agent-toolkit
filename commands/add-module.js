@@ -8,7 +8,8 @@ const configPath = path.join('faqtiv_config.yml');
 
 async function installJSModules(name, moduleVersion) {
   return await new Promise((resolve, reject) => {
-    const npmCommand = moduleVersion ? `npm install --save ${name}@${moduleVersion}` : `npm install --save ${name}`;
+    const installCommand = config.project.runtime.packageManager === 'npm' ? 'install' : 'add';
+    const npmCommand = moduleVersion ? `${config.project.runtime.packageManager} ${installCommand} ${name}@${moduleVersion}` : `${config.project.runtime.packageManager} ${installCommand} ${name}`;
     
     // Run npm install --save for the module
     exec(npmCommand, (error, stdout, stderr) => {
@@ -35,8 +36,8 @@ async function installPythonModules(name, moduleVersion) {
 
     // Activate virtual environment and run pip install
     const activateCommand = process.platform === 'win32' ? 
-      `venv\\Scripts\\activate && pip install -r requirements.txt` : 
-      `source venv/bin/activate && pip install -r requirements.txt`;
+      `venv\\Scripts\\activate && ${config.project.runtime.packageManager} install -r requirements.txt` : 
+      `source venv/bin/activate && ${config.project.runtime.packageManager} install -r requirements.txt`;
 
     // Run pip install for the module
     exec(activateCommand, (error, stdout, stderr) => {
@@ -58,7 +59,7 @@ async function installPythonModules(name, moduleVersion) {
 export default async function addModule(name, alias = name, moduleVersion = '') {
 
   if (!fs.existsSync(configPath)) {
-    console.log('faqtiv_config.yml not found');
+    console.error('faqtiv_config.yml not found');
     process.exit(1);
   }
 
@@ -71,7 +72,7 @@ export default async function addModule(name, alias = name, moduleVersion = '') 
 
   if (faqtivConfig.modules.filter((m) => m.name == name || m.alias == alias).length > 0) {
     console.log(`Module "${name}" or alias "${alias}" already exists`);
-    process.exit(1);
+    process.exit(0);
   }
 
   // Add the new module to the array

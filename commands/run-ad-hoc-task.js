@@ -8,6 +8,7 @@ import * as config from '../config.js';
 import { initializeVectorStore } from '../lib/vector-store.js';
 import { generateAdHocResponse } from '../controllers/code-gen.js';
 import { headersUpToDate } from './update-headers.js';
+import { unescapeText } from '../lib/shell-utils.js';
 
 const tmpdir = config.project.tmpDir;
 const logDir = path.join(config.project.logsDir, 'adhoc-tasks');
@@ -45,7 +46,6 @@ async function executeCode(code) {
     const { stdout, stderr } = await executeCodeFn(tempFileName);
     return { stdout, stderr };
   } catch (error) {
-    console.error(error);
     throw error;
   } finally {
     fs.unlinkSync(tempFileName);
@@ -55,6 +55,9 @@ async function executeCode(code) {
 function createLogFile(description, code, result, error = null) {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const logFileName = path.join(logDir, `${timestamp}${error ? '-error' : ''}.log`);
+  
+  mkdirpSync(path.dirname(logFileName));
+
   const delimiter = '\n\n---\n\n';
 
   let prettyResult;
@@ -78,13 +81,13 @@ function createLogFile(description, code, result, error = null) {
 }
 
 export default async function runAdHocTask(description) {
-  const maxRetries = 3;
+  const maxRetries = 5;
   let retryCount = 0;
   let errors = [];
   let previousCode = null;
   let response = null;
 
-  while (retryCount <= maxRetries) {
+  while (retryCount < maxRetries) {
     try {
       const headersUpdated = headersUpToDate();
 
@@ -97,12 +100,15 @@ export default async function runAdHocTask(description) {
         return;
       }
 
+      // Unescape the description
+      const unescapedDescription = unescapeText(description);
+
       const vectorStore = await initializeVectorStore();
       response = await generateAdHocResponse(
         vectorStore,
         [
           {
-            message: description,
+            message: unescapedDescription,
             role: 'user'
           }
         ],
@@ -115,9 +121,15 @@ export default async function runAdHocTask(description) {
       if (!fs.existsSync(logDir)) mkdirpSync(logDir);
     
       const { stdout, stderr } = await executeCode(response.output.code);
+      let result = stdout;
       
       if (stdout) {
         process.stdout.write(stdout.toString());
+        try {
+          result = JSON.parse(stdout.toString());
+        } catch (e) {
+          result = stdout.toString();
+        }
       }
       if (stderr && stderr.length > 0) {
         process.stderr.write(stderr.toString());
@@ -125,16 +137,16 @@ export default async function runAdHocTask(description) {
       }
 
       createLogFile(description, response.output.code, stdout.toString());
-      return;
+      return result;
     } catch (error) {
-      console.error(`Error during execution (attempt ${retryCount + 1}):`, error);
+      console.error(`Error during execution (attempt ${retryCount + 1}):`, error.message);
       errors.push(error.message);
       retryCount++;
 
-      if (retryCount > maxRetries) {
+      if (retryCount === maxRetries) {
         console.error(`Max retries (${maxRetries}) reached. Aborting.`);
         createLogFile(description, response ? response.output.code : 'N/A', 'N/A', error);
-        throw error;
+        process.exit(1);
       }
 
       console.warn(`Retrying... (attempt ${retryCount} of ${maxRetries})`);
@@ -142,6 +154,8 @@ export default async function runAdHocTask(description) {
         previousCode = response.output.code;
         response = null;
       }
+
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
   }
 }

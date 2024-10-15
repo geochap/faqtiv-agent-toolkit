@@ -1,0 +1,1 @@
+Initialize a faqtiv project based on a directory path and runtime type
