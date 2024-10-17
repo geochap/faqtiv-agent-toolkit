@@ -57,21 +57,20 @@ function formatCode(libs, functions, code) {
   const { opening, middle, closing } = commentTokenByRuntime[config.project.runtime.runtimeName];
   
   // gather all dependency imports and remove duplicates
-  const seen = new Set();
-  const imports = [
+  const importMap = new Map();
+  [
     ...functions.map(f => f.imports),
     ...libs.map(l => l.imports)
   ]
   .flat()
-  .filter(imp => {
-    // naive approach of just replacing all whitespace and comparing import lines
-    const normalized = imp.replace(/\s+/g, '');
-    if (seen.has(normalized)) {
-      return false;
+  .forEach(imp => {
+    const { moduleName, importPart } = normalizeImport(imp);
+    if (!importMap.has(moduleName)) {
+      importMap.set(moduleName, { original: imp, importPart });
     }
-    seen.add(normalized);
-    return true;
   });
+
+  const imports = Array.from(importMap.values()).map(value => value.original);
 
   let formattedCode = '';
 
@@ -114,6 +113,28 @@ ${closing}
 ${code}`;
 
   return formattedCode;
+}
+
+function normalizeImport(importStatement) {
+  // Remove all whitespace
+  const stripped = importStatement.replace(/\s+/g, '');
+  
+  // Check if it's an ES6 import
+  const es6Match = stripped.match(/import(.*?)from['"](.+?)['"]/);
+  if (es6Match) {
+    const [, importPart, moduleName] = es6Match;
+    return { moduleName, importPart };
+  }
+  
+  // Check if it's a CommonJS require
+  const commonJSMatch = stripped.match(/(?:const|let|var)(.*?)=require\(['"](.+?)['"]\)/);
+  if (commonJSMatch) {
+    const [, importPart, moduleName] = commonJSMatch;
+    return { moduleName, importPart };
+  }
+  
+  // If it doesn't match either pattern, return null
+  return null;
 }
 
 // adhoc means the code should be self executing with hardcoded params

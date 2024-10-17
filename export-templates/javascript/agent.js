@@ -210,27 +210,47 @@ function extractFunctionCode(inputText, targetFunctionName = 'doTask') {
   const cleanedText = cleanCodeBlock(inputText);
   const ast = parse(cleanedText, {
     sourceType: "module",
-    plugins: ["asyncGenerators"]
+    plugins: ["asyncGenerators", "classProperties", "decorators-legacy", "typescript"]
   });
   let functionCode = '';
 
   traverse(ast, {
     FunctionDeclaration(path) {
-      if (path.node.id.name === targetFunctionName) {
-        functionCode = cleanedText.substring(path.node.start, path.node.end);
-      }
-    },
-    ArrowFunctionExpression(path) {
       if (path.node.id && path.node.id.name === targetFunctionName) {
         functionCode = cleanedText.substring(path.node.start, path.node.end);
       }
     },
-    FunctionExpression(path) {
-      if (path.node.id && path.node.id.name === targetFunctionName) {
-        functionCode = cleanedText.substring(path.node.start, path.node.end);
-      }
+    VariableDeclaration(path) {
+      path.traverse({
+        VariableDeclarator(varPath) {
+          if (varPath.node.id.name === targetFunctionName &&
+              (varPath.node.init.type === 'ArrowFunctionExpression' || 
+               varPath.node.init.type === 'FunctionExpression')) {
+            functionCode = cleanedText.substring(path.node.start, path.node.end);
+          }
+        }
+      });
     },
+    ExportNamedDeclaration(path) {
+      if (path.node.declaration) {
+        if (path.node.declaration.type === 'FunctionDeclaration' && 
+            path.node.declaration.id.name === targetFunctionName) {
+          functionCode = cleanedText.substring(path.node.start, path.node.end);
+        } else if (path.node.declaration.type === 'VariableDeclaration') {
+          path.traverse({
+            VariableDeclarator(varPath) {
+              if (varPath.node.id.name === targetFunctionName &&
+                  (varPath.node.init.type === 'ArrowFunctionExpression' || 
+                   varPath.node.init.type === 'FunctionExpression')) {
+                functionCode = cleanedText.substring(path.node.start, path.node.end);
+              }
+            }
+          });
+        }
+      }
+    }
   });
+
   return functionCode;
 }
 
