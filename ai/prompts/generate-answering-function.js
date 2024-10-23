@@ -23,7 +23,7 @@ Using only these functions execute the following instructions:
 In a codeblock at the top of your response write a ${runtimeName} function called doTask that fulfills the given requirements:
 
 - Your only task is to write code for doTask and return the code with no text before or after it.
-- You are limited to using only the functions described above and the data they return, otherwise reply with "The request cannot be fulfilled using the available functions".
+- You are limited to using only the functions described above and the data they return, otherwise reply with "The request cannot be fulfilled using the available functions" and give a detailed explanation of why.
 - When calling the functions only use parameters included in the function definition and be careful to use await only if the function is async.
 - Your answer is limited to a single function that only calls the public functions described above, do not use any other functions not included in this set but you don't need to use all of them.
 - If you need to import any dependencies for your doTask code always do so inside the doTask function.
