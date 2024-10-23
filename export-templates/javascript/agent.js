@@ -16,6 +16,8 @@ const readline = require('readline');
 const figlet = require('figlet');
 const { parse } = require('@babel/parser');
 const traverse = require('@babel/traverse').default;
+const tiktoken = require('js-tiktoken');
+const { Mutex } = require('async-mutex');
 
 // Agent lib and functions dependencies
 {{ imports }}
@@ -511,6 +513,159 @@ const completionPrompt = ChatPromptTemplate.fromMessages(
   ]
 );
 
+// Context management functions
+const encoderCache = {};
+const encoderMutex = new Mutex();
+
+function createEncoder(modelName) {
+  return modelName.includes('gpt-4') || modelName.includes('gpt-3.5')
+    ? tiktoken.encodingForModel(modelName)
+    : tiktoken.getEncoding('cl100k_base');
+}
+
+// Using async-mutex to prevent race conditions
+async function getEncoder(modelName) {
+  await encoderMutex.runExclusive(async () => {
+    if (!encoderCache[modelName] || encoderCache[modelName].count >= 25) {
+      if (encoderCache[modelName] && encoderCache[modelName].encoder.free) {
+        encoderCache[modelName].encoder.free();
+      }
+      encoderCache[modelName] = { encoder: createEncoder(modelName), count: 0 };
+    }
+  });
+
+  return encoderCache[modelName];
+}
+
+async function getTokens(modelName, text) {
+  const encoderData = await getEncoder(modelName);
+  encoderData.count += 1;
+  return encoderData.encoder.encode(text).length;
+}
+
+const modelLimits = {
+  'gpt-3.5': 16000,
+  'gpt-4o': 128000,
+};
+
+function getModelLimit(model) {
+  const matchingModel = Object.keys(modelLimits).find(key => model.includes(key));
+  return matchingModel ? modelLimits[matchingModel] : null;
+}
+
+function isAssistantWithToolCalls(message) {
+  return message.role === 'assistant' && message.tool_calls;
+}
+
+// Get the messages that fit within the context limit
+// This function is used to truncate the messages to fit within the context limit
+// Prioritizes user messages and assistant messages over tool messages
+async function getMessagesWithinContextLimit(model, messages) {
+  const limit = getModelLimit(model);
+  if (!limit) throw new Error(`Unknown context limit for model ${model}`);
+  if (!messages || messages.length === 0) return messages;
+
+  const contextLimitBuffer = limit * 0.2;
+  const contextLimit = limit - contextLimitBuffer;
+  let totalTokens = 0;
+
+  // Copy the original messages array
+  let messagesCopy = messages.slice(); // Shallow copy
+
+  let limitReached = false;
+
+  // First Pass: Include user and assistant messages without tool_calls
+  let i = messagesCopy.length - 1;
+  while (i >= 0) {
+    const message = messagesCopy[i];
+    if (
+      message.role === 'user' ||
+      (message.role === 'assistant' && !isAssistantWithToolCalls(message))
+    ) {
+      const tokens = await getTokens(model, message.content || '');
+      if (totalTokens + tokens <= contextLimit) {
+        totalTokens += tokens;
+        i--;
+      } else {
+        // Token limit reached before getting to the first user message
+        // Remove all remaining messages from index 0 to i (inclusive)
+        messagesCopy.splice(0, i + 1);
+        limitReached = true;
+        break;
+      }
+    } else {
+      // Skip other messages in the first pass
+      i--;
+    }
+  }
+
+  if (limitReached) {
+    // Remove tool messages
+    messagesCopy = messagesCopy.filter(
+      (msg) =>
+        !(
+          (msg.role === 'assistant' && isAssistantWithToolCalls(msg)) ||
+          msg.role === 'tool'
+        )
+    );
+    return messagesCopy;
+  }
+
+  // Second Pass: Include tool message blocks (assistant tool calls and tool results) that fit within the context limit
+  i = messagesCopy.length - 1;
+  while (i >= 0) {
+    const message = messagesCopy[i];
+
+    if (message.role === 'tool') {
+      // Start of a tool block
+      let blockEndIndex = i;
+      let blockStartIndex = i;
+
+      // Find the start of the tool block
+      while (
+        blockStartIndex - 1 >= 0 && 
+          (messagesCopy[blockStartIndex - 1].role === 'tool' ||
+          isAssistantWithToolCalls(messagesCopy[blockStartIndex - 1]))
+      ) {
+        blockStartIndex--;
+      }
+
+      if (!isAssistantWithToolCalls(messagesCopy[blockStartIndex])) {
+        // No assistant tool_calls message found, skip this incomplete block
+        const numElementsToRemove = blockEndIndex - blockStartIndex + 1;
+        messagesCopy.splice(blockStartIndex, numElementsToRemove);
+
+        i = blockStartIndex - 1;
+        continue;
+      }
+
+      // Collect tokens for the entire block
+      let blockTokens = 0;
+      for (let j = blockStartIndex; j <= blockEndIndex; j++) {
+        const blockMessage = messagesCopy[j];
+        const tokens = await getTokens(model, blockMessage.content || '');
+        blockTokens += tokens;
+      }
+
+      if (totalTokens + blockTokens <= contextLimit) {
+        totalTokens += blockTokens;
+      } else {
+        // Remove the entire block from messagesCopy
+        const numElementsToRemove = blockEndIndex - blockStartIndex + 1;
+        messagesCopy.splice(blockStartIndex, numElementsToRemove);
+      }
+      // Move to the next message before the block
+      i = blockStartIndex - 1;
+    } else {
+      // Other messages are left untouched
+      i--;
+    }
+  }
+
+  return messagesCopy;
+}
+
+// Modify the /completions endpoint
 app.post('/completions', async (req, res) => {
   const { 
     stream, 
@@ -531,7 +686,9 @@ app.post('/completions', async (req, res) => {
   };
   log('completions', 'completions', logBody);
 
-  console.log("Completion request: ", messages.length > 0 ? messages[messages.length - 1].content : "")
+  console.log("Completion request: ", messages.length > 0 ? messages[messages.length - 1].content : "");
+
+  const truncatedMessages = await getMessagesWithinContextLimit(model, messages);
 
   if (stream) {
     res.writeHead(200, {
@@ -539,14 +696,14 @@ app.post('/completions', async (req, res) => {
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
     });
-    for await (const chunk of streamCompletion(completionId, messages, include_tool_messages, max_tokens, temperature)) {
+    for await (const chunk of streamCompletion(completionId, truncatedMessages, include_tool_messages, max_tokens, temperature)) {
       res.write(`data: ${JSON.stringify(chunk)}\n\n`);
     }
     res.write('data: [DONE]\n\n');
     res.end();
   } else {
     try {
-      const result = await generateCompletion(completionId, messages, include_tool_messages, max_tokens, temperature);
+      const result = await generateCompletion(completionId, truncatedMessages, include_tool_messages, max_tokens, temperature);
       res.json(result);
     } catch (error) {
       logErr('completions', 'completions', logBody, error);

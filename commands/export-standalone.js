@@ -45,7 +45,9 @@ const exportDependencies = {
     "@babel/preset-env": "^7.24.5",
     "@babel/traverse": "^7.24.5",
     "log4js": "^6.9.1",
-    "mkdirp": "^3.0.1"
+    "mkdirp": "^3.0.1",
+    "js-tiktoken": "^1.0.15",
+    "async-mutex": "^0.5.0"
   }
 };
 
