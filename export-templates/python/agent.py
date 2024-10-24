@@ -505,7 +505,7 @@ def get_tokens(model_name, text):
 
 model_limits = {
     'gpt-3.5': 16000,
-    'gpt-4o': 42000,
+    'gpt-4o': 128000,
 }
 
 def get_model_limit(model):
