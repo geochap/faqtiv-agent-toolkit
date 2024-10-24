@@ -524,6 +524,7 @@ function createEncoder(modelName) {
 }
 
 // Using async-mutex to prevent race conditions
+// Recreates the encoder if it has been used more than 25 times to avoid memory leaks
 async function getEncoder(modelName) {
   await encoderMutex.runExclusive(async () => {
     if (!encoderCache[modelName] || encoderCache[modelName].count >= 25) {
@@ -561,12 +562,10 @@ function isAssistantWithToolCalls(message) {
 // This function is used to truncate the messages to fit within the context limit
 // Prioritizes user messages and assistant messages over tool messages
 async function getMessagesWithinContextLimit(model, messages) {
-  const limit = getModelLimit(model);
-  if (!limit) throw new Error(`Unknown context limit for model ${model}`);
+  const contextLimit = getModelLimit(model);
+  if (!contextLimit) throw new Error(`Unknown context limit for model ${model}`);
   if (!messages || messages.length === 0) return messages;
 
-  const contextLimitBuffer = limit * 0.2;
-  const contextLimit = limit - contextLimitBuffer;
   let totalTokens = 0;
 
   // Copy the original messages array
@@ -599,8 +598,8 @@ async function getMessagesWithinContextLimit(model, messages) {
     }
   }
 
+  // If limit is reached with just user and assistant messages, remove all tool messages
   if (limitReached) {
-    // Remove tool messages
     messagesCopy = messagesCopy.filter(
       (msg) =>
         !(
@@ -665,7 +664,6 @@ async function getMessagesWithinContextLimit(model, messages) {
   return messagesCopy;
 }
 
-// Modify the /completions endpoint
 app.post('/completions', async (req, res) => {
   const { 
     stream, 

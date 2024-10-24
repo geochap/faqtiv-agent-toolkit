@@ -29,7 +29,8 @@ const exportDependencies = {
     'pydantic_core==2.20.1',
     'requests==2.32.3',
     'uvicorn==0.30.5',
-    'pyfiglet==1.0.2'
+    'pyfiglet==1.0.2',
+    'tiktoken==0.8.0'
   ],
   javascript: {
     "@langchain/core": "^0.3.0",
