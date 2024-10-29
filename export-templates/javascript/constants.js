@@ -18,8 +18,6 @@ const TASK_TOOL_SCHEMAS = [{{ taskToolSchemas }}];
 
 const COMPLETION_PROMPT_TEXT = `{{ getAssistantInstructionsPrompt }}`;
 
-const EXAMPLES_WITH_EMBEDDINGS = {{ examples }};
-
 const TASK_NAME_TO_FUNCTION_NAME_MAP = {{ taskNameToFunctionNameMap }};
 
 const ADHOC_PROMPT_TEXT = `{{ generateAnsweringFunctionPrompt }}`;
@@ -32,7 +30,6 @@ module.exports = {
   TASK_FUNCTIONS,
   TASK_TOOL_SCHEMAS,
   COMPLETION_PROMPT_TEXT,
-  EXAMPLES_WITH_EMBEDDINGS,
   TASK_NAME_TO_FUNCTION_NAME_MAP,
   ADHOC_PROMPT_TEXT,
   LIBS,

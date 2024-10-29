@@ -1,6 +1,7 @@
 const { OpenAIEmbeddings } = require('@langchain/openai');
 const { MemoryVectorStore } = require('langchain/vectorstores/memory');
-const { EXAMPLES_WITH_EMBEDDINGS } = require('../constants');
+const fs = require('fs');
+const path = require('path');
 
 // Initialize embeddings
 const embeddings = new OpenAIEmbeddings({
@@ -13,11 +14,18 @@ function decodeBase64Embedding(b64String) {
   return decodedArray;
 }
 
-// Create vector store from pre-computed embeddings
-const documents = EXAMPLES_WITH_EMBEDDINGS.map(example => 
+const examplesDirectory = path.join(__dirname, '../examples');
+const examples = fs.readdirSync(examplesDirectory)
+  .filter(file => file.endsWith('.json'))
+  .map(file => {
+    const content = fs.readFileSync(path.join(examplesDirectory, file), 'utf8');
+    return JSON.parse(content);
+  });
+
+const documents = examples.map(example => 
   ({ pageContent: JSON.stringify({ ...example.document, embedding: null }), metadata: {} })
 );
-const embeddingsList = EXAMPLES_WITH_EMBEDDINGS.map(example => 
+const embeddingsList = examples.map(example => 
   decodeBase64Embedding(example.taskEmbedding)
 );
 const vectorStore = new MemoryVectorStore();

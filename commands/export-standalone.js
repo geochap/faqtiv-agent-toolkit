@@ -95,8 +95,8 @@ function getTaskFunctions() {
 }
 
 function getExamples() {
-  const examples = [];
   const exampleNames = config.project.taskExamples;
+  const examples = [];
 
   for (const name of exampleNames) {
     const ymlFilePath = path.join(metadataDir, `${name}.yml`);
@@ -114,6 +114,7 @@ function getExamples() {
     const doTaskCodeString = extractFunctionCode(jsFileContent, 'doTask');
 
     examples.push({
+      name,
       taskEmbedding: yamlContent.embedding,
       functionsEmbedding: yamlContent.functions_embedding,
       document: {
@@ -216,7 +217,6 @@ export default async function exportStandalone(outputDir = process.cwd(), option
     taskNameToFunctionNameMap: JSON.stringify(taskNameToFunctionNameMap, null, 2),
     tasks: taskFunctions.join('\n\n'),
     taskToolSchemas: taskToolSchemas.join(',\n'),
-    examples: JSON.stringify(examples, null, 2),
     generateAnsweringFunctionPrompt: runtimeName === 'javascript' 
       ? generateAnsweringFunctionPrompt(instructions, functionsHeader.signatures, true).replace(/`/g, '\\`')
       : generateAnsweringFunctionPrompt(instructions, functionsHeader.signatures, true),
@@ -248,6 +248,21 @@ export default async function exportStandalone(outputDir = process.cwd(), option
   fs.writeFileSync(path.join(outputDir, runtimeConfig.constantsFile), constantsCode);
   fs.writeFileSync(path.join(outputDir, 'README.md'), readmeContent);
   fs.writeFileSync(path.join(outputDir, runtimeConfig.dependenciesFile), dependencies);
+  
+  // Write examples
+  const examplesDir = path.join(outputDir, 'examples');
+
+  fs.mkdirSync(examplesDir, { recursive: true });
+  examples.forEach(example => {
+    fs.writeFileSync(
+      path.join(examplesDir, `${example.name}.json`),
+      JSON.stringify({
+        taskEmbedding: example.taskEmbedding,
+        functionsEmbedding: example.functionsEmbedding,
+        document: example.document
+      }, null, 2)
+    );
+  });
 
   // Copy the agent file and components directory
   fs.copyFileSync(path.join(templateDir, runtimeConfig.agentFile), path.join(outputDir, runtimeConfig.agentFile));
@@ -258,6 +273,7 @@ export default async function exportStandalone(outputDir = process.cwd(), option
   log(`- ${runtimeConfig.agentFile}`);
   log(`- ${runtimeConfig.constantsFile}`);
   log('- components/');
+  log('- examples/');
   log(`- ${runtimeConfig.dependenciesFile}`);
   log('- README.md');
 
