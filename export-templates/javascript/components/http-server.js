@@ -5,7 +5,7 @@ const http = require('http');
 const { generateAndExecuteAdhoc, captureAndProcessOutput } = require('./tools');
 const { logErr, log } = require('./logger');
 const { generateCompletion, streamCompletion } = require('./completions');
-const { TASK_NAME_TO_FUNCTION_NAME_MAP } = require('../constants');
+const { TASK_NAME_TO_FUNCTION_NAME_MAP, TASKS } = require('../constants');
 
 const app = express();
 app.use(bodyParser.json({limit: '10mb'}));
@@ -46,14 +46,14 @@ app.post('/run_task/:taskName', async (req, res) => {
 
   const validTaskName = TASK_NAME_TO_FUNCTION_NAME_MAP[taskName] || taskName;
 
-  if (typeof taskFunctions[validTaskName] !== 'function') {
+  if (typeof TASKS[validTaskName] !== 'function') {
     logErr('run_task', taskName, req.body, 'Not found');
     return res.status(404).json({ error: `Task '${taskName}' not found` });
   }
 
   // todo: make sure the args are in the correct positional order
   try {
-    const result = await captureAndProcessOutput(taskFunctions[validTaskName], Object.values(args));
+    const result = await captureAndProcessOutput(TASKS[validTaskName], Object.values(args));
     res.json({ result });
   } catch (error) {
     logErr('run_task', taskName, { id: requestId, ...req.body }, error);
