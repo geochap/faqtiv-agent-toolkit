@@ -7,7 +7,7 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from constants import TASK_NAME_TO_FUNCTION_NAME_MAP
+from constants import TASK_NAME_TO_FUNCTION_NAME_MAP, TASKS
 from components.completions import stream_completion, generate_completion
 from components.logger import log, log_err
 from components.tools import capture_and_process_output, generate_and_execute_adhoc
@@ -53,11 +53,11 @@ async def run_task_endpoint(task_name: str, request: Request):
     
     valid_task_name = TASK_NAME_TO_FUNCTION_NAME_MAP.get(task_name, task_name)
     
-    if valid_task_name not in globals():
+    if valid_task_name not in TASKS.__dict__:  # Check if method exists in class
         log_err('run_task', task_name, {'id': request_id, **data}, 'Not found')
         return {"error": f"Task '{task_name}' not found"}
     
-    task_function = globals()[valid_task_name]
+    task_function = getattr(TASKS, valid_task_name)  # Get the static method
 
     # todo: make sure the args are in the correct positional order
     try:

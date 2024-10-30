@@ -105,7 +105,6 @@ async def execute_generated_function(function_code):
     
     return result
 
-
 # Adhoc task execution
 async def generate_and_execute_adhoc(user_input: str, max_retries: int = 5):
     retry_count = 0
