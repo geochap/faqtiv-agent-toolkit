@@ -29,7 +29,8 @@ const exportDependencies = {
     'pydantic_core==2.20.1',
     'requests==2.32.3',
     'uvicorn==0.30.5',
-    'pyfiglet==1.0.2'
+    'pyfiglet==1.0.2',
+    'tiktoken==0.8.0'
   ],
   javascript: {
     "@langchain/core": "^0.3.0",
@@ -45,7 +46,9 @@ const exportDependencies = {
     "@babel/preset-env": "^7.24.5",
     "@babel/traverse": "^7.24.5",
     "log4js": "^6.9.1",
-    "mkdirp": "^3.0.1"
+    "mkdirp": "^3.0.1",
+    "js-tiktoken": "^1.0.15",
+    "async-mutex": "^0.5.0"
   }
 };
 

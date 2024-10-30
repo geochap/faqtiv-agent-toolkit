@@ -78,7 +78,7 @@ export function getOutdatedItems() {
 
   const headersUpdated = headersUpToDate();
   if (!headersUpdated) {
-    console.log('Warning: The header file is outdated. Please run `faqtiv update-headers` to reflect recent changes in function files.');
+    console.log('WARNING: The header file is outdated. Please run `faqtiv update-headers` to reflect recent changes in function files.');
     process.exit(0);
   }
 
