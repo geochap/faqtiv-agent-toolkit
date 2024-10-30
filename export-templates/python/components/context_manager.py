@@ -54,8 +54,6 @@ def get_messages_within_context_limit(model: str, messages: List[Message]) -> Li
 
     limit_reached = False
 
-    print("Messages count: ", len(messages), flush=True)
-
     # First Pass: Include user and assistant messages without tool_calls
     i = len(messages_copy) - 1
     while i >= 0:
@@ -77,9 +75,6 @@ def get_messages_within_context_limit(model: str, messages: List[Message]) -> Li
         else:
             # Skip other messages in the first pass
             i -= 1
-
-    print("First pass messages: ", len(messages_copy), flush=True)
-    print("First pass tokens: ", total_tokens, flush=True)
 
     # If limit is reached with just user and assistant messages, remove all tool messages
     if limit_reached:
@@ -131,17 +126,10 @@ def get_messages_within_context_limit(model: str, messages: List[Message]) -> Li
                 # Remove the entire block from messages_copy
                 num_elements_to_remove = block_end_index - block_start_index + 1
                 del messages_copy[block_start_index:block_start_index + num_elements_to_remove]
-                print("Removed block of tokens: ", block_tokens, flush=True)
-                print("Block message count: ", num_elements_to_remove, flush=True)
-                print("Current tokens: ", total_tokens, flush=True)
-                print("Limit: ", context_limit, flush=True)
             # Move to the next message before the block
             i = block_start_index - 1
         else:
             # Other messages are left untouched
             i -= 1
-
-    print("Second pass messages: ", len(messages_copy), flush=True)
-    print("Second pass tokens: ", total_tokens, flush=True)
 
     return messages_copy
