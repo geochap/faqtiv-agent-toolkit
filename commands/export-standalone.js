@@ -11,6 +11,7 @@ import { extractFunctionCode } from '../lib/parse-utils.js';
 import { getOutdatedItems } from './migrate-dry.js';
 import { headersUpToDate } from './update-headers.js';
 import { copyDir } from '../lib/file-utils.js';
+import { getDeduplicatedImports } from '../controllers/code-gen.js';
 
 const { runtimeName, codeFileExtension } = config.project.runtime;
 const { codeDir, metadataDir, tasksDir } = config.project;
@@ -58,7 +59,7 @@ function getTaskFunctions() {
   const taskFiles = getAllFiles(codeDir, codeFileExtension);
 
   // Extract task functions from task files
-  const taskFunctions = [];
+  const tasks = {};
   const taskNameToFunctionNameMap = {};
   const taskToolSchemas = [];
 
@@ -73,7 +74,7 @@ function getTaskFunctions() {
       // Replace 'doTask' with the new function name for both Python and JavaScript
       const updatedCode = doTaskCode.replace(/\b(def|function)\s+doTask\b/, `$1 ${validFunctionName}`);
       
-      taskFunctions.push(updatedCode);
+      tasks[validFunctionName] = updatedCode;
       taskNameToFunctionNameMap[taskName] = validFunctionName;
 
       // Get and update the task schema
@@ -84,14 +85,14 @@ function getTaskFunctions() {
           let schemaString = metadata.output.task_schema;
           const taskNameRegex = new RegExp(taskName, 'g');
           schemaString = schemaString.replace(taskNameRegex, validFunctionName);
-          schemaString = schemaString.replace(/\bdoTask\b/g, validFunctionName);
+          schemaString = schemaString.replace(/\bdoTask\b/g, `TASKS.${validFunctionName}`);
           taskToolSchemas.push(schemaString);
         }
       }
     }
   });
 
-  return { taskFunctions, taskNameToFunctionNameMap, taskToolSchemas, taskFunctionNames: Object.values(taskNameToFunctionNameMap).join(', ') };
+  return { tasks, taskNameToFunctionNameMap, taskToolSchemas };
 }
 
 function getExamples() {
@@ -163,6 +164,17 @@ function getDependenciesFile(runtimeName, existingDependencies) {
   return updatedDependencies;
 }
 
+function formatTaskFunctions(tasks) {
+  if (runtimeName === 'python') {
+    // handle indentation of the code
+    return Object.entries(tasks).map(([name, code]) => 
+      `    @staticmethod\n${code.split('\n').map(line => `    ${line}`).join('\n')}`
+    ).join('\n');
+  }
+
+  return Object.entries(tasks).map(([name, code]) => `  ${name}: ${code}`).join(',\n');
+}
+
 export default async function exportStandalone(outputDir = process.cwd(), options = {}) {
   const { silent = false } = options;
   const log = silent ? () => {} : console.log;
@@ -184,8 +196,8 @@ export default async function exportStandalone(outputDir = process.cwd(), option
   const functionsNames = functions.map(f => f.name);
   const libsCode = libs.map(l => l.code);
   const libsNames = libs.map(f => f.name);
-  const imports = [...new Set(libs.concat(functions).flatMap(f => f.imports))];
-  const { taskFunctions, taskNameToFunctionNameMap, taskToolSchemas, taskFunctionNames } = getTaskFunctions();
+  const imports = getDeduplicatedImports(libs, functions);
+  const { tasks, taskNameToFunctionNameMap, taskToolSchemas } = getTaskFunctions();
   const examples = getExamples();
 
   // Get the current file's path
@@ -215,7 +227,7 @@ export default async function exportStandalone(outputDir = process.cwd(), option
     functions: functionsCode.join('\n'),
     functionNames: functionsNames.length > 0 ? functionsNames.join(',\n') + ',' : '',
     taskNameToFunctionNameMap: JSON.stringify(taskNameToFunctionNameMap, null, 2),
-    tasks: taskFunctions.join('\n\n'),
+    tasks: formatTaskFunctions(tasks),
     taskToolSchemas: taskToolSchemas.join(',\n'),
     generateAnsweringFunctionPrompt: runtimeName === 'javascript' 
       ? generateAnsweringFunctionPrompt(instructions, functionsHeader.signatures, true).replace(/`/g, '\\`')
@@ -226,7 +238,6 @@ export default async function exportStandalone(outputDir = process.cwd(), option
     installCommand: runtimeConfig.installCommand,
     cliAgentCommand: runtimeConfig.cliCommand,
     httpServerCommand: runtimeConfig.httpCommand,
-    taskFunctionNames
   };
 
   // Function to replace placeholders in templates
@@ -248,7 +259,7 @@ export default async function exportStandalone(outputDir = process.cwd(), option
   fs.writeFileSync(path.join(outputDir, runtimeConfig.constantsFile), constantsCode);
   fs.writeFileSync(path.join(outputDir, 'README.md'), readmeContent);
   fs.writeFileSync(path.join(outputDir, runtimeConfig.dependenciesFile), dependencies);
-  
+
   // Write examples
   const examplesDir = path.join(outputDir, 'examples');
 

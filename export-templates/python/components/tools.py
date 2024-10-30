@@ -144,7 +144,6 @@ async def generate_and_execute_adhoc(user_input: str, max_retries: int = 5):
                 *[HumanMessage(content=msg["content"]) if msg["role"] == "human" else AIMessage(content=msg["content"]) for msg in example_messages],
                 HumanMessage(content=f"{user_input}\n\n{error_context}")
             ]
-            print(messages)
             response = await adhoc_llm.agenerate([messages])
 
             if 'The request cannot be fulfilled using the available functions' in response.generations[0][0].text:

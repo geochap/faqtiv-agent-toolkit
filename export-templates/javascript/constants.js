@@ -10,9 +10,9 @@ const z = require('zod');
 {{ functions }}
 
 // Agent tasks
-{{ tasks }}
-
-const TASK_FUNCTIONS = { {{ taskFunctionNames }} };
+const TASKS = {
+  {{ tasks }}
+};
 
 const TASK_TOOL_SCHEMAS = [{{ taskToolSchemas }}];
 
@@ -27,7 +27,7 @@ const LIBS = { {{ libsNames }} };
 const FUNCTIONS = { {{ functionNames }} };
 
 module.exports = {
-  TASK_FUNCTIONS,
+  TASKS,
   TASK_TOOL_SCHEMAS,
   COMPLETION_PROMPT_TEXT,
   TASK_NAME_TO_FUNCTION_NAME_MAP,

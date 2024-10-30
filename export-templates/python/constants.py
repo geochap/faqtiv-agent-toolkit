@@ -10,12 +10,12 @@ from typing import List, Dict, Union, Any, Optional
 # Agent functions
 {{ functions }}
 
-# Agent tasks
+class TASKS:
 {{ tasks }}
 
-TASK_FUNCTIONS = { {{ taskFunctionNames }} }
-
-TASK_TOOL_SCHEMAS = { {{ taskToolSchemas }} }
+TASK_TOOL_SCHEMAS = {
+  {{ taskToolSchemas }}
+}
 
 COMPLETION_PROMPT_TEXT = """{{ getAssistantInstructionsPrompt }}"""
 
