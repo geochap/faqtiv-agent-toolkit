@@ -14,7 +14,7 @@ from contextlib import redirect_stdout
 from components.examples import get_relevant_examples
 from components.parser import extract_function_code
 from components.logger import create_adhoc_log_file
-from constants import ADHOC_PROMPT_TEXT
+from constants import ADHOC_PROMPT_TEXT, LIBS, FUNCTIONS
 
 TOOL_TIMEOUT = int(os.getenv('TOOL_TIMEOUT', 60000)) / 1000
 
@@ -91,7 +91,11 @@ async def execute_generated_function(function_code):
     module = types.ModuleType("temp_module")
     
     # Add necessary imports to the module
-    module.__dict__.update(globals())
+    module.__dict__.update({
+        **{func.__name__: func for func in LIBS},
+        **{func.__name__: func for func in FUNCTIONS},
+        'json': json,
+    })
     
     # Execute the function code in the module's context
     exec(function_code, module.__dict__)
