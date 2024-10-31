@@ -191,6 +191,11 @@ export default async function exportStandalone(outputDir = process.cwd(), option
     process.exit(1);
   }
 
+  if (!functionsHeader) {
+    console.error('Error: No functions header found in the project. Please run `faqtiv update-headers` before exporting.');
+    process.exit(1);
+  }
+
   const runtimeConfig = runtimeConfigs[runtimeName];
   const functionsCode = functions.map(f => f.code);
   const functionsNames = functions.map(f => f.name);
