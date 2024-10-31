@@ -175,6 +175,20 @@ function formatTaskFunctions(tasks) {
   return Object.entries(tasks).map(([name, code]) => `  ${name}: ${code}`).join(',\n');
 }
 
+function escapeInstructions(instructions) {
+  if (runtimeName === 'javascript') {
+    return instructions
+      .replace(/\\/g, '\\\\')  // Escape backslashes
+      .replace(/`/g, '\\`')   // Escape backticks
+      .replace(/\$\{/g, '\\${'); // Escape template literal interpolation
+  }
+  // Python multiline string escaping
+  return instructions
+    .replace(/\\/g, '\\\\')     // Escape backslashes
+    .replace(/"""/g, '\\"\\"\\"') // Escape triple double quotes
+    .replace(/'''/g, "\\'\\'\\'"); // Escape triple single quotes
+}
+
 export default async function exportStandalone(outputDir = process.cwd(), options = {}) {
   const { silent = false } = options;
   const log = silent ? () => {} : console.log;
@@ -234,12 +248,8 @@ export default async function exportStandalone(outputDir = process.cwd(), option
     taskNameToFunctionNameMap: JSON.stringify(taskNameToFunctionNameMap, null, 2),
     tasks: formatTaskFunctions(tasks),
     taskToolSchemas: taskToolSchemas.join(',\n'),
-    generateAnsweringFunctionPrompt: runtimeName === 'javascript' 
-      ? generateAnsweringFunctionPrompt(instructions, functionsHeader.signatures, true).replace(/`/g, '\\`')
-      : generateAnsweringFunctionPrompt(instructions, functionsHeader.signatures, true),
-    getAssistantInstructionsPrompt: runtimeName === 'javascript'
-      ? getAssistantInstructionsPrompt(assistantInstructions).replace(/`/g, '\\`')
-      : getAssistantInstructionsPrompt(assistantInstructions),
+    generateAnsweringFunctionPrompt: escapeInstructions(generateAnsweringFunctionPrompt(instructions, functionsHeader.signatures, true)),
+    getAssistantInstructionsPrompt: escapeInstructions(getAssistantInstructionsPrompt(assistantInstructions)),
     installCommand: runtimeConfig.installCommand,
     cliAgentCommand: runtimeConfig.cliCommand,
     httpServerCommand: runtimeConfig.httpCommand,
