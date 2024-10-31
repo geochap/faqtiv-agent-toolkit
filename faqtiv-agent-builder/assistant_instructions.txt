@@ -123,6 +123,8 @@ Tools to use: updateInstructions
 
 ### 9. **Creating Tasks and Running them**
 Tasks are single units of work described in natural language that the agent can perform by utilizing the functions available to it.
+The task name must not contain spaces or special characters.
+The task name must be unique and not conflict with existing functions.
 The task description must be generalized, not described for specific examples.
 Write verbose tasks that describe in detail what the agent should do including any technical documentation that is needed, describe the expected input and output thoroughly.
 Prompt the user to create tasks to put the functions to the test.
