@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import CodeAgent from '../ai/code-agent.js';
 import * as config from '../config.js';
 import OpenAIModel from '../ai/models/openai.js';
+import { getNormalizedImport } from '../lib/parse-utils.js';
 
 async function getNearestExamples(vectorStore, taskEmbedding, functionsEmbedding, taskWeight = 0.8, functionWeight = 0.2) {
   const taskResults = await vectorStore.searchByTask(taskEmbedding, 10);
@@ -55,22 +56,7 @@ const commentTokenByRuntime = {
 
 function formatCode(libs, functions, code) {
   const { opening, middle, closing } = commentTokenByRuntime[config.project.runtime.runtimeName];
-  
-  // gather all dependency imports and remove duplicates
-  const importMap = new Map();
-  [
-    ...functions.map(f => f.imports),
-    ...libs.map(l => l.imports)
-  ]
-  .flat()
-  .forEach(imp => {
-    const { moduleName, importPart } = normalizeImport(imp);
-    if (!importMap.has(moduleName)) {
-      importMap.set(moduleName, { original: imp, importPart });
-    }
-  });
-
-  const imports = Array.from(importMap.values()).map(value => value.original);
+  const imports = getDeduplicatedImports(libs, functions);
 
   let formattedCode = '';
 
@@ -115,26 +101,22 @@ ${code}`;
   return formattedCode;
 }
 
-function normalizeImport(importStatement) {
-  // Remove all whitespace
-  const stripped = importStatement.replace(/\s+/g, '');
-  
-  // Check if it's an ES6 import
-  const es6Match = stripped.match(/import(.*?)from['"](.+?)['"]/);
-  if (es6Match) {
-    const [, importPart, moduleName] = es6Match;
-    return { moduleName, importPart };
-  }
-  
-  // Check if it's a CommonJS require
-  const commonJSMatch = stripped.match(/(?:const|let|var)(.*?)=require\(['"](.+?)['"]\)/);
-  if (commonJSMatch) {
-    const [, importPart, moduleName] = commonJSMatch;
-    return { moduleName, importPart };
-  }
-  
-  // If it doesn't match either pattern, return null
-  return null;
+export function getDeduplicatedImports(libs, functions) {
+  // gather all dependency imports and remove duplicates
+  const importMap = new Map();
+  [
+    ...functions.map(f => f.imports),
+    ...libs.map(l => l.imports)
+  ]
+  .flat()
+  .forEach(imp => {
+    const { moduleName, importPart } = getNormalizedImport(imp);
+    if (!importMap.has(importPart)) {
+      importMap.set(importPart, { original: imp, importPart });
+    }
+  });
+
+  return Array.from(importMap.values()).map(value => value.original);
 }
 
 // adhoc means the code should be self executing with hardcoded params

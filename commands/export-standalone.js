@@ -10,6 +10,8 @@ import { getAllFiles } from '../lib/file-utils.js';
 import { extractFunctionCode } from '../lib/parse-utils.js';
 import { getOutdatedItems } from './migrate-dry.js';
 import { headersUpToDate } from './update-headers.js';
+import { copyDir } from '../lib/file-utils.js';
+import { getDeduplicatedImports } from '../controllers/code-gen.js';
 
 const { runtimeName, codeFileExtension } = config.project.runtime;
 const { codeDir, metadataDir, tasksDir } = config.project;
@@ -57,8 +59,8 @@ function getTaskFunctions() {
   const taskFiles = getAllFiles(codeDir, codeFileExtension);
 
   // Extract task functions from task files
-  const taskFunctions = [];
-  const taskNameMap = {};
+  const tasks = {};
+  const taskNameToFunctionNameMap = {};
   const taskToolSchemas = [];
 
   taskFiles.forEach(file => {
@@ -72,8 +74,8 @@ function getTaskFunctions() {
       // Replace 'doTask' with the new function name for both Python and JavaScript
       const updatedCode = doTaskCode.replace(/\b(def|function)\s+doTask\b/, `$1 ${validFunctionName}`);
       
-      taskFunctions.push(updatedCode);
-      taskNameMap[taskName] = validFunctionName;
+      tasks[validFunctionName] = updatedCode;
+      taskNameToFunctionNameMap[taskName] = validFunctionName;
 
       // Get and update the task schema
       const metadataPath = path.join(metadataDir, `${taskName}.yml`);
@@ -83,19 +85,19 @@ function getTaskFunctions() {
           let schemaString = metadata.output.task_schema;
           const taskNameRegex = new RegExp(taskName, 'g');
           schemaString = schemaString.replace(taskNameRegex, validFunctionName);
-          schemaString = schemaString.replace(/\bdoTask\b/g, validFunctionName);
+          schemaString = schemaString.replace(/\bdoTask\b/g, `TASKS.${validFunctionName}`);
           taskToolSchemas.push(schemaString);
         }
       }
     }
   });
 
-  return { taskFunctions, taskNameMap, taskToolSchemas, taskFunctionNames: Object.values(taskNameMap).join(', ') };
+  return { tasks, taskNameToFunctionNameMap, taskToolSchemas };
 }
 
 function getExamples() {
-  const examples = [];
   const exampleNames = config.project.taskExamples;
+  const examples = [];
 
   for (const name of exampleNames) {
     const ymlFilePath = path.join(metadataDir, `${name}.yml`);
@@ -113,6 +115,7 @@ function getExamples() {
     const doTaskCodeString = extractFunctionCode(jsFileContent, 'doTask');
 
     examples.push({
+      name,
       taskEmbedding: yamlContent.embedding,
       functionsEmbedding: yamlContent.functions_embedding,
       document: {
@@ -130,6 +133,7 @@ const runtimeConfigs = {
   python: {
     templateDir: 'python',
     agentFile: 'agent.py',
+    constantsFile: 'constants.py',
     dependenciesFile: 'requirements.txt',
     installCommand: `${config.project.runtime.packageManager} install -r requirements.txt`,
     cliCommand: `${config.project.runtime.command} agent.py`,
@@ -138,6 +142,7 @@ const runtimeConfigs = {
   javascript: {
     templateDir: 'javascript',
     agentFile: 'agent.js',
+    constantsFile: 'constants.js',
     dependenciesFile: 'package.json',
     installCommand: `${config.project.runtime.packageManager} install`,
     cliCommand: `${config.project.runtime.command} agent.js`,
@@ -159,6 +164,31 @@ function getDependenciesFile(runtimeName, existingDependencies) {
   return updatedDependencies;
 }
 
+function formatTaskFunctions(tasks) {
+  if (runtimeName === 'python') {
+    // handle indentation of the code
+    return Object.entries(tasks).map(([name, code]) => 
+      `    @staticmethod\n${code.split('\n').map(line => `    ${line}`).join('\n')}`
+    ).join('\n');
+  }
+
+  return Object.entries(tasks).map(([name, code]) => `  ${name}: ${code}`).join(',\n');
+}
+
+function escapeInstructions(instructions) {
+  if (runtimeName === 'javascript') {
+    return instructions
+      .replace(/\\/g, '\\\\')  // Escape backslashes
+      .replace(/`/g, '\\`')   // Escape backticks
+      .replace(/\$\{/g, '\\${'); // Escape template literal interpolation
+  }
+  // Python multiline string escaping
+  return instructions
+    .replace(/\\/g, '\\\\')     // Escape backslashes
+    .replace(/"""/g, '\\"\\"\\"') // Escape triple double quotes
+    .replace(/'''/g, "\\'\\'\\'"); // Escape triple single quotes
+}
+
 export default async function exportStandalone(outputDir = process.cwd(), options = {}) {
   const { silent = false } = options;
   const log = silent ? () => {} : console.log;
@@ -175,13 +205,18 @@ export default async function exportStandalone(outputDir = process.cwd(), option
     process.exit(1);
   }
 
+  if (!functionsHeader) {
+    console.error('Error: No functions header found in the project. Please run `faqtiv update-headers` before exporting.');
+    process.exit(1);
+  }
+
   const runtimeConfig = runtimeConfigs[runtimeName];
   const functionsCode = functions.map(f => f.code);
   const functionsNames = functions.map(f => f.name);
   const libsCode = libs.map(l => l.code);
   const libsNames = libs.map(f => f.name);
-  const imports = [...new Set(libs.concat(functions).flatMap(f => f.imports))];
-  const { taskFunctions, taskNameMap, taskToolSchemas, taskFunctionNames } = getTaskFunctions();
+  const imports = getDeduplicatedImports(libs, functions);
+  const { tasks, taskNameToFunctionNameMap, taskToolSchemas } = getTaskFunctions();
   const examples = getExamples();
 
   // Get the current file's path
@@ -189,7 +224,8 @@ export default async function exportStandalone(outputDir = process.cwd(), option
   const __dirname = dirname(__filename);
 
   // Read template files
-  const agentTemplate = fs.readFileSync(path.join(__dirname, `../export-templates/${runtimeConfig.templateDir}/${runtimeConfig.agentFile}`), 'utf8');
+  const templateDir = path.join(__dirname, `../export-templates/${runtimeConfig.templateDir}`);
+  const constantsTemplate = fs.readFileSync(path.join(templateDir, runtimeConfig.constantsFile), 'utf8');
   const readmeTemplate = fs.readFileSync(path.join(__dirname, '../export-templates/README.md'), 'utf8');
 
   // Read existing dependencies file
@@ -209,20 +245,14 @@ export default async function exportStandalone(outputDir = process.cwd(), option
     libsNames: libsNames.length > 0 ? libsNames.join(',\n') + ',' : '',
     functions: functionsCode.join('\n'),
     functionNames: functionsNames.length > 0 ? functionsNames.join(',\n') + ',' : '',
-    taskNameMap: JSON.stringify(taskNameMap, null, 2),
-    tasks: taskFunctions.join('\n\n'),
+    taskNameToFunctionNameMap: JSON.stringify(taskNameToFunctionNameMap, null, 2),
+    tasks: formatTaskFunctions(tasks),
     taskToolSchemas: taskToolSchemas.join(',\n'),
-    examples: JSON.stringify(examples, null, 2),
-    generateAnsweringFunctionPrompt: runtimeName === 'javascript' 
-      ? generateAnsweringFunctionPrompt(instructions, functionsHeader.signatures, true).replace(/`/g, '\\`')
-      : generateAnsweringFunctionPrompt(instructions, functionsHeader.signatures, true),
-    getAssistantInstructionsPrompt: runtimeName === 'javascript'
-      ? getAssistantInstructionsPrompt(assistantInstructions).replace(/`/g, '\\`')
-      : getAssistantInstructionsPrompt(assistantInstructions),
+    generateAnsweringFunctionPrompt: escapeInstructions(generateAnsweringFunctionPrompt(instructions, functionsHeader.signatures, true)),
+    getAssistantInstructionsPrompt: escapeInstructions(getAssistantInstructionsPrompt(assistantInstructions)),
     installCommand: runtimeConfig.installCommand,
     cliAgentCommand: runtimeConfig.cliCommand,
     httpServerCommand: runtimeConfig.httpCommand,
-    taskFunctionNames
   };
 
   // Function to replace placeholders in templates
@@ -237,17 +267,39 @@ export default async function exportStandalone(outputDir = process.cwd(), option
   }
 
   // Generate files from templates
-  const agentCode = replacePlaceholders(agentTemplate, templateData);
+  const constantsCode = replacePlaceholders(constantsTemplate, templateData);
   const readmeContent = replacePlaceholders(readmeTemplate, templateData);
 
   // Write files
-  fs.writeFileSync(path.join(outputDir, runtimeConfig.agentFile), agentCode);
+  fs.writeFileSync(path.join(outputDir, runtimeConfig.constantsFile), constantsCode);
   fs.writeFileSync(path.join(outputDir, 'README.md'), readmeContent);
   fs.writeFileSync(path.join(outputDir, runtimeConfig.dependenciesFile), dependencies);
+
+  // Write examples
+  const examplesDir = path.join(outputDir, 'examples');
+
+  fs.mkdirSync(examplesDir, { recursive: true });
+  examples.forEach(example => {
+    fs.writeFileSync(
+      path.join(examplesDir, `${example.name}.json`),
+      JSON.stringify({
+        taskEmbedding: example.taskEmbedding,
+        functionsEmbedding: example.functionsEmbedding,
+        document: example.document
+      }, null, 2)
+    );
+  });
+
+  // Copy the agent file and components directory
+  fs.copyFileSync(path.join(templateDir, runtimeConfig.agentFile), path.join(outputDir, runtimeConfig.agentFile));
+  copyDir(path.join(templateDir, 'components'), path.join(outputDir, 'components'));
 
   log(`Standalone agent exported to ${outputDir}`);
   log('Generated files:');
   log(`- ${runtimeConfig.agentFile}`);
+  log(`- ${runtimeConfig.constantsFile}`);
+  log('- components/');
+  log('- examples/');
   log(`- ${runtimeConfig.dependenciesFile}`);
   log('- README.md');
 
