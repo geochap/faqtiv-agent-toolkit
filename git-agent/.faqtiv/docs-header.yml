@@ -1,0 +1,338 @@
+diff-format.txt:
+  description: >-
+    The "diff-format.txt" document describes the raw output format of various
+    Git diff commands, detailing how changes between sets of objects are
+    represented, including modes, SHA-1 hashes, status codes, and file paths,
+    and also covers merge diffs, `--summary`, `--stat`, and `--numstat` options
+    for additional diff formats.
+diff-options.txt:
+  description: >-
+    The "diff-options.txt" document provides a comprehensive guide to Git diff
+    command options, covering how to customize diff output, including patch
+    generation, merge diff formats, rename and copy detection, and whitespace
+    handling, enriched with explanations of each option's functionality tailored
+    for different Git commands like git-log, git-diff, and git-format-patch.
+fetch-options.txt:
+  description: >-
+    The "fetch-options.txt" document provides an exhaustive list of options and
+    parameters for the `git fetch` command, detailing how to control ref
+    updates, shallow repository behavior, submodule fetching, parallel fetching,
+    connection settings, and output configuration to customize the fetching
+    process from a remote repository.
+git-add.txt:
+  description: >-
+    The "git-add.txt" document provides detailed documentation for the `git add`
+    command, explaining how to add file contents to the index to prepare for a
+    commit, including command syntax, options for interactive and patch modes,
+    editing patches, handling ignored files, and configuration settings, along
+    with examples and related commands.
+git-blame.txt:
+  description: >-
+    The "git-blame.txt" document provides comprehensive details on using the
+    `git blame` command to annotate each line of a file with the revision and
+    author information that last modified them, including options for line and
+    revision ranges, various output formats, and tips for tracking code changes
+    within a file's history.
+git-checkout-index.txt:
+  description: >-
+    The "git-checkout-index.txt" document provides detailed instructions for
+    using the `git checkout-index` command to copy files from the Git index to
+    the working directory, including various options for updating file status,
+    handling temporary files, managing file prefixes, and specifying stages for
+    merging, emphasizing its use for precise control over content retrieval from
+    the index.
+git-checkout.txt:
+  description: >-
+    The "git-checkout.txt" document provides a comprehensive guide on using the
+    `git checkout` command to switch branches, restore files in the working
+    tree, or update the working tree to match the index or a specific commit,
+    with detailed explanations of options, behavior in detached HEAD states,
+    handling merge conflicts, and usage examples.
+git-cherry-pick.txt:
+  description: >-
+    The "git-cherry-pick.txt" document provides detailed guidance on using the
+    `git cherry-pick` command to apply changes introduced by specific commits to
+    the current branch, including handling conflicts, various options for commit
+    messages and signatures, and executing cherry-pick sequences with
+    subcommands for advanced commit management scenarios.
+git-cherry.txt:
+  description: >-
+    The "git-cherry.txt" document describes the use of the `git cherry` command
+    to identify which commits from a specified range are not yet applied to an
+    upstream branch, particularly useful in patch-based workflows for tracking
+    commit status and equivalence, with options to display commit subjects and
+    specify commit limits for the comparison.
+git-clone.txt:
+  description: >-
+    The "git-clone.txt" document provides detailed instructions for using the
+    `git clone` command to create a copy of a repository into a new directory,
+    covering various options for customization, such as repository references,
+    branching, depth control, submodule handling, and setting configuration
+    values, along with examples of common use cases.
+git-describe.txt:
+  description: >-
+    The "git-describe.txt" document explains how to use the `git describe`
+    command to generate a human-readable name for a Git object by finding the
+    most recent tag reachable from a commit, with options to customize the
+    description, including tag and ref filtering, working tree states, and
+    output formats.
+git-diff-files.txt:
+  description: >-
+    The "git-diff-files.txt" document provides instructions for using the `git
+    diff-files` command to compare files in the working tree against the index,
+    detailing various options to control the output format and specify branches
+    for comparison, particularly useful for identifying unstaged changes prior
+    to committing.
+git-diff-index.txt:
+  description: >-
+    The "git-diff-index.txt" document explains the `git diff-index` command,
+    which compares the contents of the working tree or index with a specified
+    tree object, allowing users to see differences between tracked files and the
+    index, with options for various modes to check pre-commit changes or
+    uncommitted modifications, providing output similar to `git diff-tree` and
+    `git diff-files` commands.
+git-diff-tree.txt:
+  description: >-
+    The "git-diff-tree.txt" document provides instructions for using the `git
+    diff-tree` command to compare the content and mode of blobs between two tree
+    objects, particularly between commits and their parents, with options for
+    recursive comparison, merge base analysis, and detailed output formatting
+    for understanding changes between commits.
+git-diff.txt:
+  description: >-
+    The "git-diff.txt" document provides detailed guidance on using the `git
+    diff` command to show changes between commits, between your working
+    directory and the index, or between two files or trees, with a broad range
+    of options for specifying commits, paths, and formatting the output to aid
+    in understanding modifications made to a Git repository.
+git-difftool.txt:
+  description: >-
+    The "git-difftool.txt" document provides instructions on using the `git
+    difftool` command to view and compare changes between commits or the working
+    tree using external diff tools, covering options for tool selection,
+    directory and symlink handling, customization of commands, and user prompts,
+    along with configuration settings tied to both difftool and mergetool
+    functionalities.
+git-fetch.txt:
+  description: >-
+    The "git-fetch.txt" document provides detailed instructions for the `git
+    fetch` command, which is used to download branches, tags, and associated
+    objects from remote repositories, updating local references and
+    configurations, with options for specifying repositories, refspecs, and
+    handling tags, submodules, and prune operations, along with configuration
+    and output behavior.
+git-init.txt:
+  description: >-
+    The "git-init.txt" document details how to use the `git init` command to
+    create an empty Git repository or reinitialize an existing one, explaining
+    options for setting the branch name, template directory, object and ref
+    formats, and shared repository configurations, along with guidelines for
+    directory and environment setup.
+git-log.txt:
+  description: >-
+    The "git-log.txt" document provides comprehensive instructions for using the
+    `git log` command to display commit history in a Git repository, offering
+    options for filtering and formatting output, tracking file changes across
+    renames, and customizing displayed data, while integrating features from
+    `git-rev-list` and `git-diff` to enhance log functionalities.
+git-ls-files.txt:
+  description: >-
+    The "git-ls-files.txt" document explains the use of the `git ls-files`
+    command to show information about files in the index and working tree,
+    offering options to display tracked, untracked, modified, deleted, or
+    ignored files, among others, and providing details on how to customize
+    output and handle exclude patterns effectively.
+git-merge-base.txt:
+  description: >-
+    The "git-merge-base.txt" document provides instructions for using the `git
+    merge-base` command to find the best common ancestor(s) of two or more
+    commits, aiding in merges or determining the relationship between branches,
+    with options to handle multiple commits, check commit ancestry, and identify
+    fork-points in the branch history.
+git-merge-file.txt:
+  description: >-
+    The "git-merge-file.txt" document provides instructions for using the `git
+    merge-file` command to perform a three-way file merge, incorporating changes
+    from two files into a third, with options for resolving conflicts, labeling
+    outputs, and specifying object IDs for blobs, primarily serving as a minimal
+    implementation of RCS 'merge' functionality needed by Git.
+git-merge-index.txt:
+  description: >-
+    The "git-merge-index.txt" document provides information on using the `git
+    merge-index` command to automate the merging process for files that require
+    it in the index, specifying options for handling multiple files, error
+    management, and integration with custom merge scripts, with a focus on the
+    order of merging arguments.
+git-merge-one-file.txt:
+  description: >-
+    The "git-merge-one-file.txt" document provides details on the `git
+    merge-one-file` command, a standard helper program used in conjunction with
+    `git merge-index` to assist in resolving merges after a trivial merge
+    performed by `git read-tree -m`.
+git-merge-tree.txt:
+  description: >-
+    The "git-merge-tree.txt" document describes the `git merge-tree` command,
+    which performs a merge between branches without modifying the working tree
+    or index, presenting the merged result as a tree object and detailing
+    conflicts, if any, through output sections for sophisticated handling akin
+    to `git merge`, while offering options for conflict messaging and
+    compatibility with older usage styles.
+git-merge.txt:
+  description: >-
+    The "git-merge.txt" document provides detailed guidance on using the `git
+    merge` command to combine changes from different branches, covering options
+    for conflict resolution, commit messages, and strategies, along with steps
+    for handling conflicts and preparing pre-merge checks, plus examples and
+    configuration notes to facilitate integration activities in Git
+    repositories.
+git-mergetool--lib.txt:
+  description: >-
+    The "git-mergetool--lib.txt" document provides details about the
+    `git-mergetool--lib` scriptlet, meant for use by other shell scripts to set
+    up functions for working with Git merge tools, describing functions for
+    selecting, initializing, and running merge tools, specifically for those
+    writing or studying Git Porcelain scripts.
+git-mergetool.txt:
+  description: >-
+    The "git-mergetool.txt" document provides guidance on using the `git
+    mergetool` command to invoke external merge resolution tools to resolve
+    conflicts during a Git merge, detailing options for tool selection,
+    execution prompts, configuration settings, and handling of temporary files,
+    and it includes specifics for backend tools like vimdiff.
+git-mv.txt:
+  description: >-
+    The "git-mv.txt" document explains the use of the `git mv` command for
+    moving or renaming files, directories, or symlinks within a Git repository,
+    detailing options for forceful moves, dry-runs, and verbosity, as well as
+    special handling considerations when moving submodules.
+git-prune.txt:
+  description: >-
+    The "git-prune.txt" document describes the `git prune` command, which is
+    used to remove unreachable objects from the Git object database to save
+    space, while noting that `git gc` is generally preferred as it handles
+    pruning along with other maintenance tasks, and detailing options for
+    running the command safely and efficiently.
+git-pull.txt:
+  description: >-
+    The "git-pull.txt" document describes the `git pull` command, which is used
+    to fetch changes from a remote repository and integrate them into the
+    current branch, detailing its behavior for merging or rebasing,
+    configuration options, handling of submodules, default behaviors, and
+    providing examples for its usage in different scenarios.
+git-push.txt:
+  description: >-
+    The "git-push.txt" document explains the `git push` command, which is used
+    to update remote references along with their associated objects,
+    highlighting options for defining what and where to push, handling force
+    pushes, setting upstream branches, and managing submodules, providing a
+    detailed overview of default behaviors, examples, and configuration settings
+    for effective repository management.
+git-rebase.txt:
+  description: >-
+    The "git-rebase.txt" document details the `git rebase` command, explaining
+    how to reapply commits on top of another base tip, covering various options
+    for specifying the rebase process, resolving conflicts, interactive mode for
+    editing commits, and managing merge scenarios, with precautionary notes on
+    its implications for shared repositories.
+git-reset.txt:
+  description: >-
+    The "git-reset.txt" document provides comprehensive guidance on using the
+    `git reset` command, which is used to reset the current HEAD to a specified
+    state, detailing various modes like soft, mixed, hard, merge, and keep, and
+    explaining how it affects the working tree, index, and commit history, along
+    with examples and use cases to undo changes or refine commit sequences.
+git-restore.txt:
+  description: >-
+    The "git-restore.txt" document provides guidance on using the `git restore`
+    command to revert working tree files to a specified state from a given
+    source, with options for restoring content to the index, working tree, or
+    both, detailing usage for interactive mode, handling submodules, and setting
+    overlay modes, and offering examples for common file restoration scenarios.
+git-revert.txt:
+  description: >-
+    The "git-revert.txt" document details the `git revert` command, which is
+    used to create new commits that undo changes introduced by previous commits,
+    offering options for editing commit messages, handling merges, and managing
+    multiple commits, while emphasizing the utility of revert in maintaining
+    history without discarding uncommitted changes.
+git-rm.txt:
+  description: >-
+    The "git-rm.txt" document explains the `git rm` command, which is used to
+    remove files from both the working tree and the index in a Git repository,
+    including options for force removal, handling submodules, and dealing with
+    pathspecs, as well as alternatives for specific scenarios like files
+    disappearing from the filesystem.
+git-show-branch.txt:
+  description: >-
+    The "git-show-branch.txt" document details the `git show-branch` command,
+    which provides a semi-visual representation of branch commits and their
+    ancestry in a Git repository. It offers options for displaying specific
+    branches, remote branches, commit orders, and more, along with configuration
+    tips and examples for effective branch comparison and review.
+git-show-ref.txt:
+  description: >-
+    The "git-show-ref.txt" document provides details on using the `git show-ref`
+    command to list references in a local Git repository, offering options for
+    filtering by branches, tags, dereferencing tags, verifying reference
+    existence, and scripting support, with examples of typical usage scenarios
+    for managing and exploring repository refs.
+git-show.txt:
+  description: >-
+    The "git-show.txt" document provides an overview of the `git show` command,
+    which is used to display various types of Git objects, such as commits,
+    tags, trees, and blobs. It details options for displaying logs, diffs, and
+    object contents, drawing from `git log` options to format the output, and
+    includes examples to illustrate typical usage scenarios.
+git-stash.txt:
+  description: >-
+    The "git-stash.txt" document describes the `git stash` command, which allows
+    users to temporarily save changes in a dirty working directory to return to
+    a clean state, detailing how to list, show, apply, and pop stash entries,
+    along with examples of managing workflows and preserving changes for future
+    use, and covering options like including untracked files and interactive
+    patch selection.
+git-status.txt:
+  description: >-
+    The "git-status.txt" document describes the `git status` command, which
+    displays the state of the working directory and staging area by listing
+    paths with differences between the working tree and index, changes ready to
+    be committed, and untracked files, detailing options for output formatting,
+    filtering, performance optimization, and handling submodules.
+git-version.txt:
+  description: >-
+    The "git-version.txt" document describes the `git version` command, which
+    displays the version information of Git, with an option to include details
+    about its build configuration for diagnostic purposes.
+main.txt:
+  description: >-
+    The "main.txt" document provides an overview of Git as a distributed
+    revision control system, including its command-line syntax, main and
+    auxiliary commands (both porcelain and plumbing), configuration options,
+    environment variables, and security considerations, offering links to
+    tutorials, guides, and detailed documentation for users of all levels.
+merge-options.txt:
+  description: >-
+    The "merge-options.txt" document outlines the various command-line options
+    available for merging branches in Git, detailing functionalities such as
+    commit handling, merge strategies, message editing, conflict resolutions,
+    verification, and progress reporting, providing users with tools to control
+    the behavior and output of merge operations.
+merge-strategies.txt:
+  description: >-
+    The "merge-strategies.txt" document provides an overview of various merge
+    strategies available in Git, such as 'ort', 'recursive', 'resolve',
+    'octopus', and 'ours', detailing their capabilities and options for handling
+    merges between branches, including conflict resolution, rename detection,
+    and whitespace handling.
+sequencer.txt:
+  description: >-
+    The "sequencer.txt" document outlines options for managing Git operations
+    like cherry-pick or revert sequences, including commands to continue after
+    conflict resolution, skip commits, quit and clear the sequencer state, or
+    abort the operation to revert to the original state.
+urls.txt:
+  description: >-
+    The "urls.txt" document explains the formats and types of URLs used to
+    connect to remote Git repositories, detailing protocols like ssh, git, http,
+    and https, and also describing URL rewriting configurations (`insteadOf` and
+    `pushInsteadOf`) for transforming URLs into more usable forms.

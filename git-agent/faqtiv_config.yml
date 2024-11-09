@@ -1,0 +1,5 @@
+runtime: javascript
+auto_add_examples: true
+modules: []
+task_examples:
+  - checkout
