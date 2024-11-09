@@ -137,6 +137,11 @@ export function loadConfig() {
       functionsHeader.embedding = decodeBase64(functionsHeader.embedding);
     } catch(e) {}
 
+    let documentsHeader;
+    try {
+      documentsHeader = yaml.load(fs.readFileSync(path.join('.faqtiv', 'docs-header.yml'), 'utf8'));
+    } catch(e) {}
+
     let instructions = '';
     try {
       instructions = fs.readFileSync(path.join('instructions.txt'), 'utf8');
@@ -151,6 +156,7 @@ export function loadConfig() {
       instructions,
       assistantInstructions,
       functionsHeader,
+      documentsHeader,
       functions,
       libs,
       runtime,
@@ -164,6 +170,8 @@ export function loadConfig() {
       functionsDir: path.join(process.cwd(), 'functions'),
       libsDir: path.join(process.cwd(), 'libs'),
       headerPath: path.join(projectWorkdir, 'functions-header.yml'),
+      docsDir: path.join(process.cwd(), 'docs'),
+      docsHeaderPath: path.join(projectWorkdir, 'docs-header.yml'),
       tmpDir: path.join(projectWorkdir, 'tmp'),
       logsDir: path.join(process.cwd(), 'logs')
     };
