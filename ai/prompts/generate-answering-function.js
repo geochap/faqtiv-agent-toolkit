@@ -18,6 +18,14 @@ You have these globally available public functions:
 {{functionsSignatures}}
 \`\`\`
 
+And you have these documents:
+
+\`\`\`
+{{documentsHeader}}
+\`\`\`
+
+Use tool get_document to get more information for the documents that you consider relevant to implement the doTask function.
+
 Using only these functions execute the following instructions:
 
 In a codeblock at the top of your response write a ${runtimeName} function called doTask that fulfills the given requirements:
@@ -53,8 +61,14 @@ const compilePrompt = `
 - The function code block should only include the function code without any example calls to it.
 `;
 
-export function generateAnsweringFunctionPrompt(instructions, functionsSignatures, adHoc = false) {
-  let prompt = basePrompt.replace('{{functionsSignatures}}', functionsSignatures);
+export function generateAnsweringFunctionPrompt(instructions, functionsSignatures, documentsHeader, adHoc = false) {
+  const formattedDocuments = Object.entries(documentsHeader)
+    .map(([key, value]) => `- ${key}: ${value.description}\n`)
+    .join('\n');
+
+  let prompt = basePrompt
+    .replace('{{functionsSignatures}}', functionsSignatures)
+    .replace('{{documentsHeader}}', formattedDocuments);
   prompt += adHoc ? adHocPrompt : compilePrompt;
   
   if (instructions) {

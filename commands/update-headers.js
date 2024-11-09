@@ -60,8 +60,8 @@ export default async function(options) {
       }).filter(Boolean);
     }
 
-    const { instructions, functions, functionsHeader } = config.project;
-    const codeAgent = new CodeAgent('code-gen-demo', instructions, functions, functionsHeader ? functionsHeader.signatures : '', config.openai);
+    const { instructions, functions, functionsHeader, documentsHeader } = config.project;
+    const codeAgent = new CodeAgent('code-gen-demo', instructions, functions, functionsHeader ? functionsHeader.signatures : '', documentsHeader, config.openai);
 
     const functionsCode = fullPaths.map(file => fs.readFileSync(file, 'utf8'));
     const improvedSignatures = await codeAgent.improveFunctionSignatures(functionsCode, signatures);

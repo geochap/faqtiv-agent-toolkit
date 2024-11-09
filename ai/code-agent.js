@@ -5,6 +5,7 @@ import { generateAnsweringFunctionPrompt } from './prompts/generate-answering-fu
 import { extractFunctionCode } from '../lib/parse-utils.js';
 import { improveFunctionSignaturesPrompt } from './prompts/improve-function-signatures.js';
 import { generateLangchainToolSchemaFromFunctionPrompt } from './prompts/generate-langchain-tool-schema-from-function.js';
+import { getDocumentTool } from './tools/get-document.js';
 
 function codeResponse(response) {
   try {
@@ -31,7 +32,7 @@ function codeResponse(response) {
   }
 }
 
-async function generateAnsweringFunction(ai, promptMessages, instructions, functionsSignatures, examples = [], adHoc = false) {
+async function generateAnsweringFunction(ai, promptMessages, instructions, functionsSignatures, documentsHeader, examples = [], adHoc = false) {
   examples = examples.flatMap(e => {
     return [
       new HumanMessage(e.task),
@@ -39,7 +40,7 @@ async function generateAnsweringFunction(ai, promptMessages, instructions, funct
     ];
   });
 
-  const preprompt = generateAnsweringFunctionPrompt(instructions, functionsSignatures, adHoc);
+  const preprompt = generateAnsweringFunctionPrompt(instructions, functionsSignatures, documentsHeader, adHoc);
   const messages = await ai.start(preprompt, promptMessages, examples, 'generate-answering-function');
   const response = messages[messages.length - 1].content.trim();
 
@@ -67,12 +68,15 @@ export function getFunctionDependencies(functionNames, functions) {
 }
 
 export default class CodeAgent {
-  constructor(id, instructions, functions, functionsSignatures, modelConfig = { model, organization, apiKey }) {
+  constructor(id, instructions, functions, functionsSignatures, documentsHeader, modelConfig = { model, organization, apiKey }) {
     this.id = id;
-    this.ai = new AI(modelConfig, id);
+    const tools = [getDocumentTool];
+
+    this.ai = new AI(modelConfig, id, tools);
     this.instructions = instructions;
     this.functions = functions;
     this.functionsSignatures = functionsSignatures;
+    this.documentsHeader = documentsHeader;
   }
 
   async generateResponse(conversation, examples, adHoc=false) {
@@ -83,7 +87,7 @@ export default class CodeAgent {
       return new AIMessage(m.message);
     });
 
-    let { code, call } = await generateAnsweringFunction(this.ai, promptMessages, this.instructions, this.functionsSignatures, examples, adHoc);
+    let { code, call } = await generateAnsweringFunction(this.ai, promptMessages, this.instructions, this.functionsSignatures, this.documentsHeader, examples, adHoc);
     const usedFunctions = extractFunctionNames(code);
     const functions = getFunctionDependencies(usedFunctions, this.functions);
 
