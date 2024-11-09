@@ -69,7 +69,9 @@ export function getFunctionDependencies(functionNames, functions) {
 export default class CodeAgent {
   constructor(id, instructions, functions, functionsSignatures, modelConfig = { model, organization, apiKey }) {
     this.id = id;
-    this.ai = new AI(modelConfig, id);
+    const tools = [];
+
+    this.ai = new AI(modelConfig, id, tools);
     this.instructions = instructions;
     this.functions = functions;
     this.functionsSignatures = functionsSignatures;

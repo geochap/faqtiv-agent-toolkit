@@ -59,8 +59,7 @@ export function generateAnsweringFunctionPrompt(instructions, functionsSignature
     .join('\n');
 
   let prompt = basePrompt
-    .replace('{{functionsSignatures}}', formattedFunctions)
-    .replace('{{documentsHeader}}', formattedDocuments);
+    .replace('{{functionsSignatures}}', formattedFunctions);
   prompt += adHoc ? adHocPrompt : compilePrompt;
   
   if (instructions) {
