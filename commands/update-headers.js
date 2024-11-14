@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import yaml from 'js-yaml';
 import jsdoc2md from 'jsdoc-to-markdown';
+import updateDocHeaders, { docHeadersUpToDate } from './update-doc-headers.js';
 import * as config from '../config.js';
 import { getTaskEmbedding } from '../controllers/code-gen.js';
 import { encodeBase64 } from '../lib/base64.js';
@@ -21,12 +22,14 @@ export default async function(options) {
 
     if (!force) {
       const headersUpdated = headersUpToDate();
+      const docsUpdated = docHeadersUpToDate();
 
-      if (headersUpdated) {
-        console.log('Functions up to date, nothing to do');
+      if (headersUpdated && docsUpdated) {
+        console.log('Functions and documentation up to date, nothing to do');
         return;
       }
     }
+    await updateDocHeaders(options);
 
     const { instructions, functions, functionsHeader, documentsHeader } = config.project;
     const functionFiles = fs.readdirSync(functionsDir).filter(file => file.endsWith(codeFileExtension));

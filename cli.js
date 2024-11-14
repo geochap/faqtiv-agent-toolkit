@@ -31,7 +31,6 @@ import updateTask from './commands/update-task.js';
 import fixTask from './commands/fix-task.js';
 import showTask from './commands/show-task.js';
 import showConfig from './commands/show-config.js';
-import updateDocHeaders from './commands/update-doc-headers.js';
 
 program
   .version(config.version)
@@ -199,12 +198,6 @@ program
   .option('--json', 'Output in JSON format')
   .description('Display the current configuration from faqtiv_config.yml')
   .action(showConfig);
-
-program
-  .command('update-doc-headers')
-  .option('--force', 'Force update headers')
-  .description('Update the documentation headers')
-  .action(updateDocHeaders);
 
 program
   .on('--help', () => {
