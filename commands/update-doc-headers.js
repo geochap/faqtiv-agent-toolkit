@@ -11,24 +11,30 @@ export default async function(options) {
   const force = options.force;
   try {
     if (!fs.existsSync(docsDir) || fs.readdirSync(docsDir).length === 0) {
-      console.log('No documentation files found, nothing to do');
+      console.log('No documentation files found, skipping documentation update');
       return;
     }
 
     if (!force && docHeadersUpToDate()) {
-      console.log('Documentation headers up to date, nothing to do');
+      console.log('Documentation headers up to date, skipping documentation update');
       return;
     }
 
     const docFiles = fs.readdirSync(docsDir);
     const docsAgent = new DocsAgent('update-doc-headers', config.openai);
-    const docIndex = {};
+    const existingIndex = config.project.documentsHeader;
+
+    const filesToProcess = force ? docFiles : docFiles.filter(file => {
+      const headerStat = fs.existsSync(docHeaderPath) ? fs.statSync(docHeaderPath) : null;
+      const filePath = path.join(docsDir, file);
+      return !headerStat || fs.statSync(filePath).mtime > headerStat.mtime;
+    });
+
+    const docIndex = force ? {} : { ...existingIndex };
     
-    for (const file of docFiles) {
+    for (const file of filesToProcess) {
       const fullPath = path.join(docsDir, file);
       const docContent = fs.readFileSync(fullPath, 'utf8');
-
-      // Generate description for single document
       const description = await docsAgent.generateDocDescription(file, docContent);
       
       docIndex[file] = {
@@ -40,7 +46,7 @@ export default async function(options) {
 
     fs.writeFileSync(docHeaderPath, yaml.dump(docIndex), 'utf8');
     
-    console.log('Documentation index header updated');
+    console.log(`Documentation index header updated (${filesToProcess.length} files processed)`);
   } catch (error) {
     console.error('Error generating doc headers:', error);
     process.exit(1);

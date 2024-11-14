@@ -62,12 +62,15 @@ const compilePrompt = `
 `;
 
 export function generateAnsweringFunctionPrompt(instructions, functionsSignatures, documentsHeader, adHoc = false) {
+  const formattedFunctions = Object.entries(functionsSignatures)
+    .map(([key, value]) => `- ${value}\n`)
+    .join('\n');
   const formattedDocuments = Object.entries(documentsHeader)
     .map(([key, value]) => `- ${key}: ${value.description}\n`)
     .join('\n');
 
   let prompt = basePrompt
-    .replace('{{functionsSignatures}}', functionsSignatures)
+    .replace('{{functionsSignatures}}', formattedFunctions)
     .replace('{{documentsHeader}}', formattedDocuments);
   prompt += adHoc ? adHocPrompt : compilePrompt;
   
