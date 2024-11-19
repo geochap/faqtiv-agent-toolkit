@@ -59,9 +59,9 @@ export function generateAnsweringFunctionPrompt(instructions, functionsSignature
   const formattedFunctions = Object.entries(functionsSignatures)
     .map(([key, value]) => `- ${value}\n`)
     .join('\n');
-  const formattedDocuments = Object.entries(documentsHeader)
+  const formattedDocuments = documentsHeader ? Object.entries(documentsHeader)
     .map(([key, value]) => `- ${key}: ${value.description}\n`)
-    .join('\n');
+    .join('\n') : '';
 
   let prompt = basePrompt
     .replace('{{functionsSignatures}}', formattedFunctions)

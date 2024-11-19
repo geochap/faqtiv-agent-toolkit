@@ -124,16 +124,20 @@ async function updateFunctionManuals(functionsFiles) {
 
     const docsAgent = new DocsAgent('update-headers', config.openai);
 
+    let totalManuals = 0;
     for (const file of functionsFiles) {
       const fileContent = fs.readFileSync(path.join(functionsDir, file), 'utf8');
       const { functions } = readFunctionFile(fileContent);
+
+      totalManuals += functions.length;
       for (const { name, code } of functions) {
+        console.log(`Generating manual for ${name}`);
         const manual = await docsAgent.generateFunctionManual(code, config.project.documentsHeader);
         const manualPath = path.join(manualsDir, `${name}.md`);
         fs.writeFileSync(manualPath, manual, 'utf8');
       }
     }
-    console.log(`Function documentation updated, wrote ${functionsFiles.length} manuals`);
+    console.log(`Function documentation updated, wrote ${totalManuals} manuals`);
   } else {
     console.log('No functions need documentation update');
   }
@@ -149,8 +153,6 @@ function getFunctionsNeedingManualUpdate(functionFiles) {
     return functionFiles;
   }
 
-  const docHeaderStat = fs.statSync(docHeaderPath);
-
   return functionFiles.filter(file => {
     const functionPath = path.join(functionsDir, file);
     const functionStat = fs.statSync(functionPath);
@@ -161,9 +163,9 @@ function getFunctionsNeedingManualUpdate(functionFiles) {
       return true;
     }
 
-    // Check if manual file is older than doc header or if function is newer than doc header
+    // Check if manual file than function
     const manualStat = fs.statSync(manualPath);
-    return manualStat.mtime < docHeaderStat.mtime || functionStat.mtime > docHeaderStat.mtime;
+    return manualStat.mtime < functionStat.mtime;
   });
 }
 

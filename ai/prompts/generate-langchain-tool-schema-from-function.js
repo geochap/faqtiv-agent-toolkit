@@ -58,7 +58,7 @@ Generate a langchain tool schema for this function applying the following criter
 - For the model name use create a model name from the tool name.
 - For the function description keep as short as possible without leaving out any important details, do not mention stdout or console.
 - Include a returns_description code doc property that must describe the return type as thoroughly as possible so to the best of your abilities infer the types from the code, for example "array" or "object" are not acceptable types unless their items or content properties are defined.
-- Reply back with the schemas as-is: leave out the code and functions, no imports, no additional text or codeblock tags or surrounding braces.
+- Reply back with the schemas as-is: leave out the code and functions, no comments, no imports, no additional text or codeblock tags or surrounding braces.
 - output should correspond to the json output of the function.
 ${runtimeInstructions[runtimeName]}
 - Make sure the returned output matches the structure of the example below.

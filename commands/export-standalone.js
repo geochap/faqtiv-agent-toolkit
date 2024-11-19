@@ -71,10 +71,7 @@ function getTaskFunctions() {
       // Convert task name to a valid function name for both Python and JavaScript
       const validFunctionName = taskName.replace(/[^a-zA-Z0-9_]/g, '_').replace(/^[0-9]/, '_');
       
-      // Replace 'doTask' with the new function name for both Python and JavaScript
-      const updatedCode = doTaskCode.replace(/\b(def|function)\s+doTask\b/, `$1 ${validFunctionName}`);
-      
-      tasks[validFunctionName] = updatedCode;
+      tasks[validFunctionName] = doTaskCode;
       taskNameToFunctionNameMap[taskName] = validFunctionName;
 
       // Get and update the task schema

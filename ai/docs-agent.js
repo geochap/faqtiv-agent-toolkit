@@ -1,11 +1,12 @@
 import { AI } from './ai.js';
 import { generateDocSummaryPrompt } from './prompts/generate-doc-summary.js';
 import { generateFunctionManualPrompt } from './prompts/generate-function-manual.js';
+import { getDocumentTool } from './tools/get-document.js';
 
 export default class DocsAgent {
   constructor(id, modelConfig = { model, organization, apiKey }) {
     this.id = id;
-    const tools = [];
+    const tools = [getDocumentTool];
 
     this.ai = new AI(modelConfig, id, tools);
   }

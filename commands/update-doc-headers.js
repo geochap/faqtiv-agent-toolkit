@@ -10,7 +10,14 @@ const docHeaderPath = config.project.docsHeaderPath;
 export default async function(options) {
   const force = options.force;
   try {
-    if (!fs.existsSync(docsDir) || fs.readdirSync(docsDir).length === 0) {
+    if (!fs.existsSync(docsDir)) {
+      fs.mkdirSync(docsDir, { recursive: true });
+      fs.writeFileSync(docHeaderPath, yaml.dump({}), 'utf8');
+      console.log('Documentation directory does not exist, skipping documentation update');
+      return;
+    }
+
+    if (fs.readdirSync(docsDir).length === 0) {
       console.log('No documentation files found, skipping documentation update');
       return;
     }
