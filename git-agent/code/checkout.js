@@ -7,7 +7,7 @@ const { spawn } = require('child_process');
 const { existsSync } = require('node:fs');
     
 /**
-* PUBLIC FUNCTIONS
+* LIBRARY FUNCTIONS
 * Warning: these are common functions, if you need to make changes edit the function file and recompile this task.
  */
 
@@ -57,11 +57,20 @@ async function executeCommand(directoryPath, args) {
   });
 }
 /**
+* PUBLIC FUNCTIONS
+* Warning: these are common functions, if you need to make changes edit the function file and recompile this task.
+ */
+
+async function checkout(directoryPath, branchName) {
+  const result = await executeCommand(directoryPath, ['git', 'checkout', '-b', branchName]);
+  return result;
+}
+/**
 * GENERATED CODE
 * This function is the generated code: it's safe to edit.
  */
 
-async function doTask(branchName) {
-  const result = await executeCommand(process.cwd(), ['git', 'checkout', '-b', branchName]);
-  console.log(result);
+async function doTask(directoryPath, branchName) {
+    const result = await checkout(directoryPath, branchName);
+    console.log(JSON.stringify({ result }));
 }
