@@ -31,3 +31,7 @@ task_examples:
   - showProjectConfig
   - showInstructions
   - migrateTasks
+  - updateDocHeaders
+  - listDocuments
+  - showDocument
+  - addDocument

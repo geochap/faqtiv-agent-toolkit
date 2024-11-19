@@ -1,0 +1,8 @@
+faqtiv-readme.md:
+  description: >-
+    The `faqtiv-readme.md` file provides comprehensive documentation for
+    managing projects using the Faqtiv command-line tool. It includes
+    instructions on initializing new projects, configuring settings, managing
+    functions and modules, handling tasks, updating agent instructions, and
+    maintaining documentation within a development environment that supports
+    both JavaScript and Python runtimes.
