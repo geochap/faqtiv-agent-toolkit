@@ -18,7 +18,7 @@ You have these globally available public functions:
 {{functionsSignatures}}
 \`\`\`
 
-Use tool get_function_manual to get documentation for the functions that you consider relevant to implement the doTask function.
+Always call tool get_function_manual to get documentation for the functions you use.
 
 Using only these functions execute the following instructions:
 
@@ -71,6 +71,8 @@ export function generateAnsweringFunctionPrompt(instructions, functionsSignature
   if (instructions) {
     prompt += `\n# TASK CODE GENERATION INSTRUCTIONS AND ADDITIONAL INFORMATION:\n${instructions}`;
   }
+
+  console.log(prompt);
 
   return prompt;
 }
