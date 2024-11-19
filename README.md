@@ -114,6 +114,65 @@ In order to generate code first we need to generate function signature headers f
 faqtiv update-headers
 ```
 
+### Managing Documentation
+
+Add document files to /docs to provide the LLM with context about the agent's domain.
+
+#### Adding Documentation
+To add a new documentation file, use the `add-document` command:
+
+```bash
+faqtiv add-document <name> <content>
+```
+
+- `<name>`: The name of the document (with or without .md extension)
+- `<content>`: The content of the document in markdown format
+
+This command will:
+1. Create the document in the docs directory
+2. Automatically add .md extension if not provided
+3. Update the documentation headers to include the new file
+
+Example:
+```bash
+faqtiv add-document api-reference "# API Reference\n\nThis document describes..."
+```
+
+#### Updating Documentation Headers
+Update documentation headers using the `update-doc-headers` command:
+
+```bash
+faqtiv update-doc-headers
+```
+
+Options:
+- `--force`: Force update of documentation headers
+
+This command generates documentation headers that serve as an index for the documentation files.
+
+#### Listing Documentation
+To view the current documentation, use the `list-documents` command:
+
+```bash
+faqtiv list-documents
+```
+
+Options:
+- `--json`: Output the result in JSON format
+
+This command displays all documentation files in the project
+
+#### Show Document Contents
+To view the contents of a specific document, use the `show-document` command:
+
+```bash
+faqtiv show-document <name>
+```
+
+- `<name>`: The name of the document file to display
+
+This command displays the full contents of the specified document file.
+
 ### Managing Tasks
 Tasks are stored as text files that live within the "tasks" folder of a project. You can add, edit, or delete files in that folder manually or you can use the commands below to do the same. The task name is the file name without the .txt extension. 
 

@@ -31,6 +31,10 @@ import updateTask from './commands/update-task.js';
 import fixTask from './commands/fix-task.js';
 import showTask from './commands/show-task.js';
 import showConfig from './commands/show-config.js';
+import updateDocHeaders from './commands/update-doc-headers.js';
+import listDocuments from './commands/list-documents.js';
+import showDocument from './commands/show-document.js';
+import addDocument from './commands/add-document.js';
 
 program
   .version(config.version)
@@ -198,6 +202,28 @@ program
   .option('--json', 'Output in JSON format')
   .description('Display the current configuration from faqtiv_config.yml')
   .action(showConfig);
+
+program
+  .command('update-doc-headers')
+  .option('--force', 'Force update headers')
+  .description('Generate documentation headers')
+  .action(updateDocHeaders);
+
+program
+  .command('list-documents')
+  .option('--json', 'output to json')
+  .description('List documentation files and their headers')
+  .action(listDocuments);
+
+program
+  .command('show-document <name>')
+  .description('Display the contents of a specific document')
+  .action(showDocument);
+
+program
+  .command('add-document <name> <content>')
+  .description('Add a new documentation file')
+  .action(addDocument);
 
 program
   .on('--help', () => {
