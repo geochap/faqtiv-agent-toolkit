@@ -23,7 +23,7 @@ async function executeCommand(directoryPath, args) {
 
     const child = spawn(command, [...args], {
       cwd,
-      shell: true, // Ensures command is executed within a shell
+      shell: true,
       windowsHide: true,
     });
 

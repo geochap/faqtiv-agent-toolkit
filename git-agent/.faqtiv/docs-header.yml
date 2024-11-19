@@ -1,10 +1,11 @@
 diff-format.txt:
   description: >-
-    The `diff-format.txt` documentation explains the raw output formats used by
-    various Git diff commands, detailing the structure and interpretation of
-    each part of the output, including modes, sha1 hashes, status letters, and
-    the format for merges, as well as additional diff options like `--summary`
-    and `--stat`.
+    The file "diff-format.txt" provides a detailed explanation of the raw output
+    formats for various Git diff commands, describing how these commands compare
+    different sets of files, the format of the output lines, including the
+    meaning of status letters, scoring, and handling of merge commit diffs, as
+    well as the usage of additional options like `--summary`, `--stat`, and
+    `--numstat` for enhanced visibility of changes.
 diff-options.txt:
   description: >-
     The `diff-options.txt` documentation provides a comprehensive list of

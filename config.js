@@ -172,6 +172,7 @@ export function loadConfig() {
       headerPath: path.join(projectWorkdir, 'functions-header.yml'),
       docsDir: path.join(process.cwd(), 'docs'),
       docsHeaderPath: path.join(projectWorkdir, 'docs-header.yml'),
+      manualsDir: path.join(process.cwd(), 'manuals'),
       tmpDir: path.join(projectWorkdir, 'tmp'),
       logsDir: path.join(process.cwd(), 'logs')
     };

@@ -24,7 +24,7 @@ async function executeCommand(directoryPath, args) {
 
     const child = spawn(command, [...args], {
       cwd,
-      shell: true, // Ensures command is executed within a shell
+      shell: true,
       windowsHide: true,
     });
 
@@ -62,6 +62,6 @@ async function executeCommand(directoryPath, args) {
  */
 
 async function doTask(branchName) {
-    const result = await executeCommand(process.cwd(), ['git', 'checkout', '-b', branchName]);
-    console.log({ result });
+  const result = await executeCommand(process.cwd(), ['git', 'checkout', '-b', branchName]);
+  console.log(result);
 }
