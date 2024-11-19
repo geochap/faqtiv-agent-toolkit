@@ -18,13 +18,7 @@ You have these globally available public functions:
 {{functionsSignatures}}
 \`\`\`
 
-And you have these documents:
-
-\`\`\`
-{{documentsHeader}}
-\`\`\`
-
-Use tool get_document to get more information for the documents that you consider relevant to implement the doTask function.
+Use tool get_function_manual to get documentation for the functions that you consider relevant to implement the doTask function.
 
 Using only these functions execute the following instructions:
 

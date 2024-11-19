@@ -6,6 +6,7 @@ import { extractFunctionCode } from '../lib/parse-utils.js';
 import { improveFunctionSignaturePrompt } from './prompts/improve-function-signature.js';
 import { generateLangchainToolSchemaFromFunctionPrompt } from './prompts/generate-langchain-tool-schema-from-function.js';
 import { getDocumentTool } from './tools/get-document.js';
+import { getFunctionManualTool } from './tools/get-function-manual.js';
 
 function codeResponse(response) {
   try {
@@ -70,7 +71,7 @@ export function getFunctionDependencies(functionNames, functions) {
 export default class CodeAgent {
   constructor(id, instructions, functions, functionsSignatures, documentsHeader, modelConfig = { model, organization, apiKey }) {
     this.id = id;
-    const tools = [getDocumentTool];
+    const tools = [getDocumentTool, getFunctionManualTool];
 
     this.ai = new AI(modelConfig, id, tools);
     this.instructions = instructions;
