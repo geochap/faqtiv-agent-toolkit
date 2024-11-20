@@ -6,10 +6,11 @@ ${agentAssistantInstructions}
 
 # GUIDELINES FOR USING TOOLS AND GENERATING RESPONSES
 
-- Apply your best judgment to decide which tasks to run, if one or more tasks look like they do the same pick a single one
+- Apply your best judgment to decide which tools to use, if one or more tools look like they do the same pick a single one
+- You must always use tool get_tool_manual before using any tool to understand how to use it
 - You must use tool run_adhoc_task at least once if you can't get the results you need with other tools
-- To answer questions give preference to tasks that don't generate files unless the user specifically asks for them
-- If the task response includes file paths append them to the end of your response as described in the json block instructions below
+- To answer questions give preference to tools that don't generate files unless the user specifically asks for them
+- If the tool response includes file paths append them to the end of your response as described in the json block instructions below
 - For math formulas use syntax supported by KaTex and use $$ as delimiter
 - Escape any $s that appear in output so they aren't interpreted as katex markdown
 - If the user doesn't explicitly ask for a file, asume the data should be rendered with markdown in the response itself
@@ -21,6 +22,7 @@ ${agentAssistantInstructions}
 
 # CRITERIA FOR USING TOOLS
 
+- Before running a tool, use tool get_tool_manual to understand the tool and its requirements
 - If none of the existing tools help you fulfill the request, use the run_adhoc_task tool to fulfill the request
 - When using run_adhoc_task, make your best guess to select the most suitable agent based on its description and tools
 - If the run_adhoc_task result doesn't fully address the user's request or seems incorrect, try using run_adhoc_task again with a refined task description (more details below)

@@ -1,6 +1,6 @@
 import { HumanMessage, AIMessage } from '@langchain/core/messages';
 import { AI } from './ai.js';
-import { extractFunctionNames } from '../lib/parse-utils.js';
+import { extractFunctionNames, removeOuterCodeBlock } from '../lib/parse-utils.js';
 import { generateAnsweringFunctionPrompt } from './prompts/generate-answering-function.js';
 import { extractFunctionCode } from '../lib/parse-utils.js';
 import { improveFunctionSignaturePrompt } from './prompts/improve-function-signature.js';
@@ -54,9 +54,9 @@ async function generateTaskManual(ai) {
     new HumanMessage(generateTaskManualPrompt())
   ];
   const messages = await ai.next(promptMessages, [], 'generate-task-manual');
-  const response = messages[messages.length - 1].content.trim();
+  let response = messages[messages.length - 1].content.trim();
 
-  return response;
+  return removeOuterCodeBlock(response);
 }
 
 export function getFunctionDependencies(functionNames, functions) {

@@ -1,9 +1,7 @@
-const { DynamicStructuredTool } = require('@langchain/core/tools');
 const { ChatPromptTemplate, MessagesPlaceholder } = require('@langchain/core/prompts');
 const { ChatOpenAI } = require('@langchain/openai');
 const { AIMessage, HumanMessage, SystemMessage, ToolMessage } = require('@langchain/core/messages');
-const z = require('zod');
-const { createToolsFromSchemas, generateAndExecuteAdhoc } = require('./tools');
+const { createToolsFromSchemas, agentTools } = require('./tools');
 const { getMessagesWithinContextLimit } = require('./context-manager');
 const { TASK_TOOL_SCHEMAS, COMPLETION_PROMPT_TEXT } = require('../constants');
 
@@ -23,22 +21,7 @@ if (!model) {
 }
 
 const completionTools = [
-  new DynamicStructuredTool({
-    name: 'run_adhoc_task',
-    description: 'A tool for an agent to run custom tasks described in natural language',
-    schema: z.object({
-      description: z.string(),
-    }),
-    func: async ({ description }) => {
-      try {
-        const result = await generateAndExecuteAdhoc(description);
-        return typeof result === 'object' ? JSON.stringify(result) : String(result);
-      } catch (error) {
-        return `Error during execution: ${error.message}`;
-      }
-    },
-    returnDirect: false,
-  }),
+  ...agentTools,
   ...taskTools
 ];
 

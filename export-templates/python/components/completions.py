@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from typing import Any
 from pydantic import create_model
 from components.logger import log_err
-from components.tools import generate_and_execute_adhoc
+from components.tools import agent_tools
 from constants import TASK_TOOL_SCHEMAS, COMPLETION_PROMPT_TEXT
 from components.context_manager import get_messages_within_context_limit
 from components.tools import create_tools_from_schemas
@@ -29,35 +29,7 @@ if not api_key:
 if not model:
     raise ValueError("OPENAI_MODEL environment variable is not set")
 
-async def run_adhoc_task(input: str) -> str:
-    try:
-        result = await generate_and_execute_adhoc(input["description"])
-        # Ensure the result is a string
-        if isinstance(result, dict):
-            result = json.dumps(result)
-        elif not isinstance(result, str):
-            result = str(result)
-        return result
-    except Exception as e:
-        print(f"Error during execution: {str(e)}", flush=True)
-        traceback.print_exc()
-        return f"Error during execution: {str(e)}"
-
-completion_tool_schemas = {
-    "run_adhoc_task": {
-        "description": "A tool for an agent to run custom tasks described in natural language",
-        "input": {"description": str},
-        "args_schema": create_model(
-            "runAdhocTask",
-            description=(str, ...) 
-        ),
-        "output": Any,
-        "function": run_adhoc_task
-    }
-}
-adhoc_tool = create_tools_from_schemas(completion_tool_schemas)
-completion_tools = adhoc_tool + task_tools
-
+completion_tools = agent_tools + task_tools
 completion_prompt = ChatPromptTemplate.from_messages(
     [
         SystemMessage(COMPLETION_PROMPT_TEXT),

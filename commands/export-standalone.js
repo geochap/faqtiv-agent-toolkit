@@ -14,7 +14,7 @@ import { copyDir } from '../lib/file-utils.js';
 import { getDeduplicatedImports } from '../controllers/code-gen.js';
 
 const { runtimeName, codeFileExtension } = config.project.runtime;
-const { codeDir, metadataDir, tasksDir } = config.project;
+const { codeDir, metadataDir, tasksDir, manualsDir } = config.project;
 
 const exportDependencies = {
   python: [
@@ -61,18 +61,24 @@ function getTaskFunctions() {
   // Extract task functions from task files
   const tasks = {};
   const taskNameToFunctionNameMap = {};
+  const functionNameToTaskNameMap = {};
   const taskToolSchemas = [];
 
   taskFiles.forEach(file => {
     const code = fs.readFileSync(file.fullPath, 'utf8');
     const taskName = path.basename(file.fullPath, codeFileExtension);
-    const doTaskCode = extractFunctionCode(code, 'doTask');
+    let doTaskCode = extractFunctionCode(code, 'doTask');
     if (doTaskCode) {
       // Convert task name to a valid function name for both Python and JavaScript
       const validFunctionName = taskName.replace(/[^a-zA-Z0-9_]/g, '_').replace(/^[0-9]/, '_');
+
+      if (runtimeName === 'python') {
+        doTaskCode = doTaskCode.replace(/\b(def)\s+doTask\b/, `$1 ${validFunctionName}`);
+      }
       
       tasks[validFunctionName] = doTaskCode;
       taskNameToFunctionNameMap[taskName] = validFunctionName;
+      functionNameToTaskNameMap[validFunctionName] = taskName;
 
       // Get and update the task schema
       const metadataPath = path.join(metadataDir, `${taskName}.yml`);
@@ -89,7 +95,7 @@ function getTaskFunctions() {
     }
   });
 
-  return { tasks, taskNameToFunctionNameMap, taskToolSchemas };
+  return { tasks, taskNameToFunctionNameMap, functionNameToTaskNameMap, taskToolSchemas };
 }
 
 function getExamples() {
@@ -213,7 +219,7 @@ export default async function exportStandalone(outputDir = process.cwd(), option
   const libsCode = libs.map(l => l.code);
   const libsNames = libs.map(f => f.name);
   const imports = getDeduplicatedImports(libs, functions);
-  const { tasks, taskNameToFunctionNameMap, taskToolSchemas } = getTaskFunctions();
+  const { tasks, taskNameToFunctionNameMap, functionNameToTaskNameMap, taskToolSchemas } = getTaskFunctions();
   const examples = getExamples();
 
   // Get the current file's path
@@ -222,6 +228,7 @@ export default async function exportStandalone(outputDir = process.cwd(), option
 
   // Read template files
   const templateDir = path.join(__dirname, `../export-templates/${runtimeConfig.templateDir}`);
+  const agentManualsDir = path.join(__dirname, `../export-templates/agent-manuals`);
   const constantsTemplate = fs.readFileSync(path.join(templateDir, runtimeConfig.constantsFile), 'utf8');
   const readmeTemplate = fs.readFileSync(path.join(__dirname, '../export-templates/README.md'), 'utf8');
 
@@ -243,6 +250,7 @@ export default async function exportStandalone(outputDir = process.cwd(), option
     functions: functionsCode.join('\n'),
     functionNames: functionsNames.length > 0 ? functionsNames.join(',\n') + ',' : '',
     taskNameToFunctionNameMap: JSON.stringify(taskNameToFunctionNameMap, null, 2),
+    functionNameToTaskNameMap: JSON.stringify(functionNameToTaskNameMap, null, 2),
     tasks: formatTaskFunctions(tasks),
     taskToolSchemas: taskToolSchemas.join(',\n'),
     generateAnsweringFunctionPrompt: escapeInstructions(generateAnsweringFunctionPrompt(instructions, functionsHeader.signatures, true)),
@@ -287,6 +295,17 @@ export default async function exportStandalone(outputDir = process.cwd(), option
     );
   });
 
+  // Copy all manuals from both project and template
+  const outputManualsDir = path.join(outputDir, 'manuals');
+
+  fs.mkdirSync(outputManualsDir, { recursive: true });
+  
+  // Copy project manuals
+  copyDir(manualsDir, outputManualsDir);
+  
+  // Copy and merge agent manuals
+  copyDir(agentManualsDir, outputManualsDir);
+
   // Copy the agent file and components directory
   fs.copyFileSync(path.join(templateDir, runtimeConfig.agentFile), path.join(outputDir, runtimeConfig.agentFile));
   copyDir(path.join(templateDir, 'components'), path.join(outputDir, 'components'));
@@ -297,6 +316,7 @@ export default async function exportStandalone(outputDir = process.cwd(), option
   log(`- ${runtimeConfig.constantsFile}`);
   log('- components/');
   log('- examples/');
+  log('- manuals/');
   log(`- ${runtimeConfig.dependenciesFile}`);
   log('- README.md');
 

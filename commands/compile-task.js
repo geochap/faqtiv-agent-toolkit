@@ -19,11 +19,12 @@ const codeDir = config.project.codeDir;
 const codeFileExtension = config.project.runtime.codeFileExtension;
 const taskManualsDir = config.project.taskManualsDir;
 
-// any task files without a corresponding code file or if code is older
+// any task files without a corresponding code file, if code is older or it's missing its manual
 function findUnprocessedTasks(taskFiles, codeDir) {
   return taskFiles.filter(taskFile => {
     const taskStat = fs.statSync(taskFile.fullPath);
     const jsPath = path.join(codeDir, taskFile.relativePath.replace('.txt', codeFileExtension));
+    const manualPath = path.join(taskManualsDir, taskFile.relativePath.replace('.txt', '.md'));
 
     if (!fs.existsSync(jsPath)) {
       return true;
@@ -31,6 +32,10 @@ function findUnprocessedTasks(taskFiles, codeDir) {
     
     const jsStat = fs.statSync(jsPath);
     if (jsStat.mtime < taskStat.mtime) {
+      return true;
+    }
+
+    if (!fs.existsSync(manualPath)) {
       return true;
     }
   });

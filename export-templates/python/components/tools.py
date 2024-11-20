@@ -9,12 +9,13 @@ from langchain_core.tools import StructuredTool
 from langchain_openai import ChatOpenAI
 from langchain.schema import SystemMessage, HumanMessage, AIMessage
 from langchain.chat_models.base import BaseChatModel
+from pydantic import create_model
 from functools import partial
 from contextlib import redirect_stdout
 from components.examples import get_relevant_examples
 from components.parser import extract_function_code
 from components.logger import create_adhoc_log_file
-from constants import ADHOC_PROMPT_TEXT, LIBS, FUNCTIONS
+from constants import ADHOC_PROMPT_TEXT, LIBS, FUNCTIONS, TASKS_MANUALS_PATH, FUNCTIONS_MANUALS_PATH, FUNCTION_NAME_TO_TASK_NAME_MAP
 
 TOOL_TIMEOUT = int(os.getenv('TOOL_TIMEOUT', 60000)) / 1000
 
@@ -65,7 +66,12 @@ def create_tools_from_schemas(schemas: Dict[str, Dict[str, Any]]) -> List[Struct
         if "returns_description" in schema:
             description += f" Returns: {schema['returns_description']}"
         
-        if name == "run_adhoc_task":
+        is_agent_tool = name in [
+            "run_adhoc_task",
+            "get_tool_manual",
+            "get_function_manual"
+        ]
+        if is_agent_tool:
             func = schema["function"]
         else:
             func = partial(tool_wrapper, schema["function"])
@@ -181,3 +187,86 @@ async def generate_and_execute_adhoc(user_input: str, max_retries: int = 5):
 
     # This line should never be reached, but just in case
     raise ValueError("Unexpected error occurred")
+
+async def run_adhoc_task(input: str) -> str:
+    try:
+        result = await generate_and_execute_adhoc(input["description"])
+        # Ensure the result is a string
+        if isinstance(result, dict):
+            result = json.dumps(result)
+        elif not isinstance(result, str):
+            result = str(result)
+        return result
+    except Exception as e:
+        print(f"Error during execution: {str(e)}", flush=True)
+        traceback.print_exc()
+        return f"Error during execution: {str(e)}"
+    
+async def get_function_manual(params: Dict[str, Any]) -> str:
+    try:
+        name = params["name"]
+        if not name:
+            raise ValueError("Name is required")
+        # Add .md extension only if not already present
+        file_name = f"{name}.md" if not name.endswith('.md') else name
+        file_path = os.path.join(FUNCTIONS_MANUALS_PATH, file_name)
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"Task manual {file_name} not found")
+        with open(file_path, 'r', encoding='utf-8') as f:
+            return f.read()
+    except Exception as error:
+        raise Exception(f"Error reading task manual: {str(error)}")
+
+async def get_tool_manual(params: Dict[str, Any]) -> str:
+    try:
+        name = params["name"]
+        if not name:
+            raise ValueError("Name is required")
+        
+        # Get the task name from the function name
+        task_name = FUNCTION_NAME_TO_TASK_NAME_MAP[name.replace(".md", "")] or name
+
+        file_name = f"{task_name}.md"
+        file_path = os.path.join(TASKS_MANUALS_PATH, file_name)
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"Tool manual {file_name} not found")
+        with open(file_path, 'r', encoding='utf-8') as f:
+            return f.read()
+    except Exception as error:
+        raise Exception(f"Error reading tool manual: {str(error)}")
+
+agent_tool_schemas = {
+    "run_adhoc_task": {
+        "description": "A tool for an agent to run custom tasks described in natural language",
+        "input": {"description": str},
+        "args_schema": create_model(
+            "runAdhocTask",
+            description=(str, ...) 
+        ),
+        "output": Any,
+        "function": run_adhoc_task
+    },
+    "get_function_manual": {
+        "description": "A tool for an agent to read a function manual",
+        "input": {"name": str},
+        "args_schema": create_model(
+            "getFunctionManual",
+            name=(str, ...) 
+        ),
+        "output": str,
+        "function": get_function_manual
+    },
+    "get_tool_manual": {
+        "description": "A tool for an agent to read a tool manual",
+        "input": {"name": str},
+        "args_schema": create_model(
+            "getToolManual",
+            name=(str, ...) 
+        ),
+        "output": str,
+        "function": get_tool_manual
+    }
+}
+
+
+agent_tools = create_tools_from_schemas(agent_tool_schemas)

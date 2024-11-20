@@ -1,10 +1,13 @@
 const { DynamicStructuredTool } = require('@langchain/core/tools');
 const { AIMessage, HumanMessage, SystemMessage } = require('@langchain/core/messages');
 const { ChatOpenAI } = require('@langchain/openai');
+const z = require('zod');
+const path = require('path');
+const fs = require('fs');
 const { getRelevantExamples } = require('./examples');
 const { createAdhocLogFile } = require('./logger');
 const { extractFunctionCode } = require('./parser');
-const { ADHOC_PROMPT_TEXT, LIBS, FUNCTIONS } = require('../constants');
+const { ADHOC_PROMPT_TEXT, LIBS, FUNCTIONS, FUNCTIONS_MANUALS_PATH, TASKS_MANUALS_PATH, FUNCTION_NAME_TO_TASK_NAME_MAP } = require('../constants');
 
 const TOOL_TIMEOUT = parseInt(process.env.TOOL_TIMEOUT || '60000');
 
@@ -87,12 +90,17 @@ function createToolsFromSchemas(schemas) {
     if (schema.returns_description) {
       description += ` Returns: ${schema.returns_description}`;
     }
+    const isAgentTool = [
+      'run_adhoc_task',
+      'get_tool_manual',
+      'get_function_manual'
+    ].includes(schema.name);
 
     const tool = new DynamicStructuredTool({
       name: schema.name,
       description,
       schema: schema.schema,
-      func: schema.name === 'run_adhoc_task' ? schema.func : async (...args) => await toolWrapper(schema.func, ...args)
+      func: isAgentTool ? schema.func : async (...args) => await toolWrapper(schema.func, ...args)
     });
 
     tools.push(tool);
@@ -191,8 +199,85 @@ async function generateAndExecuteAdhoc(userInput, maxRetries = 5) {
   throw new Error("Unexpected error occurred");
 }
 
+const runAdhocTaskTool = new DynamicStructuredTool({
+  name: 'run_adhoc_task',
+  description: 'A tool for an agent to run custom tasks described in natural language',
+  schema: z.object({
+    description: z.string(),
+  }),
+  func: async ({ description }) => {
+    try {
+      const result = await generateAndExecuteAdhoc(description);
+      return typeof result === 'object' ? JSON.stringify(result) : String(result);
+    } catch (error) {
+      return `Error during execution: ${error.message}`;
+    }
+  },
+  returnDirect: false,
+});
+
+const getToolManualTool = new DynamicStructuredTool({
+  name: 'get_tool_manual',
+  description: 'Read a tool manual',
+  schema: z.object({
+    name: z.string().describe('The name of the tool'),
+  }),
+  func: async ({ name }) => {
+    try {
+      if (!name) {
+        throw new Error('Name is required');
+      }
+
+      // Get the task name from the function name
+      const taskName = FUNCTION_NAME_TO_TASK_NAME_MAP[name.replace(".md", "")] || name;
+
+      const fileName = `${taskName}.md`;
+      const filePath = path.join(TASKS_MANUALS_PATH, fileName);
+      if (!fs.existsSync(filePath)) {
+        throw new Error(`Tool manual ${fileName} not found`);
+      }
+      return fs.readFileSync(filePath, 'utf8');
+    } catch (error) {
+      console.error(`Error reading tool manual: ${error.message}`);
+      throw new Error(`Error reading tool manual: ${error.message}`);
+    }
+  },
+});
+
+const getFunctionManualTool = new DynamicStructuredTool({
+  name: 'get_function_manual',
+  description: 'Read a function manual',
+  schema: z.object({
+    name: z.string().describe('The name of the function'),
+  }),
+  func: async ({ name }) => {
+    try {
+      if (!name) {
+        throw new Error('Name is required');
+      }
+
+      const fileName = name.endsWith('.md') ? name : `${name}.md`;
+      const filePath = path.join(FUNCTIONS_MANUALS_PATH, fileName);
+      if (!fs.existsSync(filePath)) {
+        throw new Error(`Function manual ${fileName} not found`);
+      }
+      return fs.readFileSync(filePath, 'utf8');
+    } catch (error) {
+      throw new Error(`Error reading function manual: ${error.message}`);
+    }
+  },
+  returnDirect: false,
+});
+
+const agentTools = [
+  runAdhocTaskTool,
+  getToolManualTool,
+  getFunctionManualTool,
+];
+
 module.exports = {
   captureAndProcessOutput,
   createToolsFromSchemas,
-  generateAndExecuteAdhoc
+  generateAndExecuteAdhoc,
+  agentTools,
 };
