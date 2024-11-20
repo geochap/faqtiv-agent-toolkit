@@ -72,7 +72,5 @@ export function generateAnsweringFunctionPrompt(instructions, functionsSignature
     prompt += `\n# TASK CODE GENERATION INSTRUCTIONS AND ADDITIONAL INFORMATION:\n${instructions}`;
   }
 
-  console.log(prompt);
-
   return prompt;
 }

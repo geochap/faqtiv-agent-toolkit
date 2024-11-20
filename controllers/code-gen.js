@@ -119,7 +119,6 @@ export function getDeduplicatedImports(libs, functions) {
   return Array.from(importMap.values()).map(value => value.original);
 }
 
-// adhoc means the code should be self executing with hardcoded params
 export async function generateResponse(taskName, vectorStore, conversation) {
   const { instructions, functions, libs, functionsHeader, documentsHeader } = config.project;
   // generate embedding of latest user message and do a similarity search for examples
@@ -136,11 +135,12 @@ export async function generateResponse(taskName, vectorStore, conversation) {
   return { 
     id: uuidv4(),
     output: response,
-    embedding, 
+    embedding,
     functions_embedding: functionsHeader.embedding 
   };
 }
 
+// adhoc means the code should be self executing with hardcoded params
 export async function generateAdHocResponse(vectorStore, conversation, retryCount = 0, retryErrors = [], previousCode = null) {
   const { instructions, functions, libs, functionsHeader, documentsHeader } = config.project;
   const embedding = await getTaskEmbedding(conversation[conversation.length - 1].message);

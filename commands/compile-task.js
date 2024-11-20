@@ -17,6 +17,7 @@ const metadataDir = config.project.metadataDir;
 const tasksDir = config.project.tasksDir;
 const codeDir = config.project.codeDir;
 const codeFileExtension = config.project.runtime.codeFileExtension;
+const taskManualsDir = config.project.taskManualsDir;
 
 // any task files without a corresponding code file or if code is older
 function findUnprocessedTasks(taskFiles, codeDir) {
@@ -113,15 +114,20 @@ async function processTask(vectorStore, task) {
 }
 
 function writeResult(task, result, addAsExample) {
-  const metadataPath = path.join('.faqtiv', 'code', task.relativePath.replace('.txt', '.yml'));
-  const codePath = path.join('code', task.relativePath.replace('.txt', codeFileExtension));
+  const baseName = task.relativePath.replace('.txt', '');
+  const metadataPath = path.join(metadataDir, `${baseName}.yml`);
+  const codePath = path.join(codeDir, `${baseName}${codeFileExtension}`);
+  const manualPath = path.join(taskManualsDir, `${baseName}.md`);
 
   // Ensure directories exist
   fs.mkdirSync(path.dirname(metadataPath), { recursive: true });
   fs.mkdirSync(path.dirname(codePath), { recursive: true });
 
   const code = result.output.code;
+  const manual = result.output.manual;
+
   result.output.code = undefined; // exclude code from metadata
+  result.output.manual = undefined; // exclude manual from metadata
   result.embedding = encodeBase64(result.embedding);
   result.functions_embedding = encodeBase64(result.functions_embedding);
 
@@ -129,9 +135,16 @@ function writeResult(task, result, addAsExample) {
   fs.writeFileSync(codePath, code, 'utf8');
   console.log(`Wrote task code: ${codePath}`);
 
-  // Write YAML content
+  // Write metadata content
   fs.writeFileSync(metadataPath, yaml.dump(result), 'utf8');
   console.log(`Wrote metadata file: ${metadataPath}`);
+
+  // Ensure manuals directory exists
+  fs.mkdirSync(taskManualsDir, { recursive: true });
+
+  // Write manual content
+  fs.writeFileSync(manualPath, manual, 'utf8');
+  console.log(`Wrote manual file: ${manualPath}`);
 
   // Add as example
   if (addAsExample) {

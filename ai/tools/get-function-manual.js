@@ -16,8 +16,8 @@ export const getFunctionManualTool = new DynamicStructuredTool({
         throw new Error('Name is required');
       }
 
-      console.log(`Getting function manual with name: ${path.join(config.project.manualsDir, `${name}.md`)}`);
-      const filePath = path.join(config.project.manualsDir, `${name}.md`);
+      console.log(`Getting function manual with name: ${path.join(config.project.functionManualsDir, `${name}.md`)}`);
+      const filePath = path.join(config.project.functionManualsDir, `${name}.md`);
       if (!fs.existsSync(filePath)) {
         throw new Error(`Function manual ${name}.md not found`);
       }

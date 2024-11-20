@@ -13,7 +13,7 @@ import DocsAgent from '../ai/docs-agent.js';
 const functionsDir = config.project.functionsDir;
 const headerPath = config.project.headerPath;
 const docHeaderPath = config.project.docsHeaderPath;
-const manualsDir = config.project.manualsDir;
+const functionManualsDir = config.project.functionManualsDir;
 const { runtimeName, codeFileExtension } = config.project.runtime;
 
 export default async function(options) {
@@ -133,7 +133,7 @@ async function updateFunctionManuals(functionsFiles) {
       for (const { name, code } of functions) {
         console.log(`Generating manual for ${name}`);
         const manual = await docsAgent.generateFunctionManual(code, config.project.documentsHeader);
-        const manualPath = path.join(manualsDir, `${name}.md`);
+        const manualPath = path.join(functionManualsDir, `${name}.md`);
         fs.writeFileSync(manualPath, manual, 'utf8');
       }
     }
@@ -144,8 +144,8 @@ async function updateFunctionManuals(functionsFiles) {
 }
 
 function getFunctionsNeedingManualUpdate(functionFiles) {
-  if (!fs.existsSync(manualsDir)) {
-    fs.mkdirSync(manualsDir, { recursive: true });
+  if (!fs.existsSync(functionManualsDir)) {
+    fs.mkdirSync(functionManualsDir, { recursive: true });
     return functionFiles;
   }
 
@@ -157,13 +157,12 @@ function getFunctionsNeedingManualUpdate(functionFiles) {
     const functionPath = path.join(functionsDir, file);
     const functionStat = fs.statSync(functionPath);
     const baseName = path.basename(file, codeFileExtension);
-    const manualPath = path.join(manualsDir, `${baseName}.md`);
+    const manualPath = path.join(functionManualsDir, `${baseName}.md`);
     
     if (!fs.existsSync(manualPath)) {
       return true;
     }
 
-    // Check if manual file than function
     const manualStat = fs.statSync(manualPath);
     return manualStat.mtime < functionStat.mtime;
   });

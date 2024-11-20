@@ -7,6 +7,7 @@ import { improveFunctionSignaturePrompt } from './prompts/improve-function-signa
 import { generateLangchainToolSchemaFromFunctionPrompt } from './prompts/generate-langchain-tool-schema-from-function.js';
 import { getDocumentTool } from './tools/get-document.js';
 import { getFunctionManualTool } from './tools/get-function-manual.js';
+import { generateTaskManualPrompt } from './prompts/generate-task-manual.js';
 
 function codeResponse(response) {
   try {
@@ -46,6 +47,16 @@ async function generateAnsweringFunction(ai, promptMessages, instructions, funct
   const response = messages[messages.length - 1].content.trim();
 
   return codeResponse(response);
+}
+
+async function generateTaskManual(ai) {
+  const promptMessages = [
+    new HumanMessage(generateTaskManualPrompt())
+  ];
+  const messages = await ai.next(promptMessages, [], 'generate-task-manual');
+  const response = messages[messages.length - 1].content.trim();
+
+  return response;
 }
 
 export function getFunctionDependencies(functionNames, functions) {
@@ -91,12 +102,14 @@ export default class CodeAgent {
     let { code, call } = await generateAnsweringFunction(this.ai, promptMessages, this.instructions, this.functionsSignatures, this.documentsHeader, examples, adHoc);
     const usedFunctions = extractFunctionNames(code);
     const functions = getFunctionDependencies(usedFunctions, this.functions);
+    const manual = await generateTaskManual(this.ai);
 
     if (adHoc) code = code + '\n' + call
 
     return {
       code,
       functions,
+      manual,
       token_usage_logs: this.ai.getTokenUsageLogs()
     };
   }
