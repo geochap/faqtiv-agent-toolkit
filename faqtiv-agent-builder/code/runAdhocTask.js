@@ -104,6 +104,12 @@ function escapeForShell(text) {
 * Warning: these are common functions, if you need to make changes edit the function file and recompile this task.
  */
 
+async function addDocument(agentDirectoryPath, name, content) {
+  const escapedContent = escapeForShell(content);
+  const args = ['add-document', name, escapedContent];
+  return await executeAgentCommand(agentDirectoryPath, args);
+}
+
 async function addFunction(agentDirectoryPath, functionName, functionCode) {
   const escapedFunctionCode = escapeForShell(functionCode);
   const args = ['add-function', functionName, escapedFunctionCode];
@@ -144,13 +150,13 @@ async function initializeAgent(agentDirectoryPath, runtime = 'javascript') {
   return await executeAgentCommand(agentDirectoryPath, args);
 }
 
-async function listFunctions(agentDirectoryPath) {
-  const args = ['list-functions', '--json'];
+async function listDocuments(agentDirectoryPath) {
+  const args = ['list-documents', '--json'];
   return await executeAgentCommand(agentDirectoryPath, args);
 }
 
-async function listDocuments(agentDirectoryPath) {
-  const args = ['list-documents', '--json'];
+async function listFunctions(agentDirectoryPath) {
+  const args = ['list-functions', '--json'];
   return await executeAgentCommand(agentDirectoryPath, args);
 }
 
@@ -167,6 +173,10 @@ async function migrateTasks(agentDirectoryPath, dry = false) {
   return await executeAgentCommand(agentDirectoryPath, args);
 }
 
+async function parseYamlApiSpec(apiUrl) {
+  return await fetchYamlApiSpec(apiUrl);
+}
+
 async function removeFunction(agentDirectoryPath, functionName) {
   const args = ['remove-function', functionName];
   return await executeAgentCommand(agentDirectoryPath, args);
@@ -180,6 +190,7 @@ async function removeTask(agentDirectoryPath, taskName) {
 async function runAdhocTask(agentDirectoryPath, description) {
   const escapedDescription = escapeForShell(description);
   const args = ['run-ad-hoc-task', escapedDescription];
+
   return await executeAgentCommand(agentDirectoryPath, args);
 }
 
@@ -192,6 +203,11 @@ async function runTask(agentDirectoryPath, taskName, packedArgs = '') {
 async function setEnvVar(agentDirectoryPath, key, value) {
   const escapedValue = escapeForShell(value);
   const args = ['set-env-var', key, escapedValue];
+  return await executeAgentCommand(agentDirectoryPath, args);
+}
+
+async function showDocument(agentDirectoryPath, documentName) {
+  const args = ['show-document', documentName];
   return await executeAgentCommand(agentDirectoryPath, args);
 }
 
@@ -237,16 +253,12 @@ async function updateTask(agentDirectoryPath, taskName, taskDescription) {
   const args = ['update-task', taskName, escapedDescription];
   return await executeAgentCommand(agentDirectoryPath, args);
 }
-
-async function parseYamlApiSpec(apiUrl) {
-  return await fetchYamlApiSpec(apiUrl);
-}
 /**
 * GENERATED CODE
 * This function is the generated code: it's safe to edit.
  */
 
 async function doTask(agentDirectoryPath, description) {
-  const result = await runAdhocTask(agentDirectoryPath, description);
-  console.log(result);
+  await runAdhocTask(agentDirectoryPath, description);
+  console.log(JSON.stringify({ result: "Ad-hoc task executed successfully." }));
 }

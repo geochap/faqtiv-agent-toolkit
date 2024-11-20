@@ -104,6 +104,12 @@ function escapeForShell(text) {
 * Warning: these are common functions, if you need to make changes edit the function file and recompile this task.
  */
 
+async function addDocument(agentDirectoryPath, name, content) {
+  const escapedContent = escapeForShell(content);
+  const args = ['add-document', name, escapedContent];
+  return await executeAgentCommand(agentDirectoryPath, args);
+}
+
 async function addFunction(agentDirectoryPath, functionName, functionCode) {
   const escapedFunctionCode = escapeForShell(functionCode);
   const args = ['add-function', functionName, escapedFunctionCode];

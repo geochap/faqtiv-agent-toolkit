@@ -1,4 +1,4 @@
-id: fb8789d8-55f2-48d4-8ab8-4c43b3f2a5f8
+id: d56cfd49-28bb-492d-8828-8dcb640edac5
 output:
   functions:
     - name: updateInstructions
@@ -14,23 +14,33 @@ output:
     - agent_id: code-gen
       model_name: gpt-4o
       step_name: generate-answering-function
-      prompt_tokens: 635
+      prompt_tokens: 617
       completion_tokens: 39
-      total_tokens: 674
-      prompt_tokens_cost: 0.0031750000000000003
+      total_tokens: 656
+      prompt_tokens_cost: 0.003085
       completion_tokens_cost: 0.000585
-      total_cost: 0.0037600000000000003
-      created_at: 2024-11-19T21:06:40.549Z
+      total_cost: 0.00367
+      created_at: 2024-11-20T19:52:43.286Z
+    - agent_id: code-gen
+      model_name: gpt-4o
+      step_name: generate-task-manual
+      prompt_tokens: 786
+      completion_tokens: 230
+      total_tokens: 1016
+      prompt_tokens_cost: 0.00393
+      completion_tokens_cost: 0.00345
+      total_cost: 0.00738
+      created_at: 2024-11-20T19:52:43.286Z
   task_schema: |-
     {
       "name": "updateInstructions",
-      "description": "Updates the instructions for a Faqtiv agent",
-      "returns_description": "Object with a single property 'result' indicating the success message as a string",
+      "description": "Updates instructions for a specified Faqtiv agent.",
+      "returns_description": "Object with a single string property 'result' indicating success.",
       "schema": z.object({
-        agentDirectoryPath: z.string().describe("the directory path of the agent"),
-        newInstructions: z.string().describe("the new instructions to update for the agent"),
+        agentDirectoryPath: z.string().describe("The directory path of the Faqtiv agent."),
+        newInstructions: z.string().describe("The new instructions for the agent."),
       }),
-      "output": "{ result: string }",
+      "output": "{ result: string; }",
       "func": updateInstructions
     }
 embedding: >-

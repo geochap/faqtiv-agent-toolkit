@@ -1,4 +1,4 @@
-id: 326b2ea5-3cc5-4a57-81e2-160e446fb02a
+id: 2d759fef-d6b1-4f3b-bfcc-22ec4de4ed20
 output:
   functions:
     - name: updateTask
@@ -15,24 +15,34 @@ output:
     - agent_id: code-gen
       model_name: gpt-4o
       step_name: generate-answering-function
-      prompt_tokens: 594
+      prompt_tokens: 626
       completion_tokens: 48
-      total_tokens: 642
-      prompt_tokens_cost: 0.00297
+      total_tokens: 674
+      prompt_tokens_cost: 0.00313
       completion_tokens_cost: 0.0007199999999999999
-      total_cost: 0.0036899999999999997
-      created_at: 2024-11-19T21:07:34.133Z
+      total_cost: 0.00385
+      created_at: 2024-11-20T19:52:52.170Z
+    - agent_id: code-gen
+      model_name: gpt-4o
+      step_name: generate-task-manual
+      prompt_tokens: 804
+      completion_tokens: 238
+      total_tokens: 1042
+      prompt_tokens_cost: 0.00402
+      completion_tokens_cost: 0.00357
+      total_cost: 0.0075899999999999995
+      created_at: 2024-11-20T19:52:52.170Z
   task_schema: |-
     {
       "name": "updateTask",
-      "description": "Updates a task with a provided natural language description.",
-      "returns_description": "Object with a result message indicating the task update status. The object contains a single key 'result' with a string value.",
+      "description": "Updates an existing task with a natural language description",
+      "returns_description": "{ result: string; } where result is a confirmation message of the update success",
       "schema": z.object({
-        agentDirectoryPath: z.string().describe("the path to the agent's directory"),
-        taskName: z.string().describe("the name of the task to update"),
-        taskDescription: z.string().describe("the new natural language description for the task")
+        agentDirectoryPath: z.string().describe("File path to the directory containing the agent"),
+        taskName: z.string().describe("Name of the task to be updated"),
+        taskDescription: z.string().describe("New natural language description for the task"),
       }),
-      "output": "{ result: string }",
+      "output": "{ result: string; }",
       "func": doTask
     }
 embedding: >-

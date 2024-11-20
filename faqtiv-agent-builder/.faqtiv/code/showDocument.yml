@@ -1,4 +1,4 @@
-id: f173b278-c5a7-49a9-b790-638cb1114f4d
+id: 26a76ed0-4e62-4e2f-82d1-a323b85942b1
 output:
   functions:
     - name: showDocument
@@ -13,23 +13,33 @@ output:
     - agent_id: code-gen
       model_name: gpt-4o
       step_name: generate-answering-function
-      prompt_tokens: 603
+      prompt_tokens: 602
       completion_tokens: 37
-      total_tokens: 640
-      prompt_tokens_cost: 0.003015
+      total_tokens: 639
+      prompt_tokens_cost: 0.00301
       completion_tokens_cost: 0.0005549999999999999
-      total_cost: 0.00357
-      created_at: 2024-11-19T21:03:37.393Z
+      total_cost: 0.003565
+      created_at: 2024-11-20T19:51:36.973Z
+    - agent_id: code-gen
+      model_name: gpt-4o
+      step_name: generate-task-manual
+      prompt_tokens: 769
+      completion_tokens: 220
+      total_tokens: 989
+      prompt_tokens_cost: 0.0038450000000000003
+      completion_tokens_cost: 0.0033
+      total_cost: 0.007145
+      created_at: 2024-11-20T19:51:36.973Z
   task_schema: |-
     {
       "name": "showDocument",
-      "description": "Retrieves the content of a specified document",
-      "returns_description": "Object with a 'result' key containing the document content as a string",
+      "description": "Retrieve the content of a specified document.",
+      "returns_description": "Object with a single property 'result' containing the document content as a string",
       "schema": z.object({
-        agentDirectoryPath: z.string().describe("the directory path of the agent where the document is located"),
-        documentName: z.string().describe("the name of the document to retrieve")
+        agentDirectoryPath: z.string().describe("The path to the faqtiv agent's directory"),
+        documentName: z.string().describe("The name of the document to retrieve content"),
       }),
-      "output": "{ result: string }",
+      "output": "Promise<{ result: string }>",
       "func": showDocument
     }
 embedding: >-

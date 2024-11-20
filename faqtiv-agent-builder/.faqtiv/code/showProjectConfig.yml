@@ -1,4 +1,4 @@
-id: 5773af56-e323-4436-bb26-450e36fa2959
+id: 7232ffcd-49bc-4064-8894-2373e76f63e4
 output:
   functions:
     - name: showProjectConfig
@@ -13,22 +13,32 @@ output:
     - agent_id: code-gen
       model_name: gpt-4o
       step_name: generate-answering-function
-      prompt_tokens: 595
+      prompt_tokens: 593
       completion_tokens: 29
-      total_tokens: 624
-      prompt_tokens_cost: 0.0029749999999999998
+      total_tokens: 622
+      prompt_tokens_cost: 0.0029649999999999998
       completion_tokens_cost: 0.000435
-      total_cost: 0.00341
-      created_at: 2024-11-19T21:04:21.664Z
+      total_cost: 0.0034
+      created_at: 2024-11-20T19:51:52.649Z
+    - agent_id: code-gen
+      model_name: gpt-4o
+      step_name: generate-task-manual
+      prompt_tokens: 752
+      completion_tokens: 254
+      total_tokens: 1006
+      prompt_tokens_cost: 0.00376
+      completion_tokens_cost: 0.00381
+      total_cost: 0.00757
+      created_at: 2024-11-20T19:51:52.649Z
   task_schema: |-
     {
       "name": "showProjectConfig",
-      "description": "Retrieves the configuration settings for a given agent path.",
-      "returns_description": "Object containing the configuration settings for the specified agent path with possible keys and values relevant to the agent's configuration.",
+      "description": "Displays project configuration for a given agent path",
+      "returns_description": "Object with key-value pairs representing the configuration settings of the faqtiv agent, including environment variables, module versions, and other specifics.",
       "schema": z.object({
-        agentDirectoryPath: z.string().describe("The directory path of the agent whose configuration is to be retrieved"),
+        agentDirectoryPath: z.string().describe("The directory path where the faqtiv agent is located"),
       }),
-      "output": "Object containing configuration details with keys as configuration names and values as configuration settings",
+      "output": "Object<{ [key: string]: any }>",
       "func": showProjectConfig
     }
 embedding: >-

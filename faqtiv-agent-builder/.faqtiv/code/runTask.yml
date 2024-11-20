@@ -1,4 +1,4 @@
-id: b529bf47-2915-4473-a96f-f2676c3706ce
+id: 9b70715d-71c9-4c17-a93b-a24247b61a45
 output:
   functions:
     - name: runTask
@@ -14,24 +14,34 @@ output:
     - agent_id: code-gen
       model_name: gpt-4o
       step_name: generate-answering-function
-      prompt_tokens: 591
-      completion_tokens: 42
-      total_tokens: 633
-      prompt_tokens_cost: 0.0029549999999999997
-      completion_tokens_cost: 0.00063
-      total_cost: 0.0035849999999999996
-      created_at: 2024-11-19T21:09:31.153Z
+      prompt_tokens: 597
+      completion_tokens: 39
+      total_tokens: 636
+      prompt_tokens_cost: 0.002985
+      completion_tokens_cost: 0.000585
+      total_cost: 0.00357
+      created_at: 2024-11-20T19:51:15.049Z
+    - agent_id: code-gen
+      model_name: gpt-4o
+      step_name: generate-task-manual
+      prompt_tokens: 766
+      completion_tokens: 247
+      total_tokens: 1013
+      prompt_tokens_cost: 0.00383
+      completion_tokens_cost: 0.003705
+      total_cost: 0.007535
+      created_at: 2024-11-20T19:51:15.049Z
   task_schema: |-
     {
       "name": "runTask",
-      "description": "Runs an existing task by name with optional arguments",
-      "returns_description": "{\"result\": string} where result is the task output",
-      "schema": z.object({
-        agentDirectoryPath: z.string().describe("the directory path of the agent"),
-        taskName: z.string().describe("the name of the task to run"),
-        packedArgs: z.string().optional().describe("comma separated arguments for the task"),
+      "description": "Executes a task within the faqtiv agent using the task name and arguments.",
+      "returns_description": "The result of the executed task as a string, typically containing execution details or outcomes.",
+      "schema": z.object({ 
+        agentDirectoryPath: z.string().describe("The path to the agent's directory"),
+        taskName: z.string().describe("The name of the task to execute"),
+        packedArgs: z.string().optional().describe("Comma-separated arguments for the task"),
       }),
-      "output": "{\"result\": string}",
+      "output": "string",
       "func": doTask
     }
 embedding: >-

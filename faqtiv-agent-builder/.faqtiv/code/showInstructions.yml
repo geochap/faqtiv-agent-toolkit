@@ -1,4 +1,4 @@
-id: bfbe372b-db0e-45b1-b515-3bf6679c3b58
+id: 322750b4-3f66-4afa-981e-466f6483a4dd
 output:
   functions:
     - name: showInstructions
@@ -13,20 +13,30 @@ output:
     - agent_id: code-gen
       model_name: gpt-4o
       step_name: generate-answering-function
-      prompt_tokens: 621
+      prompt_tokens: 623
       completion_tokens: 31
-      total_tokens: 652
-      prompt_tokens_cost: 0.003105
+      total_tokens: 654
+      prompt_tokens_cost: 0.003115
       completion_tokens_cost: 0.00046499999999999997
-      total_cost: 0.0035700000000000003
-      created_at: 2024-11-19T21:03:57.519Z
+      total_cost: 0.0035800000000000003
+      created_at: 2024-11-20T19:51:44.841Z
+    - agent_id: code-gen
+      model_name: gpt-4o
+      step_name: generate-task-manual
+      prompt_tokens: 784
+      completion_tokens: 251
+      total_tokens: 1035
+      prompt_tokens_cost: 0.00392
+      completion_tokens_cost: 0.0037649999999999997
+      total_cost: 0.007684999999999999
+      created_at: 2024-11-20T19:51:44.841Z
   task_schema: |-
     {
       "name": "showInstructions",
-      "description": "Fetches the agent instructions for the given path",
-      "returns_description": "Object with a 'result' key containing the agent instructions as a string",
+      "description": "Retrieves agent instructions.",
+      "returns_description": "Object containing the agent's instructions as a string, with property 'result'.",
       "schema": z.object({
-        agentDirectoryPath: z.string().describe("The file path to the agent directory"),
+        agentDirectoryPath: z.string().describe("The file system path to the faqtiv agent."),
       }),
       "output": "{ result: string }",
       "func": showInstructions
