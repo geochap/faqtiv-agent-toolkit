@@ -18,13 +18,12 @@ You have these globally available public functions:
 {{functionsSignatures}}
 \`\`\`
 
-Always call tool get_function_manual to get documentation for the functions you use.
-
 Using only these functions execute the following instructions:
 
 In a codeblock at the top of your response write a ${runtimeName} function called doTask that fulfills the given requirements:
 
 - Your only task is to write code for doTask and return the code with no text before or after it.
+- Your only tool is get_function_manual: Before writing any code call this tool once for each function you intend to include in doTask to get its documentation, you can skip this step if you already have the documentation.
 - You are limited to using only the functions described above and the data they return, otherwise reply with "The request cannot be fulfilled using the available functions" and give a detailed explanation of why.
 - When calling the functions only use parameters included in the function definition and be careful to use await only if the function is async.
 - Your answer is limited to a single function that only calls the public functions described above, do not use any other functions not included in this set but you don't need to use all of them.
