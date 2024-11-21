@@ -16,6 +16,7 @@ from components.examples import get_relevant_examples
 from components.parser import extract_function_code
 from components.logger import create_adhoc_log_file
 from constants import ADHOC_PROMPT_TEXT, LIBS, FUNCTIONS, TASKS_MANUALS_PATH, FUNCTIONS_MANUALS_PATH, FUNCTION_NAME_TO_TASK_NAME_MAP
+from langchain_core.messages import ToolMessage
 
 TOOL_TIMEOUT = int(os.getenv('TOOL_TIMEOUT', 60000)) / 1000
 
@@ -89,7 +90,39 @@ def create_tools_from_schemas(schemas: Dict[str, Dict[str, Any]]) -> List[Struct
 api_key = os.getenv('OPENAI_API_KEY')
 model = os.getenv('OPENAI_MODEL')
 
-adhoc_llm: BaseChatModel = ChatOpenAI(api_key=api_key, model=model)
+async def get_function_manual(params: Dict[str, Any]) -> str:
+    try:
+        name = params["name"]
+        if not name:
+            raise ValueError("Name is required")
+        # Add .md extension only if not already present
+        file_name = f"{name}.md" if not name.endswith('.md') else name
+        file_name = file_name.replace("function.", "")
+        file_path = os.path.join(FUNCTIONS_MANUALS_PATH, file_name)
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"Task manual {file_name} not found")
+        with open(file_path, 'r', encoding='utf-8') as f:
+            return f.read()
+    except Exception as error:
+        raise Exception(f"Error reading task manual: {str(error)}")
+
+adhoc_tools_schemas = {
+    "get_function_manual": {
+        "description": "A tool for an agent to read a function manual",
+        "input": {
+            "name": str
+        },
+        "args_schema": create_model(
+            "getFunctionManual",
+            name=(str, ...) 
+        ),
+        "output": str,
+        "function": get_function_manual
+    },
+}
+adhoc_tools = create_tools_from_schemas(adhoc_tools_schemas)
+
+adhoc_llm: BaseChatModel = ChatOpenAI(api_key=api_key, model=model).bind_tools(adhoc_tools)
 
 async def execute_generated_function(function_code):
     # Create a temporary module to execute the function
@@ -115,11 +148,48 @@ async def execute_generated_function(function_code):
     
     return result
 
-# Adhoc task execution
+async def process_adhoc_tool_calls(tool_calls):
+    tool_messages = []
+    for tool_call in tool_calls:
+        print("Calling tool:", tool_call["function"]["name"], tool_call["function"]["arguments"], flush=True)
+
+        tool = next((t for t in adhoc_tools if t.name == tool_call["function"]["name"]), None)
+        if tool:
+            try:
+                tool_result = await tool.coroutine(json.loads(tool_call["function"]["arguments"]))
+            except Exception as e:
+                error_message = f"Error in tool '{tool_call['function']['name']}': {str(e)}"
+                print("Error in tool:", error_message, flush=True)
+                tool_result = {"error": error_message}
+            
+            tool_messages.append(
+                ToolMessage(
+                    content=json.dumps({
+                        "type": "tool_result",
+                        "result": tool_result
+                    }),
+                    tool_call_id=tool_call["id"]
+                )
+            )
+        else:
+            print("Tool not found:", tool_call["function"]["name"], flush=True)
+            tool_messages.append(
+                ToolMessage(
+                    content=json.dumps({
+                        "type": "tool_result",
+                        "result": {"error": "Tool not found"}
+                    }),
+                    tool_call_id=tool_call["id"]
+                )
+            )
+    
+    return tool_messages
+
 async def generate_and_execute_adhoc(user_input: str, max_retries: int = 5):
     retry_count = 0
     errors = []
     previous_code = None
+    previous_tool_messages = [] # persist tool messages across retries to avoid refetching manuals
 
     # Get relevant examples
     relevant_examples = get_relevant_examples(user_input)
@@ -151,24 +221,45 @@ async def generate_and_execute_adhoc(user_input: str, max_retries: int = 5):
                 SystemMessage("You are a useful technical assistant."),
                 SystemMessage(ADHOC_PROMPT_TEXT),
                 *[HumanMessage(content=msg["content"]) if msg["role"] == "human" else AIMessage(content=msg["content"]) for msg in example_messages],
-                HumanMessage(content=f"{user_input}\n\n{error_context}")
+                *previous_tool_messages,
+                HumanMessage(content=f"{user_input}\n\n{error_context}"),
             ]
-            response = await adhoc_llm.agenerate([messages])
 
-            if 'The request cannot be fulfilled using the available functions' in response.generations[0][0].text:
-                raise ValueError(response.generations[0][0].text)
-            
-            function_code = extract_function_code(response.generations[0][0].text)
+            # Keep processing responses and tool calls until we get code or hit an error
+            function_code = None
+            while True:
+                response = adhoc_llm.invoke(messages)
+                
+                # Check if we have tool calls to process
+                if response.additional_kwargs and response.additional_kwargs.get("tool_calls"):
+                    tool_messages = [response]
+                    tool_result_messages = await process_adhoc_tool_calls(
+                        response.additional_kwargs["tool_calls"]
+                    )
+                    tool_messages.extend(tool_result_messages)
 
-            if not function_code:
-                raise ValueError(f"Failed to parse function code: {response.generations[0][0].text}")
-            
+                    # Add tool messages and assistant's response to conversation
+                    messages.extend(tool_messages)
+                    previous_tool_messages.extend(tool_messages)
+
+                    # Continue the loop to get another response
+                    continue
+                
+                # No more tool calls, process the final response
+                if 'The request cannot be fulfilled using the available functions' in response.content:
+                    raise ValueError(response.content)
+                
+                function_code = extract_function_code(response.content)
+                if not function_code:
+                    raise ValueError(f"Failed to parse function code: {response.content}")
+                
+                # We have valid code, break the loop
+                break
+
             previous_code = function_code
-
             print("Generated code:", function_code, flush=True)
 
             result = await capture_and_process_output(execute_generated_function, function_code)
-            
             create_adhoc_log_file(user_input, function_code, result)
             
             return result
@@ -201,21 +292,6 @@ async def run_adhoc_task(input: str) -> str:
         print(f"Error during execution: {str(e)}", flush=True)
         traceback.print_exc()
         return f"Error during execution: {str(e)}"
-    
-async def get_function_manual(params: Dict[str, Any]) -> str:
-    try:
-        name = params["name"]
-        if not name:
-            raise ValueError("Name is required")
-        # Add .md extension only if not already present
-        file_name = f"{name}.md" if not name.endswith('.md') else name
-        file_path = os.path.join(FUNCTIONS_MANUALS_PATH, file_name)
-        if not os.path.exists(file_path):
-            raise FileNotFoundError(f"Task manual {file_name} not found")
-        with open(file_path, 'r', encoding='utf-8') as f:
-            return f.read()
-    except Exception as error:
-        raise Exception(f"Error reading task manual: {str(error)}")
 
 async def get_tool_manual(params: Dict[str, Any]) -> str:
     try:
@@ -245,16 +321,6 @@ agent_tool_schemas = {
         ),
         "output": Any,
         "function": run_adhoc_task
-    },
-    "get_function_manual": {
-        "description": "A tool for an agent to read a function manual",
-        "input": {"name": str},
-        "args_schema": create_model(
-            "getFunctionManual",
-            name=(str, ...) 
-        ),
-        "output": str,
-        "function": get_function_manual
     },
     "get_tool_manual": {
         "description": "A tool for an agent to read a tool manual",

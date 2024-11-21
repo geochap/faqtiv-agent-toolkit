@@ -7,8 +7,6 @@ from langchain_core.messages import SystemMessage, AIMessage, ToolMessage, Human
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
-from typing import Any
-from pydantic import create_model
 from components.logger import log_err
 from components.tools import agent_tools
 from constants import TASK_TOOL_SCHEMAS, COMPLETION_PROMPT_TEXT
