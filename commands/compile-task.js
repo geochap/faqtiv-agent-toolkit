@@ -31,6 +31,10 @@ function findUnprocessedTasks(taskFiles, codeDir) {
     if (jsStat.mtime < taskStat.mtime) {
       return true;
     }
+
+    if (!fs.existsSync(metadataPath)) {
+      return true;
+    }
   });
 }
 
