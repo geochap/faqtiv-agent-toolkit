@@ -13,7 +13,7 @@ const examplesByRuntime = {
     name=(str, ...)  # This defines 'name' as a required field of type str
   )
   "output": List[Dict[str, Any]],
-  "function": function_1
+  "function": doTask
 }`,
   'javascript': 
 `{
@@ -24,18 +24,18 @@ const examplesByRuntime = {
     name: z.string().describe("the name of the item to fetch"),
   }),
   "output": "Array<{ [key: string]: any }>",
-  "func": function_1
+  "func": doTask
 }`
 };
 
 const runtimeInstructions = {
   'python': `
 - In args_schema for any third party types, use the type by providing the correct import.
-- For the function use the function name.
+- The "function" property must be doTask.
 `,
   'javascript': `
 - Make sure the schema property is a valid Zod schema object.
-- For func use the function name.
+- The "func" property must be doTask.
 `
 };
 
