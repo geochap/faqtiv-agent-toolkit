@@ -22,7 +22,7 @@ ${agentAssistantInstructions}
 
 # CRITERIA FOR USING TOOLS
 
-- Before running a tool, use tool get_tool_manual to understand the tool and its requirements
+- Before running a tool, always use tool get_tool_manual to get its documentation even if you think you know enough to use it
 - If none of the existing tools help you fulfill the request, use the run_adhoc_task tool to fulfill the request
 - When using run_adhoc_task, make your best guess to select the most suitable agent based on its description and tools
 - If the run_adhoc_task result doesn't fully address the user's request or seems incorrect, try using run_adhoc_task again with a refined task description (more details below)
