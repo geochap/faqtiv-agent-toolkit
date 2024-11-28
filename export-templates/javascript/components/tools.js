@@ -1,10 +1,13 @@
 const { DynamicStructuredTool } = require('@langchain/core/tools');
-const { AIMessage, HumanMessage, SystemMessage } = require('@langchain/core/messages');
+const { AIMessage, HumanMessage, SystemMessage, ToolMessage } = require('@langchain/core/messages');
 const { ChatOpenAI } = require('@langchain/openai');
+const z = require('zod');
+const path = require('path');
+const fs = require('fs');
 const { getRelevantExamples } = require('./examples');
 const { createAdhocLogFile } = require('./logger');
 const { extractFunctionCode } = require('./parser');
-const { ADHOC_PROMPT_TEXT, LIBS, FUNCTIONS } = require('../constants');
+const { ADHOC_PROMPT_TEXT, LIBS, FUNCTIONS, FUNCTIONS_MANUALS_PATH, TASKS_MANUALS_PATH, FUNCTION_NAME_TO_TASK_NAME_MAP } = require('../constants');
 
 const TOOL_TIMEOUT = parseInt(process.env.TOOL_TIMEOUT || '60000');
 
@@ -87,12 +90,17 @@ function createToolsFromSchemas(schemas) {
     if (schema.returns_description) {
       description += ` Returns: ${schema.returns_description}`;
     }
+    const isAgentTool = [
+      'run_adhoc_task',
+      'get_tool_manual',
+      'get_function_manual'
+    ].includes(schema.name);
 
     const tool = new DynamicStructuredTool({
       name: schema.name,
       description,
       schema: schema.schema,
-      func: schema.name === 'run_adhoc_task' ? schema.func : async (...args) => await toolWrapper(schema.func, ...args)
+      func: isAgentTool ? schema.func : async (...args) => await toolWrapper(schema.func, ...args)
     });
 
     tools.push(tool);
@@ -103,15 +111,95 @@ function createToolsFromSchemas(schemas) {
 const apiKey = process.env.OPENAI_API_KEY;
 const model = process.env.OPENAI_MODEL;
 
+const adhocTools = [
+  new DynamicStructuredTool({
+    name: 'get_function_manual',
+    description: 'Read a function manual',
+    schema: z.object({
+      name: z.string().describe('The name of the function without file extension or "function." prefix e.g. "function_name"'),
+    }),
+    func: async ({ name }) => {
+      try {
+        if (!name) {
+          throw new Error('Name is required');
+        }
+
+        let fileName = name.endsWith('.md') ? name : `${name}.md`;
+        fileName = fileName.replace("function.", "");
+        const filePath = path.join(FUNCTIONS_MANUALS_PATH, fileName);
+        if (!fs.existsSync(filePath)) {
+          throw new Error(`Function manual ${fileName} not found`);
+        }
+        return fs.readFileSync(filePath, 'utf8');
+      } catch (error) {
+        throw new Error(`Error reading function manual: ${error.message}`);
+      }
+    },
+    returnDirect: false,
+  }),
+];
+
 const adhocLLM = new ChatOpenAI({
   apiKey,
   model,
-});
+}).bindTools(adhocTools);
+
+async function processAdhocToolCalls(toolCalls) {
+  const toolMessages = [
+    new AIMessage({
+      content: '',
+      additional_kwargs: { tool_calls: toolCalls }
+    })
+  ];
+
+  for (const toolCall of toolCalls) {
+    const tool = adhocTools.find(t => t.name === toolCall.function.name);
+
+    console.warn("Calling tool:", toolCall.function.name, toolCall.function.arguments);
+
+    if (tool) {
+      try {
+        const toolResult = await tool.func(JSON.parse(toolCall.function.arguments));
+        toolMessages.push(new ToolMessage({
+          content: JSON.stringify({
+            type: "tool_result",
+            result: toolResult
+          }),
+          name: toolCall.function.name,
+          tool_call_id: toolCall.id,
+        }));
+      } catch (error) {
+        const errorMessage = `Error in tool '${toolCall.function.name}': ${error.message}`;
+        console.warn("Error in tool:", errorMessage);
+        toolMessages.push(new ToolMessage({
+          content: JSON.stringify({
+            type: "tool_result",
+            result: { error: errorMessage }
+          }),
+          name: toolCall.function.name,
+          tool_call_id: toolCall.id,
+        }));
+      }
+    } else {
+      console.warn("Tool not found:", toolCall.function.name);
+      toolMessages.push(new ToolMessage({
+        content: JSON.stringify({
+          type: "tool_result",
+          result: { error: "Tool not found" }
+        }),
+        name: toolCall.function.name,
+        tool_call_id: toolCall.id,
+      }));
+    }
+  }
+  return toolMessages;
+}
 
 async function generateAndExecuteAdhoc(userInput, maxRetries = 5) {
   let retryCount = 0;
   const errors = [];
   let previousCode = null;
+  const previousToolMessages = [];
 
   // Get relevant examples
   const relevantExamples = await getRelevantExamples(userInput);
@@ -145,27 +233,40 @@ async function generateAndExecuteAdhoc(userInput, maxRetries = 5) {
         new SystemMessage("You are a useful technical assistant."),
         new SystemMessage(ADHOC_PROMPT_TEXT),
         ...exampleMessages,
+        ...previousToolMessages,
         new HumanMessage(`${userInput}\n\n${errorContext}`)
       ];
 
-      const response = await adhocLLM.invoke(messages);
+      let functionCode;
+      while (true) {
+        const response = await adhocLLM.invoke(messages);
 
-      if (response.content.includes('The request cannot be fulfilled using the available functions')) {
-        throw new Error(response.content);
-      }
+        // Check if we have tool calls to process
+        if (response.additional_kwargs && response.additional_kwargs.tool_calls && response.additional_kwargs.tool_calls.length > 0) {
+          const toolMessages = await processAdhocToolCalls(response.additional_kwargs.tool_calls);
+          messages.push(...toolMessages);
+          previousToolMessages.push(...toolMessages);
+          continue;
+        }
 
-      const functionCode = extractFunctionCode(response.content);
+        // No more tool calls, process the final response
+        if (response.content.includes('The request cannot be fulfilled using the available functions')) {
+          throw new Error(response.content);
+        }
 
-      if (!functionCode) {
-        throw new Error(`Failed to parse function code: ${response.content}`);
+        functionCode = extractFunctionCode(response.content);
+        if (!functionCode) {
+          throw new Error(`Failed to parse function code: ${response.content}`);
+        }
+
+        // We have valid code, break the loop
+        break;
       }
 
       previousCode = functionCode;
-
       console.log("Generated code:", functionCode);
 
       const result = await captureAndProcessOutput(functionCode);
-      
       createAdhocLogFile(userInput, functionCode, result);
       
       return result;
@@ -181,8 +282,6 @@ async function generateAndExecuteAdhoc(userInput, maxRetries = 5) {
         throw new Error(`Max retries reached. Last error: ${errorMessage}`);
       }
 
-      await new Promise(resolve => setTimeout(resolve, 500));
-
       console.log(`Retrying... (attempt ${retryCount} of ${maxRetries})`);
     }
   }
@@ -191,8 +290,59 @@ async function generateAndExecuteAdhoc(userInput, maxRetries = 5) {
   throw new Error("Unexpected error occurred");
 }
 
+const runAdhocTaskTool = new DynamicStructuredTool({
+  name: 'run_adhoc_task',
+  description: 'A tool for an agent to run custom tasks described in natural language',
+  schema: z.object({
+    description: z.string(),
+  }),
+  func: async ({ description }) => {
+    try {
+      const result = await generateAndExecuteAdhoc(description);
+      return typeof result === 'object' ? JSON.stringify(result) : String(result);
+    } catch (error) {
+      return `Error during execution: ${error.message}`;
+    }
+  },
+  returnDirect: false,
+});
+
+const getToolManualTool = new DynamicStructuredTool({
+  name: 'get_tool_manual',
+  description: 'Read a tool manual',
+  schema: z.object({
+    name: z.string().describe('The name of the tool'),
+  }),
+  func: async ({ name }) => {
+    try {
+      if (!name) {
+        throw new Error('Name is required');
+      }
+
+      // Get the task name from the function name
+      const taskName = FUNCTION_NAME_TO_TASK_NAME_MAP[name.replace(".md", "")] || name;
+
+      const fileName = `${taskName}.md`;
+      const filePath = path.join(TASKS_MANUALS_PATH, fileName);
+      if (!fs.existsSync(filePath)) {
+        throw new Error(`Tool manual ${fileName} not found`);
+      }
+      return fs.readFileSync(filePath, 'utf8');
+    } catch (error) {
+      console.error(`Error reading tool manual: ${error.message}`);
+      throw new Error(`Error reading tool manual: ${error.message}`);
+    }
+  },
+});
+
+const agentTools = [
+  runAdhocTaskTool,
+  getToolManualTool,
+];
+
 module.exports = {
   captureAndProcessOutput,
   createToolsFromSchemas,
-  generateAndExecuteAdhoc
+  generateAndExecuteAdhoc,
+  agentTools
 };

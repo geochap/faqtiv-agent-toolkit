@@ -63,7 +63,9 @@ export default async function(projectRoot, options) {
     `${baseDir}/tasks`,
     `${baseDir}/code`,
     `${baseDir}/functions`,
-    `${baseDir}/libs`
+    `${baseDir}/libs`,
+    `${baseDir}/manuals`,
+    `${baseDir}/docs`
   ];
 
   const faqtivConfig = `runtime: ${projectRuntime}

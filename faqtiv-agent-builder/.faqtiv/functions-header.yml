@@ -1,10 +1,182 @@
-signatures: >-
-  executeAgentCommand(agentDirectoryPath:string, args:Array.<string>) :
-  Promise.<string> - Executes a faqtiv CLI command within a given directory or
-  globally, resolving with stdout output or stderr if stdout is empty.
-
-  fetchYamlApiSpec(apiUrl:string) : Promise.<Object> - Fetches an API
-  specification from a URL, parses it using Swagger-Parser, and returns the
-  parsed OpenAPI spec object.
+signatures:
+  addFunction: >-
+    addFunction(agentDirectoryPath: string, functionName: string, functionCode:
+    string) : Promise<void> - Asynchronously executes a shell command to add a
+    new function to the faqtiv agent by constructing a command with the provided
+    agent directory path, function name, and escaped function code. Returns a
+    Promise that resolves when the command execution is complete or throws an
+    error if the execution fails.
+  addModule: >-
+    addModule(agentDirectoryPath: string, moduleName: string, alias?: string,
+    version?: string) : Promise<void> - Asynchronously adds a new module to the
+    faqtiv agent by executing a shell command built with the provided agent
+    directory path, module name, and optionally alias and version. Returns a
+    Promise that resolves upon successful execution or throws an error if the
+    operation fails.
+  addTask: >-
+    addTask(agentDirectoryPath: string, taskName: string, description: string) :
+    Promise<void> - Asynchronously adds a new task to the faqtiv agent by
+    executing a shell command formed with the provided agent directory path,
+    task name, and an escaped task description for shell safety. Returns a
+    Promise that resolves when the task has been successfully added or throws an
+    error if the operation fails.
+  compileTask: >-
+    compileTask(agentDirectoryPath: string, taskName: string) : Promise<void> -
+    Asynchronously compiles a specified task in the faqtiv agent by executing a
+    shell command built with the given agent directory path and task name.
+    Returns a Promise that resolves when the task compilation succeeds or throws
+    an error if it fails.
+  fixTask: >-
+    fixTask(agentDirectoryPath: string, taskName: string, feedback: string) :
+    Promise<void> - Asynchronously fixes a specified task in the faqtiv agent by
+    executing a shell command using the provided agent directory path, task
+    name, and an escaped feedback message for shell safety. Returns a Promise
+    that resolves once the task has been successfully fixed or throws an error
+    if the process fails.
+  getInstructions: >-
+    getInstructions(agentDirectoryPath: string) : Promise<string> -
+    Asynchronously retrieves and returns the instructions for the faqtiv agent
+    by executing a shell command using the provided agent directory path.
+    Returns a Promise that resolves to a string containing the agent
+    instructions or throws an error if the retrieval process fails.
+  initializeAgent: >-
+    initializeAgent(agentDirectoryPath: string, runtime?: string) :
+    Promise<void> - Asynchronously initializes a new faqtiv agent in the
+    specified directory using a shell command with the provided agent directory
+    path and an optional runtime, defaulting to 'javascript'. Returns a Promise
+    that resolves once the agent is successfully initialized or throws an error
+    if the process fails.
+  listFunctions: >-
+    listFunctions(agentDirectoryPath: string) : Promise<{functions: Array<{name:
+    string, parameters: Array<string>, returnType: string}>}> - Asynchronously
+    retrieves a list of all functions in the faqtiv agent by executing a shell
+    command utilizing the provided agent directory path. Returns a Promise that
+    resolves to an object containing an array of function objects, each with
+    properties: 'name' (string), 'parameters' (array of strings), and
+    'returnType' (string), or throws an error if the listing process fails.
+  listTasks: >-
+    listTasks(agentDirectoryPath: string) : Promise<string> - Asynchronously
+    lists all tasks in the faqtiv agent by executing a shell command using the
+    provided agent directory path. Returns a Promise that resolves to a string
+    containing the list of tasks formatted in a plain text representation or
+    throws an error if the task listing process fails.
+  migrateTasks: >-
+    migrateTasks(agentDirectoryPath: string, dry?: boolean) : Promise<string> -
+    Asynchronously migrates tasks in the faqtiv agent by executing a shell
+    command using the provided agent directory path. An optional dry run can be
+    performed without making actual changes if 'dry' is set to true. Returns a
+    Promise that resolves to a string detailing the migration process or
+    results, or throws an error if the migration fails.
+  parseYamlApiSpec: >-
+    parseYamlApiSpec(apiUrl: string) : Promise.<object> - Fetches and parses a
+    YAML API specification from the provided URL. Returns a promise resolving to
+    an object containing the parsed API specification details, including all
+    properties such as endpoints, methods, parameters, and responses.
+  removeFunction: >-
+    removeFunction(agentDirectoryPath: string, functionName: string) :
+    Promise<void> - Asynchronously removes a specified function from the faqtiv
+    agent by executing a shell command using the provided agent directory path
+    and function name. Returns a Promise that resolves once the function is
+    successfully removed or throws an error if the deletion process fails.
+  removeTask: >-
+    removeTask(agentDirectoryPath: string, taskName: string) : Promise<void> -
+    Asynchronously removes a specified task from the faqtiv agent by executing a
+    shell command using the provided agent directory path and task name. Returns
+    a Promise that resolves once the task is successfully removed or throws an
+    error if the removal process fails.
+  runAdhocTask: >-
+    runAdhocTask(agentDirectoryPath: string, description: string): Promise<void>
+    - Executes an ad-hoc task by running a command in the agent's directory.
+    Returns a promise that resolves when the task is completed, or rejects if an
+    error occurs during execution.
+  runTask: >-
+    runTask(agentDirectoryPath: string, taskName: string, packedArgs?: string) :
+    Promise<string> - Asynchronously runs a specified task in the faqtiv agent
+    by executing a shell command using the provided agent directory path, task
+    name, and optionally packed arguments. These arguments are split and escaped
+    for shell safety if provided. Returns a Promise that resolves to a string
+    containing the output of the task execution or throws an error if the
+    execution fails.
+  setEnvVar: >-
+    setEnvVar(agentDirectoryPath: string, key: string, value: string) :
+    Promise<void> - Asynchronously sets an environment variable for the faqtiv
+    agent by executing a shell command using the provided agent directory path,
+    key, and an escaped value for shell safety. Returns a Promise that resolves
+    when the environment variable is successfully set or throws an error if the
+    operation fails.
+  showInstructions: >-
+    showInstructions(agentDirectoryPath: string) : Promise<string> -
+    Asynchronously retrieves and returns the instructions for the faqtiv agent
+    by executing a shell command using the provided agent directory path.
+    Returns a Promise that resolves to a string containing the detailed
+    instructions or throws an error if the retrieval process fails.
+  showProjectConfig: >-
+    showProjectConfig(agentDirectoryPath: string) : Promise<{config:
+    Record<string, any>}> - Asynchronously retrieves and returns the project
+    configuration for the faqtiv agent in JSON format by executing a shell
+    command using the provided agent directory path. Returns a Promise that
+    resolves to an object containing the configuration details as key-value
+    pairs or throws an error if the operation fails.
+  showTask: >-
+    showTask(agentDirectoryPath: string, taskName: string) : Promise<string> -
+    Asynchronously retrieves and returns the details of a specific task in the
+    faqtiv agent by executing a shell command using the provided agent directory
+    path and task name. Returns a Promise that resolves to a string containing
+    the task's detailed information or throws an error if the retrieval process
+    fails.
+  updateDocHeaders: >-
+    updateDocHeaders(agentDirectoryPath: string) : Promise<void> -
+    Asynchronously updates the documentation headers in the faqtiv agent by
+    executing a shell command using the provided agent directory path. Returns a
+    Promise that resolves once the headers are successfully updated or throws an
+    error if the process fails.
+  updateFunction: >-
+    updateFunction(agentDirectoryPath: string, functionName: string, newCode:
+    string) : Promise<void> - Asynchronously updates an existing function in the
+    faqtiv agent by executing a shell command with the provided agent directory
+    path, function name, and the escaped new code to ensure shell safety.
+    Returns a Promise that resolves once the function is successfully updated or
+    throws an error if the update process fails.
+  updateHeaders: >-
+    updateHeaders(agentDirectoryPath: string) : Promise<void> - Asynchronously
+    updates various headers in the faqtiv agent by executing a shell command
+    using the provided agent directory path. Returns a Promise that resolves
+    once the headers are successfully updated or throws an error if the update
+    process fails.
+  updateInstructions: >-
+    updateInstructions(agentDirectoryPath: string, newInstructions: string) :
+    Promise<void> - Asynchronously updates the instructions for the faqtiv agent
+    by executing a shell command using the provided agent directory path and the
+    escaped new instructions to ensure shell safety. Returns a Promise that
+    resolves once the instructions are successfully updated or throws an error
+    if the update process fails.
+  updateTask: >-
+    updateTask(agentDirectoryPath: string, taskName: string, taskDescription:
+    string) : Promise<void> - Asynchronously updates a specified task in the
+    faqtiv agent by executing a shell command using the provided agent directory
+    path, task name, and an escaped task description for shell safety. Returns a
+    Promise that resolves when the task is successfully updated or throws an
+    error if the update process fails.
+  listDocuments: >-
+    listDocuments(agentDirectoryPath: string) : Promise<{documents: Array<{name:
+    string, size: number, createdAt: string}>}> - Asynchronously retrieves a
+    list of all documents in the faqtiv agent by executing a shell command using
+    the provided agent directory path. Returns a Promise that resolves to an
+    object containing an array of document objects, each with properties: 'name'
+    (string), 'size' (number), and 'createdAt' (string), or throws an error if
+    the listing process fails.
+  showDocument: >-
+    showDocument(agentDirectoryPath: string, documentName: string) :
+    Promise<string> - Asynchronously retrieves and returns the contents of a
+    specified document in the faqtiv agent by executing a shell command using
+    the provided agent directory path and document name. Returns a Promise that
+    resolves to a string containing the document's content or throws an error if
+    the operation fails.
+  addDocument: >-
+    addDocument(agentDirectoryPath: string, name: string, content: string) :
+    Promise<void> - Escapes the document content for shell safety, builds a
+    command with document details, and executes it to add the document to the
+    specified agent directory asynchronously, returning a promise that resolves
+    when the operation completes without any result value.
 embedding: >-
-  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
+  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

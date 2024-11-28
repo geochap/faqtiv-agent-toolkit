@@ -119,14 +119,13 @@ export function getDeduplicatedImports(libs, functions) {
   return Array.from(importMap.values()).map(value => value.original);
 }
 
-// adhoc means the code should be self executing with hardcoded params
 export async function generateResponse(taskName, vectorStore, conversation) {
-  const { instructions, functions, libs, functionsHeader } = config.project;
+  const { instructions, functions, libs, functionsHeader, documentsHeader } = config.project;
   // generate embedding of latest user message and do a similarity search for examples
   const embedding = await getTaskEmbedding(conversation[conversation.length - 1].message);
   const examples = await getNearestExamples(vectorStore, embedding, functionsHeader.embedding);
 
-  const aiAgent = new CodeAgent('code-gen', instructions, functions, functionsHeader.signatures, config.openai);
+  const aiAgent = new CodeAgent('code-gen', instructions, functions, functionsHeader.signatures, documentsHeader, config.openai);
   const response = await aiAgent.generateResponse(conversation, examples);
   const taskSchema = await aiAgent.generateTaskSchema(taskName, response.code);
 
@@ -136,17 +135,18 @@ export async function generateResponse(taskName, vectorStore, conversation) {
   return { 
     id: uuidv4(),
     output: response,
-    embedding, 
+    embedding,
     functions_embedding: functionsHeader.embedding 
   };
 }
 
+// adhoc means the code should be self executing with hardcoded params
 export async function generateAdHocResponse(vectorStore, conversation, retryCount = 0, retryErrors = [], previousCode = null) {
-  const { instructions, functions, libs, functionsHeader } = config.project;
+  const { instructions, functions, libs, functionsHeader, documentsHeader } = config.project;
   const embedding = await getTaskEmbedding(conversation[conversation.length - 1].message);
   const examples = await getNearestExamples(vectorStore, embedding, functionsHeader.embedding);
 
-  const aiAgent = new CodeAgent('code-gen', instructions, functions, functionsHeader.signatures, config.openai);
+  const aiAgent = new CodeAgent('code-gen', instructions, functions, functionsHeader.signatures, documentsHeader, config.openai);
   
   if (retryCount > 0) {
     let retryMessage = `
@@ -187,8 +187,8 @@ export async function generateAdHocResponse(vectorStore, conversation, retryCoun
 }
 
 export async function generateTaskSchema(doTaskCode, taskName) {
-  const { instructions, functions, functionsHeader } = config.project;
-  const aiAgent = new CodeAgent('code-gen', instructions, functions, functionsHeader.signatures, config.openai);
+  const { instructions, functions, functionsHeader, documentsHeader } = config.project;
+  const aiAgent = new CodeAgent('code-gen', instructions, functions, functionsHeader.signatures, documentsHeader, config.openai);
   
   const response = await aiAgent.generateTaskSchema(taskName, doTaskCode);
 

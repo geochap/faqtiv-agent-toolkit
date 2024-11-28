@@ -106,15 +106,15 @@ def add_table_header(worksheet, row, col, column_names):
 
 def doTask(bank_name: str, years: str):
     import json
-
+    
     bank_id = get_bank_id_by_name(bank_name)
     financials = get_bank_financials(bank_id)
     
-    selected_years = set(int(year) for year in years.split('|'))
+    selected_years = set(years.split('|'))
     
     report = [
         {"Report Date": record["report_date"], "Total Deposits": record["total_deposits"]}
-        for record in financials if int(record["report_date"][:4]) in selected_years
+        for record in financials if record["report_date"][:4] in selected_years
     ]
     
     print(json.dumps(report))

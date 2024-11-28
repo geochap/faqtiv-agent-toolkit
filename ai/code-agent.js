@@ -1,10 +1,13 @@
 import { HumanMessage, AIMessage } from '@langchain/core/messages';
 import { AI } from './ai.js';
-import { extractFunctionNames } from '../lib/parse-utils.js';
+import { extractFunctionNames, removeOuterCodeBlock } from '../lib/parse-utils.js';
 import { generateAnsweringFunctionPrompt } from './prompts/generate-answering-function.js';
 import { extractFunctionCode } from '../lib/parse-utils.js';
-import { improveFunctionSignaturesPrompt } from './prompts/improve-function-signatures.js';
+import { improveFunctionSignaturePrompt } from './prompts/improve-function-signature.js';
 import { generateLangchainToolSchemaFromFunctionPrompt } from './prompts/generate-langchain-tool-schema-from-function.js';
+import { getDocumentTool } from './tools/get-document.js';
+import { getFunctionManualTool } from './tools/get-function-manual.js';
+import { generateTaskManualPrompt } from './prompts/generate-task-manual.js';
 
 function codeResponse(response) {
   try {
@@ -31,7 +34,7 @@ function codeResponse(response) {
   }
 }
 
-async function generateAnsweringFunction(ai, promptMessages, instructions, functionsSignatures, examples = [], adHoc = false) {
+async function generateAnsweringFunction(ai, promptMessages, instructions, functionsSignatures, documentsHeader, examples = [], adHoc = false) {
   examples = examples.flatMap(e => {
     return [
       new HumanMessage(e.task),
@@ -39,11 +42,21 @@ async function generateAnsweringFunction(ai, promptMessages, instructions, funct
     ];
   });
 
-  const preprompt = generateAnsweringFunctionPrompt(instructions, functionsSignatures, adHoc);
+  const preprompt = generateAnsweringFunctionPrompt(instructions, functionsSignatures, documentsHeader, adHoc);
   const messages = await ai.start(preprompt, promptMessages, examples, 'generate-answering-function');
   const response = messages[messages.length - 1].content.trim();
 
   return codeResponse(response);
+}
+
+async function generateTaskManual(ai) {
+  const promptMessages = [
+    new HumanMessage(generateTaskManualPrompt())
+  ];
+  const messages = await ai.next(promptMessages, [], 'generate-task-manual');
+  let response = messages[messages.length - 1].content.trim();
+
+  return removeOuterCodeBlock(response);
 }
 
 export function getFunctionDependencies(functionNames, functions) {
@@ -67,12 +80,15 @@ export function getFunctionDependencies(functionNames, functions) {
 }
 
 export default class CodeAgent {
-  constructor(id, instructions, functions, functionsSignatures, modelConfig = { model, organization, apiKey }) {
+  constructor(id, instructions, functions, functionsSignatures, documentsHeader, modelConfig = { model, organization, apiKey }) {
     this.id = id;
-    this.ai = new AI(modelConfig, id);
+    const tools = [getDocumentTool, getFunctionManualTool];
+
+    this.ai = new AI(modelConfig, id, tools);
     this.instructions = instructions;
     this.functions = functions;
     this.functionsSignatures = functionsSignatures;
+    this.documentsHeader = documentsHeader;
   }
 
   async generateResponse(conversation, examples, adHoc=false) {
@@ -83,15 +99,17 @@ export default class CodeAgent {
       return new AIMessage(m.message);
     });
 
-    let { code, call } = await generateAnsweringFunction(this.ai, promptMessages, this.instructions, this.functionsSignatures, examples, adHoc);
+    let { code, call } = await generateAnsweringFunction(this.ai, promptMessages, this.instructions, this.functionsSignatures, this.documentsHeader, examples, adHoc);
     const usedFunctions = extractFunctionNames(code);
     const functions = getFunctionDependencies(usedFunctions, this.functions);
+    const manual = await generateTaskManual(this.ai);
 
     if (adHoc) code = code + '\n' + call
 
     return {
       code,
       functions,
+      manual,
       token_usage_logs: this.ai.getTokenUsageLogs()
     };
   }
@@ -106,18 +124,11 @@ export default class CodeAgent {
     return response;
   }
 
-  async improveFunctionSignatures(functionsCode, signatures, examples = []) {
-    examples = examples.flatMap(e => {
-      return [
-        new HumanMessage(e.task),
-        new AIMessage(e.code)
-      ];
-    });
-  
-    const promptMessages = [new HumanMessage(improveFunctionSignaturesPrompt(functionsCode, signatures))];
-    const messages = await this.ai.start(null, promptMessages, examples, 'improve-function-signatures');
+  async improveFunctionSignature(functionCode, signature) {
+    const prompt = [new HumanMessage(improveFunctionSignaturePrompt([functionCode], [signature]))];
+    const messages = await this.ai.start(null, prompt, [], 'improve-function-signature');
     const response = messages[messages.length - 1].content.trim();
-  
+
     return response;
   }
 }

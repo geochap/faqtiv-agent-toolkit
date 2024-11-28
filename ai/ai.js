@@ -1,20 +1,30 @@
-import { SystemMessage, AIMessage } from '@langchain/core/messages';
+import { SystemMessage, AIMessage, ToolMessage } from '@langchain/core/messages';
 import { ChatOpenAI } from '@langchain/openai';
-import { StringOutputParser } from "@langchain/core/output_parsers";
+import { ChatPromptTemplate, MessagesPlaceholder } from '@langchain/core/prompts';
 import TokenUsageLog from './token-usage.js';
 import * as config from '../config.js';
 
 export class AI {
-  constructor(modelConfig = { model, organization, apiKey }, agentId) {
-    this.model = new ChatOpenAI({ model: modelConfig.model });
+  constructor(modelConfig = { model, organization, apiKey }, agentId, tools = []) {
+    this.model = new ChatOpenAI({ model: modelConfig.model }).bindTools(tools);
     this.modelName = modelConfig.model;
-    this.chain = this.model.pipe(new StringOutputParser());
     this.tokenUsageLog = new TokenUsageLog(agentId);
     this.messages = [new SystemMessage('You are a useful technical assistant.')];
+    this.tools = tools;
   }
 
   async start(systemPrompt, promptMessages, examples, stepName, modelName = this.modelName) {
-    if (systemPrompt) this.messages.push(new AIMessage(systemPrompt));
+    if (systemPrompt) {
+      this.prompt = ChatPromptTemplate.fromMessages([
+        new SystemMessage(systemPrompt),
+        new MessagesPlaceholder('messages')
+      ]);
+    } else {
+      this.prompt = ChatPromptTemplate.fromMessages([
+        new SystemMessage('You are a useful technical assistant.'),
+        new MessagesPlaceholder('messages')
+      ]);
+    }
     return await this.next(promptMessages, examples, stepName, modelName);
   }
 
@@ -30,9 +40,21 @@ export class AI {
       console.log(`Creating a new chat completion: ${this.messages.map(m => JSON.stringify(m, null, 2)).join('\n\n')}`);
     }
 
-    const response = await this.backoffInference(this.messages);
-    await this.tokenUsageLog.updateLog(this.messages, response, modelName, stepName);
-    this.messages.push(new AIMessage(response));
+    let finalResponse;
+    while (true) {
+      const { response, toolMessages } = await this.backoffInference(this.messages);
+      
+      if (toolMessages) {
+        this.messages.push(...toolMessages);
+        continue;
+      }
+      
+      finalResponse = response;
+      break;
+    }
+
+    await this.tokenUsageLog.updateLog(this.messages, finalResponse.content, modelName, stepName);
+    this.messages.push(new AIMessage(finalResponse));
     
     if (config.logging.LOG_DEBUG_AI) {
       console.log(`Chat completion finished: ${this.messages.map(m => JSON.stringify(m, null, 2)).join('\n\n')}`);
@@ -65,8 +87,15 @@ export class AI {
     
     while (retryCount < maxRetries) {
       try {
-        const response = await this.chain.invoke(messages);
-        return response;
+        const chain = this.prompt.pipe(this.model);
+        const response = await chain.invoke({ messages });
+        
+        if (response.additional_kwargs?.tool_calls?.length > 0) {
+          const toolMessages = await this.processToolCalls(response.additional_kwargs.tool_calls);
+          return { response, toolMessages };
+        }
+        
+        return { response };
       } catch (error) {
         if (retryCount === maxRetries - 1) {
           throw error;
@@ -76,5 +105,65 @@ export class AI {
         delay *= 2;
       }
     }
+  }
+
+  async processToolCalls(toolCalls) {
+    const toolMessages = [
+      new AIMessage({
+        content: '',
+        additional_kwargs: { tool_calls: toolCalls }
+      })
+    ];
+
+    for (const toolCall of toolCalls) {
+      const tool = this.tools.find(t => t.name === toolCall.function.name);
+
+      if (config.logging.LOG_DEBUG_AI) {
+        console.log("Calling tool:", toolCall.function.name, toolCall.function.arguments);
+      }
+
+      if (tool) {
+        try {
+          const toolResult = await tool.func(JSON.parse(toolCall.function.arguments));
+          if (config.logging.LOG_DEBUG_AI) {
+            console.log("Tool result:", toolResult);
+          }
+          toolMessages.push(new ToolMessage({
+            content: JSON.stringify({
+              type: "tool_result",
+              result: toolResult
+            }),
+            name: toolCall.function.name,
+            tool_call_id: toolCall.id,
+          }));
+        } catch (error) {
+          const errorMessage = `Error in tool '${toolCall.function.name}': ${error.message}`;
+          if (config.logging.LOG_DEBUG_AI) {
+            console.log("Error in tool:", errorMessage);
+          }
+          toolMessages.push(new ToolMessage({
+            content: JSON.stringify({
+              type: "tool_result",
+              result: { error: errorMessage }
+            }),
+            name: toolCall.function.name,
+            tool_call_id: toolCall.id,
+          }));
+        }
+      } else {
+        if (config.logging.LOG_DEBUG_AI) {
+          console.log("Tool not found:", toolCall.function.name);
+        }
+        toolMessages.push(new ToolMessage({
+          content: JSON.stringify({
+            type: "tool_result",
+            result: { error: "Tool not found" }
+          }),
+          name: toolCall.function.name,
+          tool_call_id: toolCall.id,
+        }));
+      }
+    }
+    return toolMessages;
   }
 }

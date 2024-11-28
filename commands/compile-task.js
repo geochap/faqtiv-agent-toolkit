@@ -5,6 +5,7 @@ import { initializeVectorStore } from '../lib/vector-store.js';
 import { extractFunctionCode, extractFunctionNames } from '../lib/parse-utils.js';
 import { generateResponse, generateTaskSchema } from '../controllers/code-gen.js';
 import { headersUpToDate } from './update-headers.js';
+import { docHeadersUpToDate } from './update-doc-headers.js';
 import { getAllFiles } from '../lib/file-utils.js';
 import migrateDry, { getOutdatedItems } from './migrate-dry.js';
 import * as config from '../config.js';
@@ -16,12 +17,15 @@ const metadataDir = config.project.metadataDir;
 const tasksDir = config.project.tasksDir;
 const codeDir = config.project.codeDir;
 const codeFileExtension = config.project.runtime.codeFileExtension;
+const taskManualsDir = config.project.taskManualsDir;
 
-// any task files without a corresponding code file or if code is older
+// any task files without a corresponding code file, older code file than description, or if it's missing its manual or metadata
 function findUnprocessedTasks(taskFiles, codeDir) {
   return taskFiles.filter(taskFile => {
     const taskStat = fs.statSync(taskFile.fullPath);
     const jsPath = path.join(codeDir, taskFile.relativePath.replace('.txt', codeFileExtension));
+    const metadataPath = path.join(metadataDir, taskFile.relativePath.replace('.txt', '.yml'));
+    const manualPath = path.join(taskManualsDir, taskFile.relativePath.replace('.txt', '.md'));
 
     if (!fs.existsSync(jsPath)) {
       return true;
@@ -29,6 +33,14 @@ function findUnprocessedTasks(taskFiles, codeDir) {
     
     const jsStat = fs.statSync(jsPath);
     if (jsStat.mtime < taskStat.mtime) {
+      return true;
+    }
+
+    if (!fs.existsSync(metadataPath)) {
+      return true;
+    }
+
+    if (!fs.existsSync(manualPath)) {
       return true;
     }
   });
@@ -112,15 +124,20 @@ async function processTask(vectorStore, task) {
 }
 
 function writeResult(task, result, addAsExample) {
-  const metadataPath = path.join('.faqtiv', 'code', task.relativePath.replace('.txt', '.yml'));
-  const codePath = path.join('code', task.relativePath.replace('.txt', codeFileExtension));
+  const baseName = task.relativePath.replace('.txt', '');
+  const metadataPath = path.join(metadataDir, `${baseName}.yml`);
+  const codePath = path.join(codeDir, `${baseName}${codeFileExtension}`);
+  const manualPath = path.join(taskManualsDir, `${baseName}.md`);
 
   // Ensure directories exist
   fs.mkdirSync(path.dirname(metadataPath), { recursive: true });
   fs.mkdirSync(path.dirname(codePath), { recursive: true });
 
   const code = result.output.code;
+  const manual = result.output.manual;
+
   result.output.code = undefined; // exclude code from metadata
+  result.output.manual = undefined; // exclude manual from metadata
   result.embedding = encodeBase64(result.embedding);
   result.functions_embedding = encodeBase64(result.functions_embedding);
 
@@ -128,9 +145,16 @@ function writeResult(task, result, addAsExample) {
   fs.writeFileSync(codePath, code, 'utf8');
   console.log(`Wrote task code: ${codePath}`);
 
-  // Write YAML content
+  // Write metadata content
   fs.writeFileSync(metadataPath, yaml.dump(result), 'utf8');
   console.log(`Wrote metadata file: ${metadataPath}`);
+
+  // Ensure manuals directory exists
+  fs.mkdirSync(taskManualsDir, { recursive: true });
+
+  // Write manual content
+  fs.writeFileSync(manualPath, manual, 'utf8');
+  console.log(`Wrote manual file: ${manualPath}`);
 
   // Add as example
   if (addAsExample) {
@@ -221,12 +245,20 @@ async function compileTask(taskName) {
 
 export default async function(taskName, options) {
   try {
+    const docHeadersUpdated = docHeadersUpToDate();
+
+    if (!docHeadersUpdated) {
+      console.error('The documentation header is outdated. Please run `faqtiv update-doc-headers` to reflect recent changes in documentation files.');
+      process.exit(1);
+    }
+
     const headersUpdated = headersUpToDate();
 
     if (!headersUpdated) {
       console.error('The functions header is outdated. Please run `faqtiv update-headers` to reflect recent changes in function files.');
       process.exit(1);
     }
+
     const compileAll = options.all;
 
     if (!taskName && !compileAll) {
