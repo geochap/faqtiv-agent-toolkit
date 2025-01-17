@@ -29,6 +29,7 @@ In a codeblock at the top of your response write a ${runtimeName} function calle
 - If you need to import any dependencies for your doTask code always do so inside the doTask function.
 - Do not catch errors, let exceptions propagate.
 - If there are no errors doTask must always finish by writing its result as JSON to stdout.
+- If not output format is specified then output the result as JSON.
 - Never output anything else to stdout, any messages if needed should be included in the resulting JSON.
 - Do not include any comments or documentation in your code, only the code is needed.
 - Remember that you can write code to process the function results to filter or summarize them as needed if the function results are not what is needed.
