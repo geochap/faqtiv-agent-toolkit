@@ -22,6 +22,7 @@ function findUnprocessedTasks(taskFiles, codeDir) {
   return taskFiles.filter(taskFile => {
     const taskStat = fs.statSync(taskFile.fullPath);
     const jsPath = path.join(codeDir, taskFile.relativePath.replace('.txt', codeFileExtension));
+    const metadataPath = path.join(metadataDir, taskFile.relativePath.replace('.txt', '.yml'));
 
     if (!fs.existsSync(jsPath)) {
       return true;
