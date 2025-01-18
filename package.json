@@ -1,6 +1,6 @@
 {
   "name": "@intellidimension/faqtiv-agent-toolkit",
-  "version": "0.9.9",
+  "version": "0.9.10",
   "type": "module",
   "description": "A command line tool for code generation",
   "main": "cli.js",
@@ -18,8 +18,8 @@
     "@babel/parser": "^7.24.5",
     "@babel/preset-env": "^7.24.5",
     "@babel/traverse": "^7.24.5",
-    "@langchain/core": "^0.2.0",
-    "@langchain/openai": "^0.0.33",
+    "@langchain/core": "^0.3.0",
+    "@langchain/openai": "^0.3.0",
     "axios": "^1.7.7",
     "chokidar": "^3.6.0",
     "commander": "^12.1.0",
@@ -33,7 +33,8 @@
     "mkdirp": "^3.0.1",
     "openai": "^4.47.1",
     "python-ast": "^0.1.0",
-    "uuid": "^9.0.1"
+    "uuid": "^9.0.1",
+    "zod": "^3.23.8"
   },
   "bin": {
     "faqtiv": "./cli.js"

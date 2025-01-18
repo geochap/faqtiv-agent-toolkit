@@ -3,7 +3,7 @@ import { AI } from './ai.js';
 import { extractFunctionNames } from '../lib/parse-utils.js';
 import { generateAnsweringFunctionPrompt } from './prompts/generate-answering-function.js';
 import { extractFunctionCode } from '../lib/parse-utils.js';
-import { improveFunctionSignaturesPrompt } from './prompts/improve-function-signatures.js';
+import { improveFunctionSignaturePrompt } from './prompts/improve-function-signature.js';
 import { generateLangchainToolSchemaFromFunctionPrompt } from './prompts/generate-langchain-tool-schema-from-function.js';
 
 function codeResponse(response) {
@@ -69,7 +69,9 @@ export function getFunctionDependencies(functionNames, functions) {
 export default class CodeAgent {
   constructor(id, instructions, functions, functionsSignatures, modelConfig = { model, organization, apiKey }) {
     this.id = id;
-    this.ai = new AI(modelConfig, id);
+    const tools = [];
+
+    this.ai = new AI(modelConfig, id, tools);
     this.instructions = instructions;
     this.functions = functions;
     this.functionsSignatures = functionsSignatures;
@@ -106,18 +108,11 @@ export default class CodeAgent {
     return response;
   }
 
-  async improveFunctionSignatures(functionsCode, signatures, examples = []) {
-    examples = examples.flatMap(e => {
-      return [
-        new HumanMessage(e.task),
-        new AIMessage(e.code)
-      ];
-    });
-  
-    const promptMessages = [new HumanMessage(improveFunctionSignaturesPrompt(functionsCode, signatures))];
-    const messages = await this.ai.start(null, promptMessages, examples, 'improve-function-signatures');
+  async improveFunctionSignature(functionCode, signature) {
+    const prompt = [new HumanMessage(improveFunctionSignaturePrompt([functionCode], [signature]))];
+    const messages = await this.ai.start(null, prompt, [], 'improve-function-signature');
     const response = messages[messages.length - 1].content.trim();
-  
+
     return response;
   }
 }
