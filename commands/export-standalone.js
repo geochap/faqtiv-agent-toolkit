@@ -290,6 +290,9 @@ export default async function exportStandalone(outputDir = process.cwd(), option
     );
   });
 
+  // Copy data files
+  copyDir(path.join(config.project.dataFilesDir), path.join(outputDir, 'data'));
+
   // Copy the agent file and components directory
   fs.copyFileSync(path.join(templateDir, runtimeConfig.agentFile), path.join(outputDir, runtimeConfig.agentFile));
   copyDir(path.join(templateDir, 'components'), path.join(outputDir, 'components'));

@@ -17,13 +17,19 @@ const execAsync = util.promisify(exec);
 
 async function executeJS(tempFileName) {
   const runCommand = `${config.project.runtime.command} ${tempFileName}`;
-  return execAsync(runCommand, { encoding: 'buffer' });
+  return execAsync(runCommand, { 
+    encoding: 'buffer',
+    env: {
+      ...process.env,
+      DATA_FILES: path.resolve(config.project.dataFilesDir)
+    }
+  });
 }
 
 async function executePython(tempFileName) {
   const activateCommand = process.platform === 'win32' ? 
-    `venv\\Scripts\\activate && ${config.project.runtime.command} ${tempFileName}` : 
-    `source venv/bin/activate && ${config.project.runtime.command} ${tempFileName}`;
+    `set DATA_FILES=${path.resolve(config.project.dataFilesDir)} && venv\\Scripts\\activate && ${config.project.runtime.command} ${tempFileName}` : 
+    `export DATA_FILES=${path.resolve(config.project.dataFilesDir)} && source venv/bin/activate && ${config.project.runtime.command} ${tempFileName}`;
 
   return execAsync(activateCommand, { encoding: 'buffer' });
 }

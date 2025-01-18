@@ -71,7 +71,8 @@ export function loadConfig() {
       functionsDir: path.join(process.cwd(), 'functions'),
       headerPath: path.join(projectWorkdir, 'functions-header.yml'),
       tmpDir: path.join(projectWorkdir, 'tmp'),
-      logsDir: path.join(process.cwd(), 'logs')
+      logsDir: path.join(process.cwd(), 'logs'),
+      dataFilesDir: path.join(process.cwd(), 'data')
     };
   } else {
     if (!isInProjectDir) {
@@ -165,7 +166,8 @@ export function loadConfig() {
       libsDir: path.join(process.cwd(), 'libs'),
       headerPath: path.join(projectWorkdir, 'functions-header.yml'),
       tmpDir: path.join(projectWorkdir, 'tmp'),
-      logsDir: path.join(process.cwd(), 'logs')
+      logsDir: path.join(process.cwd(), 'logs'),
+      dataFilesDir: path.join(process.cwd(), 'data')
     };
   }
 }
