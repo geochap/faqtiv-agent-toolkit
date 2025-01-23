@@ -37,7 +37,13 @@ function executeJS(taskName, code, runParameters, outputFilePath, errorFilePath,
 
     execFile(
       config.project.runtime.command, [tempFileName], 
-      execOptions, 
+      {
+        ...execOptions,
+        env: {
+          ...process.env,
+          DATA_FILES: path.resolve(config.project.dataFilesDir)
+        }
+      }, 
       (error, stdout, stderr) => {
         const result = getExecutionHandler(taskName, runParameters, tempFileName, outputFilePath, errorFilePath)(error, stdout, stderr);
         resolve(result);
@@ -51,8 +57,8 @@ function executePython(taskName, code, runParameters, outputFilePath, errorFileP
     const tempFileName = path.join(tmpdir, `${uuidv4()}.py`);
     fs.writeFileSync(tempFileName, code);
     const activateCommand = process.platform === 'win32' ?
-      `venv\\Scripts\\activate && cd ${execOptions.cwd} && ${config.project.runtime.command} ${tempFileName}` :
-      `source venv/bin/activate && cd ${execOptions.cwd} && ${config.project.runtime.command} ${tempFileName}`;
+      `set DATA_FILES=${path.resolve(config.project.dataFilesDir)} && venv\\Scripts\\activate && cd ${execOptions.cwd} && ${config.project.runtime.command} ${tempFileName}` :
+      `export DATA_FILES=${path.resolve(config.project.dataFilesDir)} && source venv/bin/activate && cd ${execOptions.cwd} && ${config.project.runtime.command} ${tempFileName}`;
 
     exec(
       activateCommand,

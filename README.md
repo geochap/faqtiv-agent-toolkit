@@ -101,6 +101,33 @@ To get JSON output:
 faqtiv show-config --json
 ```
 
+### Data Files
+
+The toolkit provides a `/data` directory in your project root for storing data files that need to be accessed by your tasks at runtime. The absolute path to this directory is automatically exposed to your tasks through the `DATA_FILES` global variable.
+
+#### Adding Data Files
+1. Place any files your tasks need to access at runtime in this directory
+3. Access these files in your task code using the `DATA_FILES` environment variable
+
+Example usage in a function:
+
+JavaScript:
+```javascript
+// Read a JSON file from data directory
+const userData = JSON.parse(fs.readFileSync(`${DATA_FILES}/users.json`, 'utf8'));
+```
+
+Python:
+```python
+# Read a JSON file from data directory
+with open(f"{DATA_FILES}/users.json", 'r') as f:
+    user_data = json.load(f)
+```
+
+The `DATA_FILES` variable is automatically available in your task runtime environment - you don't need to import or configure anything to use it.
+
+Files in the data directory will be automatically included in the exported standalone agent.
+
 ### Getting started
 
 Start by adding some functions and libs to your project. Functions will be provided to the LLM to use for code generation while libs are private dependencies that your functions may use but the LLM won't use directly. Be verbose in your function and argumaent naming and supply code docs as necessary to make clear to the LLM what the function does.

@@ -26,3 +26,7 @@ ADHOC_PROMPT_TEXT = """{{ generateAnsweringFunctionPrompt }}"""
 LIBS = { {{ libsNames }} }
 
 FUNCTIONS = { {{ functionNames }} }
+
+ENV_VARS = {
+  "DATA_FILES": "./data"
+}

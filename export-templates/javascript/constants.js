@@ -26,6 +26,10 @@ const LIBS = { {{ libsNames }} };
 
 const FUNCTIONS = { {{ functionNames }} };
 
+const ENV_VARS = {
+  DATA_FILES: "./data"
+}
+
 module.exports = {
   TASKS,
   TASK_TOOL_SCHEMAS,
@@ -33,5 +37,6 @@ module.exports = {
   TASK_NAME_TO_FUNCTION_NAME_MAP,
   ADHOC_PROMPT_TEXT,
   LIBS,
-  FUNCTIONS
+  FUNCTIONS,
+  ENV_VARS
 };
