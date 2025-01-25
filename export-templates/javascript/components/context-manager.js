@@ -7,11 +7,14 @@ const encoderMutex = new Mutex();
 const modelLimits = {
   'gpt-3.5': 16000,
   'gpt-4o': 128000,
+  'gpt-4o-2024-11-20': 128000,
 };
 
 function createEncoder(modelName) {
+  // todo: figure out support for gpt-4o-2024-11-20
+  const model = modelName.includes('gpt-4o') ? 'gpt-4o' : modelName;
   return modelName.includes('gpt-4') || modelName.includes('gpt-3.5')
-    ? tiktoken.encodingForModel(modelName)
+    ? tiktoken.encodingForModel(model)
     : tiktoken.getEncoding('cl100k_base');
 }
 

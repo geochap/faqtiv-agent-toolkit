@@ -50,7 +50,8 @@ const exportDependencies = {
     "log4js": "^6.9.1",
     "mkdirp": "^3.0.1",
     "js-tiktoken": "^1.0.15",
-    "async-mutex": "^0.5.0"
+    "async-mutex": "^0.5.0",
+    "serverless-http": "^3.2.0"
   }
 };
 
@@ -132,21 +133,21 @@ function getExamples() {
 const runtimeConfigs = {
   python: {
     templateDir: 'python',
-    agentFile: 'agent.py',
+    agentFile: 'main.py',
     constantsFile: 'constants.py',
     dependenciesFile: 'requirements.txt',
     installCommand: `${config.project.runtime.packageManager} install -r requirements.txt`,
-    cliCommand: `${config.project.runtime.command} agent.py`,
-    httpCommand: `${config.project.runtime.command} agent.py --http`,
+    cliCommand: `${config.project.runtime.command} main.py`,
+    httpCommand: `${config.project.runtime.command} main.py --http`,
   },
   javascript: {
     templateDir: 'javascript',
-    agentFile: 'agent.js',
+    agentFile: 'index.js',
     constantsFile: 'constants.js',
     dependenciesFile: 'package.json',
     installCommand: `${config.project.runtime.packageManager} install`,
-    cliCommand: `${config.project.runtime.command} agent.js`,
-    httpCommand: `${config.project.runtime.command} agent.js --http`,
+    cliCommand: `${config.project.runtime.command} index.js`,
+    httpCommand: `${config.project.runtime.command} index.js --http`,
   }
 };
 

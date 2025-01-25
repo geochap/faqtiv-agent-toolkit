@@ -7,6 +7,7 @@ const { extractFunctionCode } = require('./parser');
 const { ADHOC_PROMPT_TEXT, LIBS, FUNCTIONS } = require('../constants');
 
 const TOOL_TIMEOUT = parseInt(process.env.TOOL_TIMEOUT || '60000');
+const IS_LAMBDA = !!process.env.AWS_LAMBDA_FUNCTION_NAME;
 
 function captureAndProcessOutput(func, args = []) {
   return new Promise((resolve, reject) => {
@@ -166,7 +167,7 @@ async function generateAndExecuteAdhoc(userInput, maxRetries = 5) {
 
       const result = await captureAndProcessOutput(functionCode);
       
-      createAdhocLogFile(userInput, functionCode, result);
+      if (!IS_LAMBDA) createAdhocLogFile(userInput, functionCode, result);
       
       return result;
     } catch (e) {
@@ -177,7 +178,7 @@ async function generateAndExecuteAdhoc(userInput, maxRetries = 5) {
 
       if (retryCount === maxRetries) {
         console.error(`Max retries (${maxRetries}) reached. Aborting.`);
-        createAdhocLogFile(userInput, previousCode, '', new Error(`Max retries reached. Last error: ${errorMessage}`));
+        if (!IS_LAMBDA) createAdhocLogFile(userInput, previousCode, '', new Error(`Max retries reached. Last error: ${errorMessage}`));
         throw new Error(`Max retries reached. Last error: ${errorMessage}`);
       }
 

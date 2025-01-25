@@ -7,7 +7,9 @@ const logDir = path.join(process.cwd(), 'logs');
 const logsFilePath = `${logDir}/app.log`;
 const errorLogsFilePath = `${logDir}/err.log`;
 
-mkdirpSync(logDir);
+const IS_LAMBDA = !!process.env.AWS_LAMBDA_FUNCTION_NAME;
+
+if (!IS_LAMBDA) mkdirpSync(logDir);
 
 log4js.addLayout('json', function(config) {
   return function(logEvent) { 
@@ -16,28 +18,39 @@ log4js.addLayout('json', function(config) {
 });
 
 const log4jsConfig = {
-    appenders: {
-      file: { 
-        type: 'file',
-        filename: logsFilePath,
-        layout: { type: 'json', separator: ',' }
-      },
-      errorFile: {
-        type: 'file',
-        filename: errorLogsFilePath,
-        layout: { type: 'json', separator: ',' }
-      }
+  appenders: IS_LAMBDA ? {
+    stdout: { type: 'stdout', layout: { type: 'json', separator: ',' } }
+  } : {
+    file: { 
+      type: 'file',
+      filename: logsFilePath,
+      layout: { type: 'json', separator: ',' }
     },
-    categories: {
-      default: { 
-        appenders: ['file'], 
-        level: 'info' 
-      },
-      error: {
-        appenders: ['errorFile'],
-        level: 'error'
-      }
+    errorFile: {
+      type: 'file',
+      filename: errorLogsFilePath,
+      layout: { type: 'json', separator: ',' }
     }
+  },
+  categories: IS_LAMBDA ? {
+    default: { 
+      appenders: ['stdout'], 
+      level: 'info' 
+    },
+    error: {
+      appenders: ['stdout'],
+      level: 'error'
+    }
+  } : {
+    default: { 
+      appenders: ['file'], 
+      level: 'info' 
+    },
+    error: {
+      appenders: ['errorFile'],
+      level: 'error'
+    }
+  }
 };
 log4js.configure(log4jsConfig);
 
