@@ -86,9 +86,9 @@ export default async function serve(options) {
       const activateCommand = process.platform === 'win32' ?
         `${venvPath}\\Scripts\\activate.bat && ` :
         `source ${venvPath}/bin/activate && `;
-      agentCommand = `${activateCommand}${config.project.runtime.command} main.py --http`;
+      agentCommand = `${activateCommand}${config.project.runtime.command} src/main.py --http`;
     } else {
-      agentCommand = `${config.project.runtime.command} index.js --http`;
+      agentCommand = `${config.project.runtime.command} src/index.js --http`;
     }
 
     serverProcess = exec(agentCommand, { 

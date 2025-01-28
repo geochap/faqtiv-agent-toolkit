@@ -2,7 +2,6 @@ const fs = require('fs');
 const path = require('path');
 const { mkdirpSync } = require('mkdirp');
 const log4js = require('log4js');
-
 const logDir = path.join(process.cwd(), 'logs');
 const logsFilePath = `${logDir}/app.log`;
 const errorLogsFilePath = `${logDir}/err.log`;

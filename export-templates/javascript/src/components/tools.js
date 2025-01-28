@@ -4,10 +4,9 @@ const { ChatOpenAI } = require('@langchain/openai');
 const { getRelevantExamples } = require('./examples');
 const { createAdhocLogFile } = require('./logger');
 const { extractFunctionCode } = require('./parser');
-const { ADHOC_PROMPT_TEXT, LIBS, FUNCTIONS } = require('../constants');
+const { ADHOC_PROMPT_TEXT, LIBS, FUNCTIONS, IS_LAMBDA } = require('../constants');
 
 const TOOL_TIMEOUT = parseInt(process.env.TOOL_TIMEOUT || '60000');
-const IS_LAMBDA = !!process.env.AWS_LAMBDA_FUNCTION_NAME;
 
 function captureAndProcessOutput(func, args = []) {
   return new Promise((resolve, reject) => {

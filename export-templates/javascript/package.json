@@ -1,0 +1,43 @@
+{
+  "name": "agent",
+  "version": "0.0.0",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "esbuild src/index.js --bundle --outfile=dist/index.js --platform=node --target=node20",
+    "dev": "npm run build && sst dev",
+    "deploy-dev": "npm run build && sst deploy --stage=dev",
+    "deploy-staging": "npm run build && sst deploy --stage=staging",
+    "deploy-prod": "npm run build && sst deploy --stage=production"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@babel/core": "^7.24.5",
+    "@babel/parser": "^7.24.5",
+    "@babel/preset-env": "^7.24.5",
+    "@babel/traverse": "^7.24.5",
+    "@langchain/core": "^0.3.30",
+    "@langchain/openai": "^0.3.17",
+    "async-mutex": "^0.5.0",
+    "axios": "^1.7.9",
+    "body-parser": "^1.20.2",
+    "exceljs": "^4.4.0",
+    "express": "^4.19.2",
+    "figlet": "^1.7.0",
+    "js-tiktoken": "^1.0.15",
+    "langchain": "^0.3.11",
+    "log4js": "^6.9.1",
+    "mkdirp": "^3.0.1",
+    "serverless-http": "^3.2.0",
+    "uuid": "^10.0.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "sst": "3.6.19",
+    "typescript": "^5.3.3",
+    "esbuild": "^0.24.2"
+  }
+}

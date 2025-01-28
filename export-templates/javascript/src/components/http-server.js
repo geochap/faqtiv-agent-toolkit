@@ -6,7 +6,7 @@ const serverless = require('serverless-http');
 const { generateAndExecuteAdhoc, captureAndProcessOutput } = require('./tools');
 const { logErr, log } = require('./logger');
 const { generateCompletion, streamCompletion } = require('./completions');
-const { TASK_NAME_TO_FUNCTION_NAME_MAP, TASKS } = require('../constants');
+const { TASK_NAME_TO_FUNCTION_NAME_MAP, TASKS, IS_LAMBDA } = require('../constants');
 
 const app = express();
 app.use(bodyParser.json({
@@ -171,7 +171,7 @@ function getLambdaBody(event) {
 }
 
 const serverlessApp = serverless(app);
-const lambdaHandler = awslambda.streamifyResponse(async (event, responseStream, context) => {
+const lambdaHandler = IS_LAMBDA ? awslambda.streamifyResponse(async (event, responseStream, context) => {
   // Check if it's a streaming request
   const isCompletionsRequest = (event.path === '/completions' || event.rawPath === '/completions');
   const isStreamingRequest = event.headers?.accept?.includes('text/event-stream');
@@ -250,7 +250,7 @@ const lambdaHandler = awslambda.streamifyResponse(async (event, responseStream, 
   
   // Handle other requests normally
   return serverlessApp(event, context);
-});
+}) : null;
 
 module.exports = {
   startHttpServer,

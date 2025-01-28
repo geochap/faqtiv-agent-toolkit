@@ -8,6 +8,7 @@ This is a standalone version of a FAQtiv agent. It includes all the necessary co
 
    ```
    {{ installCommand }}
+   npx sst init
    ```
 
 3. Set up your OpenAI API and model as environment variables:
@@ -46,6 +47,14 @@ To start the agent as an HTTP server, run:
 By default, the server will run on `http://localhost:8000`. 
 
 For more detailed information on how to use these endpoints, refer to the original FAQtiv Agent Toolkit documentation.
+
+## Deploying to AWS
+
+Edit the `sst.config.ts` file to set the lambda configuration for your environment.
+
+```
+npm run deploy-dev | npm run deploy-staging | npm run deploy-prod
+```
 
 ## Note
 

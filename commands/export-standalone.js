@@ -16,45 +16,6 @@ import { getDeduplicatedImports } from '../controllers/code-gen.js';
 const { runtimeName, codeFileExtension } = config.project.runtime;
 const { codeDir, metadataDir, tasksDir } = config.project;
 
-const exportDependencies = {
-  python: [
-    'faiss-cpu==1.8.0.post1',
-    'fastapi==0.112.0',
-    'langchain==0.3.14',
-    'langchain-community==0.3.14',
-    'langchain-core==0.3.30',
-    'langchain-openai==0.3.0',
-    'langchain-text-splitters==0.3.5',
-    'numpy==1.26.4',
-    'openai==1.59.8',
-    'pydantic==2.8.2',
-    'pydantic_core==2.20.1',
-    'requests==2.32.3',
-    'uvicorn==0.30.5',
-    'pyfiglet==1.0.2',
-    'tiktoken==0.8.0'
-  ],
-  javascript: {
-    "@langchain/core": "^0.3.30",
-    "@langchain/openai": "^0.3.17",
-    "body-parser": "^1.20.2",
-    "express": "^4.19.2",
-    "langchain": "^0.3.11",
-    "zod": "^3.23.8",
-    "uuid": "^10.0.0",
-    "figlet": "^1.7.0",
-    "@babel/core": "^7.24.5",
-    "@babel/parser": "^7.24.5",
-    "@babel/preset-env": "^7.24.5",
-    "@babel/traverse": "^7.24.5",
-    "log4js": "^6.9.1",
-    "mkdirp": "^3.0.1",
-    "js-tiktoken": "^1.0.15",
-    "async-mutex": "^0.5.0",
-    "serverless-http": "^3.2.0"
-  }
-};
-
 function getTaskFunctions() {
   // Get all task files
   const taskFiles = getAllFiles(codeDir, codeFileExtension);
@@ -133,37 +94,23 @@ function getExamples() {
 const runtimeConfigs = {
   python: {
     templateDir: 'python',
-    agentFile: 'main.py',
-    constantsFile: 'constants.py',
+    agentFile: 'src/main.py',
+    constantsFile: 'src/constants.py',
     dependenciesFile: 'requirements.txt',
     installCommand: `${config.project.runtime.packageManager} install -r requirements.txt`,
-    cliCommand: `${config.project.runtime.command} main.py`,
-    httpCommand: `${config.project.runtime.command} main.py --http`,
+    cliCommand: `${config.project.runtime.command} src/main.py`,
+    httpCommand: `${config.project.runtime.command} src/main.py --http`,
   },
   javascript: {
     templateDir: 'javascript',
-    agentFile: 'index.js',
-    constantsFile: 'constants.js',
+    agentFile: 'src/index.js',
+    constantsFile: 'src/constants.js',
     dependenciesFile: 'package.json',
-    installCommand: `${config.project.runtime.packageManager} install`,
-    cliCommand: `${config.project.runtime.command} index.js`,
-    httpCommand: `${config.project.runtime.command} index.js --http`,
+    installCommand: `${config.project.runtime.packageManager} install --include=dev`,
+    cliCommand: `${config.project.runtime.command} src/index.js`,
+    httpCommand: `${config.project.runtime.command} src/index.js --http`,
   }
 };
-
-function getDependenciesFile(runtimeName, existingDependencies) {
-  let updatedDependencies = existingDependencies;
-  if (runtimeName === 'python') {
-    // For Python, append new dependencies to requirements.txt
-    updatedDependencies += '\n' + exportDependencies[runtimeName].join('\n');
-  } else if (runtimeName === 'javascript') {
-    // For JavaScript, update package.json
-    const packageJson = JSON.parse(existingDependencies || '{}');
-    packageJson.dependencies = { ...packageJson.dependencies, ...exportDependencies[runtimeName] };
-    updatedDependencies = JSON.stringify(packageJson, null, 2);
-  }
-  return updatedDependencies;
-}
 
 function formatTaskFunctions(tasks) {
   if (runtimeName === 'python') {
@@ -228,16 +175,7 @@ export default async function exportStandalone(outputDir = process.cwd(), option
   const templateDir = path.join(__dirname, `../export-templates/${runtimeConfig.templateDir}`);
   const constantsTemplate = fs.readFileSync(path.join(templateDir, runtimeConfig.constantsFile), 'utf8');
   const readmeTemplate = fs.readFileSync(path.join(__dirname, '../export-templates/README.md'), 'utf8');
-
-  // Read existing dependencies file
-  let existingDependencies = '';
-  const existingDependenciesPath = path.join(process.cwd(), runtimeConfig.dependenciesFile);
-  if (fs.existsSync(existingDependenciesPath)) {
-    existingDependencies = fs.readFileSync(existingDependenciesPath, 'utf8');
-  }
-
-  // Add export dependencies to existing agent dependencies file
-  const dependencies = getDependenciesFile(runtimeName, existingDependencies);
+  const gitignorePath = path.join(__dirname, '../export-templates/.gitignore');
 
   // Prepare data for templates
   const templateData = {
@@ -271,14 +209,16 @@ export default async function exportStandalone(outputDir = process.cwd(), option
   const constantsCode = replacePlaceholders(constantsTemplate, templateData);
   const readmeContent = replacePlaceholders(readmeTemplate, templateData);
 
-  // Write files
+  // Copy the entire template directory
+  copyDir(templateDir, outputDir);
+  fs.copyFileSync(gitignorePath, path.join(outputDir, '.gitignore'));
+
+  // Write generated files
   fs.writeFileSync(path.join(outputDir, runtimeConfig.constantsFile), constantsCode);
   fs.writeFileSync(path.join(outputDir, 'README.md'), readmeContent);
-  fs.writeFileSync(path.join(outputDir, runtimeConfig.dependenciesFile), dependencies);
 
   // Write examples
-  const examplesDir = path.join(outputDir, 'examples');
-
+  const examplesDir = path.join(outputDir, 'src/examples');
   fs.mkdirSync(examplesDir, { recursive: true });
   examples.forEach(example => {
     fs.writeFileSync(
@@ -296,21 +236,19 @@ export default async function exportStandalone(outputDir = process.cwd(), option
   if (!fs.existsSync(dataDir)) {
     console.warn(`WARNING: Data directory does not exist at path: ${dataDir}`);
   } else {
-    copyDir(dataDir, path.join(outputDir, 'data'));
+    copyDir(dataDir, path.join(outputDir, 'src/data'));
   }
-
-  // Copy the agent file and components directory
-  fs.copyFileSync(path.join(templateDir, runtimeConfig.agentFile), path.join(outputDir, runtimeConfig.agentFile));
-  copyDir(path.join(templateDir, 'components'), path.join(outputDir, 'components'));
 
   log(`Standalone agent exported to ${outputDir}`);
   log('Generated files:');
   log(`- ${runtimeConfig.agentFile}`);
   log(`- ${runtimeConfig.constantsFile}`);
-  log('- components/');
-  log('- examples/');
+  log('- src/components/');
+  log('- src/examples/');
+  log('- src/data/');
   log(`- ${runtimeConfig.dependenciesFile}`);
   log('- README.md');
+  log('- .gitignore');
 
   // Check headers up to date
   if (!headersUpToDate()) {
