@@ -13,6 +13,14 @@ app.use(bodyParser.json({
   limit: '10mb'
 }));
 
+// Enable CORS
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
+  next();
+});
+
 app.post('/run_adhoc', async (req, res) => {
   const requestId = `run-adhoc-${uuidv4()}`;
   log('run_adhoc', 'run_adhoc', { id: requestId, ...req.body });
