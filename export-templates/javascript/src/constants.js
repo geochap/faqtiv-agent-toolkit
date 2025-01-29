@@ -1,4 +1,6 @@
+const log4js = require('log4js');
 const z = require('zod');
+const { logDir } = require('./components/logger');
 
 // Agent lib and functions dependencies
 {{ imports }}
@@ -30,6 +32,8 @@ const ENV_VARS = {
   DATA_FILES: "./data"
 }
 
+const IS_LAMBDA = !!process.env.AWS_LAMBDA_FUNCTION_NAME;
+
 module.exports = {
   TASKS,
   TASK_TOOL_SCHEMAS,
@@ -38,5 +42,6 @@ module.exports = {
   ADHOC_PROMPT_TEXT,
   LIBS,
   FUNCTIONS,
-  ENV_VARS
+  ENV_VARS,
+  IS_LAMBDA
 };

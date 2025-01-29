@@ -3,6 +3,7 @@ const { ChatPromptTemplate, MessagesPlaceholder } = require('@langchain/core/pro
 const { ChatOpenAI } = require('@langchain/openai');
 const { AIMessage, HumanMessage, SystemMessage, ToolMessage } = require('@langchain/core/messages');
 const z = require('zod');
+const { logErr } = require('./logger');
 const { createToolsFromSchemas, generateAndExecuteAdhoc } = require('./tools');
 const { getMessagesWithinContextLimit } = require('./context-manager');
 const { TASK_TOOL_SCHEMAS, COMPLETION_PROMPT_TEXT } = require('../constants');
