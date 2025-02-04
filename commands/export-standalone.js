@@ -209,9 +209,29 @@ export default async function exportStandalone(outputDir = process.cwd(), option
   const constantsCode = replacePlaceholders(constantsTemplate, templateData);
   const readmeContent = replacePlaceholders(readmeTemplate, templateData);
 
-  // Copy the entire template directory
-  copyDir(templateDir, outputDir);
-  fs.copyFileSync(gitignorePath, path.join(outputDir, '.gitignore'));
+  // Check if both src directory and package.json exist
+  const targetSrcDir = path.join(outputDir, 'src');
+  const targetPackageJsonPath = path.join(outputDir, runtimeConfig.dependenciesFile);
+  const shouldDoPartialUpdate = fs.existsSync(targetSrcDir) && fs.existsSync(targetPackageJsonPath);
+
+  if (!shouldDoPartialUpdate) {
+    // If either src or package.json don't exist, do full export
+    copyDir(templateDir, outputDir);
+    fs.copyFileSync(gitignorePath, path.join(outputDir, '.gitignore'));
+  } else {
+    // If both exist, only update src and package.json
+    const srcDir = path.join(templateDir, 'src');
+    const packageJsonPath = path.join(templateDir, runtimeConfig.dependenciesFile);
+
+    // Remove existing src directory
+    fs.rmSync(targetSrcDir, { recursive: true, force: true });
+    
+    // Copy new src directory
+    copyDir(srcDir, targetSrcDir);
+    
+    // Copy package.json
+    fs.copyFileSync(packageJsonPath, targetPackageJsonPath);
+  }
 
   // Write generated files
   fs.writeFileSync(path.join(outputDir, runtimeConfig.constantsFile), constantsCode);
@@ -240,15 +260,21 @@ export default async function exportStandalone(outputDir = process.cwd(), option
   }
 
   log(`Standalone agent exported to ${outputDir}`);
-  log('Generated files:');
-  log(`- ${runtimeConfig.agentFile}`);
-  log(`- ${runtimeConfig.constantsFile}`);
-  log('- src/components/');
-  log('- src/examples/');
-  log('- src/data/');
-  log(`- ${runtimeConfig.dependenciesFile}`);
-  log('- README.md');
-  log('- .gitignore');
+  if (!shouldDoPartialUpdate) {
+    log('Performing full export. Generated files:');
+    log(`- ${runtimeConfig.agentFile}`);
+    log(`- ${runtimeConfig.constantsFile}`);
+    log('- src/components/');
+    log('- src/examples/');
+    log('- src/data/');
+    log(`- ${runtimeConfig.dependenciesFile}`);
+    log('- README.md');
+    log('- .gitignore');
+  } else {
+    log('Performing partial update. Updated files:');
+    log('- src/ directory (replaced)');
+    log(`- ${runtimeConfig.dependenciesFile} (replaced)`);
+  }
 
   // Check headers up to date
   if (!headersUpToDate()) {
