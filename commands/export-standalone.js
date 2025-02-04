@@ -255,6 +255,8 @@ export default async function exportStandalone(outputDir = process.cwd(), option
   const dataDir = path.join(config.project.dataFilesDir);
   if (!fs.existsSync(dataDir)) {
     console.warn(`WARNING: Data directory does not exist at path: ${dataDir}`);
+    // Create empty data directory in output
+    fs.mkdirSync(path.join(outputDir, 'src/data'), { recursive: true });
   } else {
     copyDir(dataDir, path.join(outputDir, 'src/data'));
   }
