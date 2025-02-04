@@ -8,7 +8,6 @@ This is a standalone version of a FAQtiv agent. It includes all the necessary co
 
    ```
    {{ installCommand }}
-   npx sst init
    ```
 
 3. Set up your OpenAI API and model as environment variables:

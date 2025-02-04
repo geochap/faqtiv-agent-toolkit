@@ -8,6 +8,16 @@ const { logErr, log } = require('./logger');
 const { generateCompletion, streamCompletion } = require('./completions');
 const { TASK_NAME_TO_FUNCTION_NAME_MAP, TASKS, IS_LAMBDA } = require('../constants');
 
+function validateCompletionMessages(messages) {
+  if (!messages || !Array.isArray(messages) || messages.length === 0) {
+    return { 
+      isValid: false, 
+      error: 'Messages field must be provided and contain at least one message' 
+    };
+  }
+  return { isValid: true };
+}
+
 const app = express();
 app.use(bodyParser.json({
   limit: '10mb'
@@ -65,71 +75,68 @@ app.post('/run_task/:taskName', async (req, res) => {
 });
 
 app.post('/completions', async (req, res) => {
-  const { 
-    messages, 
-    include_tool_messages,
-    max_tokens,
-    temperature
-  } = req.body;
-  const completionId = `cmpl-${uuidv4()}`;
-  const logBody = {
-    id: completionId,
-    prompt: messages.length > 0 ? messages[messages.length - 1].content : "",
-    messageCount: messages.length, 
-    include_tool_messages, 
-    max_tokens, 
-    temperature 
-  };
-  log('completions', 'completions', logBody);
+  try {
+    const { 
+      messages, 
+      include_tool_messages,
+      max_tokens,
+      temperature
+    } = req.body;
 
-  console.log("Completion request: ", messages.length > 0 ? messages[messages.length - 1].content : "");
+    const validation = validateCompletionMessages(messages);
+    if (!validation.isValid) {
+      logErr('completions', 'invalid-request', req.body, validation.error);
+      return res.status(400).json({ error: validation.error });
+    }
 
-  if (req.headers.accept?.includes('text/event-stream')) {
-    // For non-Lambda environment
-    if (!res.responseStream) {
+    const completionId = `cmpl-${uuidv4()}`;
+    const logBody = {
+      id: completionId,
+      prompt: messages.length > 0 ? messages[messages.length - 1].content : "",
+      messageCount: messages.length, 
+      include_tool_messages, 
+      max_tokens, 
+      temperature 
+    };
+    log('completions', 'request', logBody);
+
+    console.log("Completion request: ", messages.length > 0 ? messages[messages.length - 1].content : "");
+
+    if (req.headers.accept?.includes('text/event-stream')) {
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
+      res.setHeader('Keep-Alive', 'timeout=900');
       res.setHeader('X-Accel-Buffering', 'no');
-    }
+      res.setHeader('Transfer-Encoding', 'chunked');
 
-    const writer = res.responseStream || res;
-    
-    try {
-      for await (const chunk of streamCompletion(completionId, messages, include_tool_messages, max_tokens, temperature)) {
-        const data = `data: ${JSON.stringify(chunk)}\n\n`;
-        if (res.responseStream) {
-          await writer.write(data);
-        } else {
-          writer.write(data);
+      try {
+        for await (const chunk of streamCompletion(completionId, messages, include_tool_messages, max_tokens, temperature)) {
+          const data = `data: ${JSON.stringify(chunk)}\n\n`;
+          res.write(data);
         }
-      }
-      // Send final DONE message
-      const doneData = 'data: [DONE]\n\n';
-      if (res.responseStream) {
-        await writer.write(doneData);
-        await writer.end();
-      } else {
-        writer.write(doneData);
-        writer.end();
-      }
-    } catch (error) {
-      logErr('completions', 'completions', logBody, error);
-      if (res.responseStream) {
-        await writer.write(JSON.stringify({ error: error.message }));
-        await writer.end();
-      } else {
+        // Send final DONE message
+        const doneData = 'data: [DONE]\n\n';
+        res.write(doneData);
+        res.end();
+        log('completions', 'done', { id: completionId, status: 'done' });
+      } catch (error) {
+        logErr('completions', 'internal-server-error', logBody, error);
         res.status(500).json({ error: error.message });
       }
+      return;
     }
-    return;
-  }
 
-  try {
-    const result = await generateCompletion(completionId, messages, include_tool_messages, max_tokens, temperature);
-    res.json(result);
+    try {
+      const result = await generateCompletion(completionId, messages, include_tool_messages, max_tokens, temperature);
+      res.json(result);
+      log('completions', 'done', { id: completionId, status: 'done' });
+    } catch (error) {
+      logErr('completions', 'internal-server-error', logBody, error);
+      res.status(500).json({ error: error.message });
+    }
   } catch (error) {
-    logErr('completions', 'completions', logBody, error);
+    logErr('completions', 'internal-server-error', logBody, error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -191,7 +198,9 @@ const lambdaHandler = IS_LAMBDA ? awslambda.streamifyResponse(async (event, resp
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
-        'X-Accel-Buffering': 'no'
+        'X-Accel-Buffering': 'no',
+        'Transfer-Encoding': 'chunked',
+        'Keep-Alive': 'timeout=900'
       }
     };
 
@@ -202,11 +211,19 @@ const lambdaHandler = IS_LAMBDA ? awslambda.streamifyResponse(async (event, resp
     
     try {
       const { messages, include_tool_messages, max_tokens, temperature } = getLambdaBody(event);
+
+      const validation = validateCompletionMessages(messages);
+      if (!validation.isValid) {
+        responseStream.write(JSON.stringify({ error: validation.error }));
+        responseStream.end();
+        return;
+      }
+
       const completionId = `cmpl-${uuidv4()}`;
       const logBody = {
         id: completionId,
         prompt: messages.length > 0 ? messages[messages.length - 1].content : "",
-        messageCount: messages.length, 
+        messageCount: messages.length,
         include_tool_messages, 
         max_tokens, 
         temperature 
@@ -216,44 +233,21 @@ const lambdaHandler = IS_LAMBDA ? awslambda.streamifyResponse(async (event, resp
 
       for await (const chunk of streamCompletion(completionId, messages, include_tool_messages, max_tokens, temperature)) {
         const data = `data: ${JSON.stringify(chunk)}\n\n`;
-        await responseStream.write(data);
+        responseStream.write(data);
       }
 
       log('completions', 'done', { id: completionId, status: 'done' });
       
       // Send final DONE message
-      await responseStream.write('data: [DONE]\n\n');
-      await responseStream.end();
+      responseStream.write('data: [DONE]\n\n');
+      responseStream.end();
     } catch (error) {
       logErr('completions', 'completions', event.body, error);
-      await responseStream.write(JSON.stringify({ error: error.message }));
-      await responseStream.end();
+      responseStream.write(JSON.stringify({ error: error.message }));
+      responseStream.end();
     }
     
     return;
-  } else if (isCompletionsRequest) {
-    try {
-      const { messages, include_tool_messages, max_tokens, temperature } = getLambdaBody(event);
-      const completionId = `cmpl-${uuidv4()}`;
-      const logBody = {
-        id: completionId,
-        prompt: messages.length > 0 ? messages[messages.length - 1].content : "",
-        messageCount: messages.length, 
-        include_tool_messages, 
-        max_tokens, 
-        temperature 
-      };
-      
-      log('completions', 'non-stream', logBody);
-
-      const result = await generateCompletion(completionId, messages, include_tool_messages, max_tokens, temperature);
-      res.setHeader('Content-Type', 'application/json');
-      res.status(200).send(JSON.stringify(result));
-    } catch (error) {
-      logErr('completions', 'completions', event.body, error);
-      res.setHeader('Content-Type', 'application/json');
-      res.status(500).send(JSON.stringify({ error: error.message }));
-    }
   }
   
   // Handle other requests normally

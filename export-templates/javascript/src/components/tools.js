@@ -106,6 +106,12 @@ const model = process.env.OPENAI_MODEL;
 const adhocLLM = new ChatOpenAI({
   apiKey,
   model,
+  configuration: {
+    defaultHeaders: {
+      'Connection': 'keep-alive',
+      'Keep-Alive': 'timeout=900'
+    },
+  },
 });
 
 async function generateAndExecuteAdhoc(userInput, maxRetries = 5) {

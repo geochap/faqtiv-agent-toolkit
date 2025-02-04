@@ -3,7 +3,7 @@ const { ChatPromptTemplate, MessagesPlaceholder } = require('@langchain/core/pro
 const { ChatOpenAI } = require('@langchain/openai');
 const { AIMessage, HumanMessage, SystemMessage, ToolMessage } = require('@langchain/core/messages');
 const z = require('zod');
-const { logErr } = require('./logger');
+const { log, logErr } = require('./logger');
 const { createToolsFromSchemas, generateAndExecuteAdhoc } = require('./tools');
 const { getMessagesWithinContextLimit } = require('./context-manager');
 const { TASK_TOOL_SCHEMAS, COMPLETION_PROMPT_TEXT } = require('../constants');
@@ -151,7 +151,13 @@ async function generateCompletion(completionId, messages, includeToolMessages = 
     apiKey,
     model,
     maxTokens,
-    temperature
+    temperature,
+    configuration: {
+      defaultHeaders: {
+        'Connection': 'keep-alive',
+        'Keep-Alive': 'timeout=900'
+      },
+    },
   }).bindTools(completionTools);
   const completionChain = completionPrompt.pipe(llm);
 
@@ -257,7 +263,13 @@ async function* streamCompletion(completionId, messages, includeToolMessages = f
     apiKey,
     model,
     maxTokens,
-    temperature
+    temperature,
+    configuration: {
+      defaultHeaders: {
+        'Connection': 'keep-alive',
+        'Keep-Alive': 'timeout=900'
+      },
+    },
   }).bindTools(completionTools);
   const completionChain = completionPrompt.pipe(llm);
 
@@ -304,6 +316,7 @@ async function* streamCompletion(completionId, messages, includeToolMessages = f
     while (true) {
       let hasToolCalls = false;
       for await (const event of processRequest({ conversation })) {
+        log('completions', 'stream-event', { event });
         if (insertNewline) {
           // Insert a newline before processing new tokens
           const newlineChunk = {
