@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field, create_model
 from typing import List, Dict, Union, Any, Optional
+import os
 
 # Agent lib and functions dependencies
 {{ imports }}
@@ -26,6 +27,8 @@ ADHOC_PROMPT_TEXT = """{{ generateAnsweringFunctionPrompt }}"""
 LIBS = { {{ libsNames }} }
 
 FUNCTIONS = { {{ functionNames }} }
+
+IS_LAMBDA = bool(os.getenv('AWS_LAMBDA_FUNCTION_NAME'))
 
 ENV_VARS = {
   "DATA_FILES": "./data"
