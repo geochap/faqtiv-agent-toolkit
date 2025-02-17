@@ -89,7 +89,19 @@ app.post('/completions', async (req, res) => {
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
     });
-    for await (const chunk of streamCompletion(completionId, messages, include_tool_messages, max_tokens, temperature)) {
+
+    async function emitEvent(data, model){
+      const eventChunk = {
+        id: completionId,
+        object: 'chat.completion.chunk',
+        created: Math.floor(Date.now() / 1000),
+        model,
+        choices: [{ index: 0, delta: { role: 'assistant', content: `\n\`\`\`agent-message\n${data}\n\`\`\`\n` }, finish_reason: null }],
+      };
+      res.write(`data: ${JSON.stringify(eventChunk)}\n\n`);
+    }
+
+    for await (const chunk of streamCompletion(completionId, messages, include_tool_messages, max_tokens, temperature, emitEvent)) {
       res.write(`data: ${JSON.stringify(chunk)}\n\n`);
     }
     res.write('data: [DONE]\n\n');

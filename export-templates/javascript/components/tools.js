@@ -8,7 +8,7 @@ const { ADHOC_PROMPT_TEXT, LIBS, FUNCTIONS } = require('../constants');
 
 const TOOL_TIMEOUT = parseInt(process.env.TOOL_TIMEOUT || '60000');
 
-function captureAndProcessOutput(func, args = []) {
+function captureAndProcessOutput(func, args = [], emitEvent) {
   return new Promise((resolve, reject) => {
     const customLog = (arg) => {
       // Assuming we only need the first argument as tasks return a single object
@@ -32,7 +32,7 @@ function captureAndProcessOutput(func, args = []) {
     // Create a context object with all the necessary functions and variables
     const context = {
       require,
-      console: { log: customLog, warn: console.warn, error: console.error },
+      console: { log: customLog, warn: console.warn, error: console.error, emitEvent: emitEvent },
       // Add all the functions and variables from the local scope that the function might need
       ...LIBS,
       ...FUNCTIONS
@@ -67,11 +67,11 @@ function captureAndProcessOutput(func, args = []) {
 }
 
 // Capture stdout of tasks
-async function toolWrapper(func, args) {
+async function toolWrapper(func, args, emitEvent) {
   // todo: make sure the args are in the correct positional order
   // this code extracts the args map from the object and passes them as individual value arguments
   try {
-    const result = await captureAndProcessOutput(func, Object.values(args));
+    const result = await captureAndProcessOutput(func, Object.values(args), emitEvent);
     // Ensure the result is a string
     return (typeof result === 'object' ? JSON.stringify(result) : String(result));
   } catch (error) {
@@ -92,7 +92,7 @@ function createToolsFromSchemas(schemas) {
       name: schema.name,
       description,
       schema: schema.schema,
-      func: schema.name === 'run_adhoc_task' ? schema.func : async (...args) => await toolWrapper(schema.func, ...args)
+      func: schema.name === 'run_adhoc_task' ? schema.func : async (args, emitEvent) => await toolWrapper(schema.func, args, emitEvent)
     });
 
     tools.push(tool);

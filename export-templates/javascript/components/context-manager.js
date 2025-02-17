@@ -7,6 +7,7 @@ const encoderMutex = new Mutex();
 const modelLimits = {
   'gpt-3.5': 16000,
   'gpt-4o': 128000,
+  'o3-mini': 200000,
 };
 
 function createEncoder(modelName) {
