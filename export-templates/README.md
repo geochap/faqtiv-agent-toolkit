@@ -47,7 +47,7 @@ By default, the server will run on `http://localhost:8000`.
 
 For more detailed information on how to use these endpoints, refer to the original FAQtiv Agent Toolkit documentation.
 
-## Deploying to AWS
+## Deploying to AWS (only for node runtime)
 
 Edit the `sst.config.ts` file to set the lambda configuration for your environment.
 
