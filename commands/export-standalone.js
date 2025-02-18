@@ -16,44 +16,6 @@ import { getDeduplicatedImports } from '../controllers/code-gen.js';
 const { runtimeName, codeFileExtension } = config.project.runtime;
 const { codeDir, metadataDir, tasksDir } = config.project;
 
-const exportDependencies = {
-  python: [
-    'faiss-cpu==1.8.0.post1',
-    'fastapi==0.112.0',
-    'langchain==0.3.14',
-    'langchain-community==0.3.14',
-    'langchain-core==0.3.30',
-    'langchain-openai==0.3.0',
-    'langchain-text-splitters==0.3.5',
-    'numpy==1.26.4',
-    'openai==1.59.8',
-    'pydantic==2.8.2',
-    'pydantic_core==2.20.1',
-    'requests==2.32.3',
-    'uvicorn==0.30.5',
-    'pyfiglet==1.0.2',
-    'tiktoken==0.8.0'
-  ],
-  javascript: {
-    "@langchain/core": "^0.3.30",
-    "@langchain/openai": "^0.3.17",
-    "body-parser": "^1.20.2",
-    "express": "^4.19.2",
-    "langchain": "^0.3.11",
-    "zod": "^3.23.8",
-    "uuid": "^10.0.0",
-    "figlet": "^1.7.0",
-    "@babel/core": "^7.24.5",
-    "@babel/parser": "^7.24.5",
-    "@babel/preset-env": "^7.24.5",
-    "@babel/traverse": "^7.24.5",
-    "log4js": "^6.9.1",
-    "mkdirp": "^3.0.1",
-    "js-tiktoken": "^1.0.15",
-    "async-mutex": "^0.5.0"
-  }
-};
-
 function getTaskFunctions() {
   // Get all task files
   const taskFiles = getAllFiles(codeDir, codeFileExtension);
@@ -132,37 +94,23 @@ function getExamples() {
 const runtimeConfigs = {
   python: {
     templateDir: 'python',
-    agentFile: 'agent.py',
-    constantsFile: 'constants.py',
+    agentFile: 'src/main.py',
+    constantsFile: 'src/constants.py',
     dependenciesFile: 'requirements.txt',
     installCommand: `${config.project.runtime.packageManager} install -r requirements.txt`,
-    cliCommand: `${config.project.runtime.command} agent.py`,
-    httpCommand: `${config.project.runtime.command} agent.py --http`,
+    cliCommand: `${config.project.runtime.command} src/main.py`,
+    httpCommand: `${config.project.runtime.command} src/main.py --http`,
   },
   javascript: {
     templateDir: 'javascript',
-    agentFile: 'agent.js',
-    constantsFile: 'constants.js',
+    agentFile: 'src/index.js',
+    constantsFile: 'src/constants.js',
     dependenciesFile: 'package.json',
-    installCommand: `${config.project.runtime.packageManager} install`,
-    cliCommand: `${config.project.runtime.command} agent.js`,
-    httpCommand: `${config.project.runtime.command} agent.js --http`,
+    installCommand: `${config.project.runtime.packageManager} install --include=dev`,
+    cliCommand: `${config.project.runtime.command} src/index.js`,
+    httpCommand: `${config.project.runtime.command} src/index.js --http`,
   }
 };
-
-function getDependenciesFile(runtimeName, existingDependencies) {
-  let updatedDependencies = existingDependencies;
-  if (runtimeName === 'python') {
-    // For Python, append new dependencies to requirements.txt
-    updatedDependencies += '\n' + exportDependencies[runtimeName].join('\n');
-  } else if (runtimeName === 'javascript') {
-    // For JavaScript, update package.json
-    const packageJson = JSON.parse(existingDependencies || '{}');
-    packageJson.dependencies = { ...packageJson.dependencies, ...exportDependencies[runtimeName] };
-    updatedDependencies = JSON.stringify(packageJson, null, 2);
-  }
-  return updatedDependencies;
-}
 
 function formatTaskFunctions(tasks) {
   if (runtimeName === 'python') {
@@ -187,6 +135,58 @@ function escapeInstructions(instructions) {
     .replace(/\\/g, '\\\\')     // Escape backslashes
     .replace(/"""/g, '\\"\\"\\"') // Escape triple double quotes
     .replace(/'''/g, "\\'\\'\\'"); // Escape triple single quotes
+}
+
+function injectAgentModules(outputDir, runtimeConfig) {
+  const dependenciesPath = path.join(outputDir, runtimeConfig.dependenciesFile);
+  const agentDependenciesPath = path.join(config.project.rootDir, runtimeConfig.dependenciesFile);
+  
+  if (runtimeName === 'python') {
+    // Read agent's requirements
+    const agentRequirements = fs.readFileSync(agentDependenciesPath, 'utf8')
+      .split('\n')
+      .filter(r => r.trim())
+      .reduce((acc, req) => {
+        const [name] = req.split('==');
+        acc[name] = req;
+        return acc;
+      }, {});
+    
+    // Read current requirements
+    let requirements = fs.readFileSync(dependenciesPath, 'utf8').split('\n').filter(r => r.trim());
+    
+    // Add project modules if not already present, using agent versions if available
+    const moduleNames = (config.project.modules || []).map(module => module.name);
+    
+    for (const module of moduleNames) {
+      if (!requirements.some(r => r.startsWith(module))) {
+        // Use agent version if available, otherwise just add the module name
+        requirements.push(agentRequirements[module] || module);
+      }
+    }
+    
+    // Write back updated requirements
+    fs.writeFileSync(dependenciesPath, requirements.join('\n') + '\n');
+  } else if (runtimeName === 'javascript') {
+    // Read agent's package.json
+    const agentPackageJson = JSON.parse(fs.readFileSync(agentDependenciesPath, 'utf8'));
+    
+    // Read current package.json
+    const packageJson = JSON.parse(fs.readFileSync(dependenciesPath, 'utf8'));
+    
+    // Add project modules to dependencies if not already present
+    const moduleNames = (config.project.modules || []).map(module => module.name);
+    
+    for (const module of moduleNames) {
+      if (!packageJson.dependencies[module]) {
+        // Use agent version if available, otherwise use latest
+        packageJson.dependencies[module] = agentPackageJson.dependencies?.[module] || '*';
+      }
+    }
+    
+    // Write back updated package.json
+    fs.writeFileSync(dependenciesPath, JSON.stringify(packageJson, null, 2) + '\n');
+  }
 }
 
 export default async function exportStandalone(outputDir = process.cwd(), options = {}) {
@@ -227,16 +227,7 @@ export default async function exportStandalone(outputDir = process.cwd(), option
   const templateDir = path.join(__dirname, `../export-templates/${runtimeConfig.templateDir}`);
   const constantsTemplate = fs.readFileSync(path.join(templateDir, runtimeConfig.constantsFile), 'utf8');
   const readmeTemplate = fs.readFileSync(path.join(__dirname, '../export-templates/README.md'), 'utf8');
-
-  // Read existing dependencies file
-  let existingDependencies = '';
-  const existingDependenciesPath = path.join(process.cwd(), runtimeConfig.dependenciesFile);
-  if (fs.existsSync(existingDependenciesPath)) {
-    existingDependencies = fs.readFileSync(existingDependenciesPath, 'utf8');
-  }
-
-  // Add export dependencies to existing agent dependencies file
-  const dependencies = getDependenciesFile(runtimeName, existingDependencies);
+  const gitignorePath = path.join(__dirname, '../export-templates/.gitignore');
 
   // Prepare data for templates
   const templateData = {
@@ -270,14 +261,36 @@ export default async function exportStandalone(outputDir = process.cwd(), option
   const constantsCode = replacePlaceholders(constantsTemplate, templateData);
   const readmeContent = replacePlaceholders(readmeTemplate, templateData);
 
-  // Write files
+  // Check if both src directory and package.json exist
+  const targetSrcDir = path.join(outputDir, 'src');
+  const targetPackageJsonPath = path.join(outputDir, runtimeConfig.dependenciesFile);
+  const shouldDoPartialUpdate = fs.existsSync(targetSrcDir) && fs.existsSync(targetPackageJsonPath);
+
+  if (!shouldDoPartialUpdate) {
+    // If either src or package.json don't exist, do full export
+    copyDir(templateDir, outputDir);
+    fs.copyFileSync(gitignorePath, path.join(outputDir, '.gitignore'));
+  } else {
+    // If both exist, only update src and package.json
+    const srcDir = path.join(templateDir, 'src');
+    const packageJsonPath = path.join(templateDir, runtimeConfig.dependenciesFile);
+
+    // Remove existing src directory
+    fs.rmSync(targetSrcDir, { recursive: true, force: true });
+    
+    // Copy new src directory
+    copyDir(srcDir, targetSrcDir);
+    
+    // Copy package.json
+    fs.copyFileSync(packageJsonPath, targetPackageJsonPath);
+  }
+
+  // Write generated files
   fs.writeFileSync(path.join(outputDir, runtimeConfig.constantsFile), constantsCode);
   fs.writeFileSync(path.join(outputDir, 'README.md'), readmeContent);
-  fs.writeFileSync(path.join(outputDir, runtimeConfig.dependenciesFile), dependencies);
 
   // Write examples
-  const examplesDir = path.join(outputDir, 'examples');
-
+  const examplesDir = path.join(outputDir, 'src/examples');
   fs.mkdirSync(examplesDir, { recursive: true });
   examples.forEach(example => {
     fs.writeFileSync(
@@ -294,22 +307,31 @@ export default async function exportStandalone(outputDir = process.cwd(), option
   const dataDir = path.join(config.project.dataFilesDir);
   if (!fs.existsSync(dataDir)) {
     console.warn(`WARNING: Data directory does not exist at path: ${dataDir}`);
+    // Create empty data directory in output
+    fs.mkdirSync(path.join(outputDir, 'src/data'), { recursive: true });
   } else {
-    copyDir(dataDir, path.join(outputDir, 'data'));
+    copyDir(dataDir, path.join(outputDir, 'src/data'));
   }
 
-  // Copy the agent file and components directory
-  fs.copyFileSync(path.join(templateDir, runtimeConfig.agentFile), path.join(outputDir, runtimeConfig.agentFile));
-  copyDir(path.join(templateDir, 'components'), path.join(outputDir, 'components'));
+  // Inject the agent modules to the dependencies template
+  injectAgentModules(outputDir, runtimeConfig);
 
   log(`Standalone agent exported to ${outputDir}`);
-  log('Generated files:');
-  log(`- ${runtimeConfig.agentFile}`);
-  log(`- ${runtimeConfig.constantsFile}`);
-  log('- components/');
-  log('- examples/');
-  log(`- ${runtimeConfig.dependenciesFile}`);
-  log('- README.md');
+  if (!shouldDoPartialUpdate) {
+    log('Performing full export. Generated files:');
+    log(`- ${runtimeConfig.agentFile}`);
+    log(`- ${runtimeConfig.constantsFile}`);
+    log('- src/components/');
+    log('- src/examples/');
+    log('- src/data/');
+    log(`- ${runtimeConfig.dependenciesFile}`);
+    log('- README.md');
+    log('- .gitignore');
+  } else {
+    log('Performing partial update. Updated files:');
+    log('- src/ directory (replaced)');
+    log(`- ${runtimeConfig.dependenciesFile} (replaced)`);
+  }
 
   // Check headers up to date
   if (!headersUpToDate()) {

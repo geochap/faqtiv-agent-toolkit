@@ -503,16 +503,20 @@ To run the exported standalone agent:
 #### Python
 1. Navigate to the exported directory
 2. Install dependencies with `pip install -r requirements.txt`
-3. Run a task with `python agent.py` for an interactive agent or `python agent.py --http` to serve the agent via HTTP
+3. Run `python src/main.py` for an interactive cli agent or `python src/main.py --http` to serve the agent via HTTP
 
 #### Javascript
 1. Navigate to the exported directory
 2. Install dependencies with `npm install`
-3. Run a task with `node agent.js` for an interactive agent or `node agent.js --http` to serve the agent via HTTP
+3. Run `node src/index.js` for an interactive cli agent or `node src/index.js --http` to serve the agent via HTTP
 
 The HTTP api will match the same endpoints as the FAQtiv Agent Toolkit serve command.
 
 Note: The standalone agent will not have the ability to compile new tasks or modify existing ones. It's a static export of your agent's current state.
+
+#### Deploying to AWS (js only)
+
+Currently the toolkit supports deploying the standalone agent to AWS Lambda using SST for javascript agents. Follow the instructions in the README.md file in the exported directory to deploy your agent.
 
 ### Help
 For help with any command, use the `--help` flag:

@@ -2,10 +2,18 @@ const { OpenAIEmbeddings } = require('@langchain/openai');
 const { MemoryVectorStore } = require('langchain/vectorstores/memory');
 const fs = require('fs');
 const path = require('path');
+const { IS_LAMBDA } = require('../constants');
+
+const apiKey = process.env.OPENAI_API_KEY;
+
+if (!apiKey) {
+  throw new Error("OPENAI_API_KEY environment variable is not set");
+}
 
 // Initialize embeddings
 const embeddings = new OpenAIEmbeddings({
-  model: 'text-embedding-ada-002'
+  model: 'text-embedding-ada-002',
+  apiKey: apiKey
 });
 
 function decodeBase64Embedding(b64String) {
@@ -14,7 +22,7 @@ function decodeBase64Embedding(b64String) {
   return decodedArray;
 }
 
-const examplesDirectory = path.join(__dirname, '../examples');
+const examplesDirectory = IS_LAMBDA ? path.resolve('/var/task/examples') : path.join(__dirname, '../examples');
 const examples = fs.readdirSync(examplesDirectory)
   .filter(file => file.endsWith('.json'))
   .map(file => {

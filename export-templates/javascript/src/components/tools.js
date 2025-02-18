@@ -4,7 +4,7 @@ const { ChatOpenAI } = require('@langchain/openai');
 const { getRelevantExamples } = require('./examples');
 const { createAdhocLogFile } = require('./logger');
 const { extractFunctionCode } = require('./parser');
-const { ADHOC_PROMPT_TEXT, LIBS, FUNCTIONS } = require('../constants');
+const { ADHOC_PROMPT_TEXT, LIBS, FUNCTIONS, IS_LAMBDA } = require('../constants');
 
 const TOOL_TIMEOUT = parseInt(process.env.TOOL_TIMEOUT || '60000');
 
@@ -106,6 +106,12 @@ const model = process.env.OPENAI_MODEL;
 const adhocLLM = new ChatOpenAI({
   apiKey,
   model,
+  configuration: {
+    defaultHeaders: {
+      'Connection': 'keep-alive',
+      'Keep-Alive': 'timeout=900'
+    },
+  },
 });
 
 async function generateAndExecuteAdhoc(userInput, maxRetries = 5) {
@@ -166,7 +172,7 @@ async function generateAndExecuteAdhoc(userInput, maxRetries = 5) {
 
       const result = await captureAndProcessOutput(functionCode);
       
-      createAdhocLogFile(userInput, functionCode, result);
+      if (!IS_LAMBDA) createAdhocLogFile(userInput, functionCode, result);
       
       return result;
     } catch (e) {
@@ -177,7 +183,7 @@ async function generateAndExecuteAdhoc(userInput, maxRetries = 5) {
 
       if (retryCount === maxRetries) {
         console.error(`Max retries (${maxRetries}) reached. Aborting.`);
-        createAdhocLogFile(userInput, previousCode, '', new Error(`Max retries reached. Last error: ${errorMessage}`));
+        if (!IS_LAMBDA) createAdhocLogFile(userInput, previousCode, '', new Error(`Max retries reached. Last error: ${errorMessage}`));
         throw new Error(`Max retries reached. Last error: ${errorMessage}`);
       }
 

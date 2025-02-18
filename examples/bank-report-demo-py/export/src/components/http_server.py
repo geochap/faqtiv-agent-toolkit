@@ -1,13 +1,16 @@
 import os
 import uuid
-import uvicorn
+import json
 import asyncio
+from typing import Dict, Any
+import uvicorn
 from starlette.responses import Response
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from constants import TASK_NAME_TO_FUNCTION_NAME_MAP, TASKS
+from mangum import Mangum
+from constants import TASK_NAME_TO_FUNCTION_NAME_MAP, TASKS, IS_LAMBDA
 from components.completions import stream_completion, generate_completion
 from components.logger import log, log_err
 from components.tools import capture_and_process_output, generate_and_execute_adhoc
@@ -120,8 +123,60 @@ if shutdown_key:
         return Response("Shutting down server", status_code=200)
 
 def start_http_server():
-    port = int(os.getenv('PORT')) if os.getenv('PORT') else 8000
-    
+    port = int(os.getenv('PORT', 8000))
     print("Starting HTTP server...", flush=True)
     print("HTTP server running on port", port, flush=True)
     uvicorn.run(app, host="0.0.0.0", port=port, log_level="error")
+
+# Lambda handler
+handler = Mangum(app, lifespan="off")
+
+async def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    # Check if it's a streaming request
+    is_completions_request = event.get('path') == '/completions' or event.get('rawPath') == '/completions'
+    is_streaming_request = 'accept' in event.get('headers', {}) and 'text/event-stream' in event['headers']['accept']
+
+    if is_completions_request and is_streaming_request:
+        response = await handle_streaming_completion(event, context)
+        return response
+    
+    # Handle non-streaming requests using Mangum
+    return await handler(event, context)
+
+async def handle_streaming_completion(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    try:
+        body = json.loads(event['body'] if not event.get('isBase64Encoded') else 
+                         base64.b64decode(event['body']).decode('utf-8'))
+        
+        request = CompletionRequest(**body)
+        completion_id = f"cmpl-{uuid.uuid4()}"
+
+        async def generate():
+            async for chunk in stream_completion(
+                completion_id=completion_id,
+                messages=request.messages,
+                include_tool_messages=request.include_tool_messages,
+                max_tokens=request.max_tokens,
+                temperature=request.temperature
+            ):
+                yield chunk
+
+        return {
+            'statusCode': 200,
+            'headers': {
+                'Content-Type': 'text/event-stream',
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+                'X-Accel-Buffering': 'no',
+                'Transfer-Encoding': 'chunked',
+                'Keep-Alive': 'timeout=900'
+            },
+            'body': generate(),
+            'isBase64Encoded': False
+        }
+    except Exception as e:
+        return {
+            'statusCode': 500,
+            'body': json.dumps({'error': str(e)}),
+            'headers': {'Content-Type': 'application/json'}
+        }

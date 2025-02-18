@@ -7,7 +7,7 @@ This is a standalone version of a FAQtiv agent. It includes all the necessary co
 1. Install the required dependencies:
 
    ```
-   {{ installCommand }}
+   pip3.11 install -r requirements.txt
    ```
 
 3. Set up your OpenAI API and model as environment variables:
@@ -30,7 +30,7 @@ You can run the agent in two modes:
 To start the agent in interactive CLI mode, run:
 
 ```
-{{ cliAgentCommand }}
+python3.11 src/main.py
 ```
 
 You can then interact with the agent by typing your requests. Type 'exit' to quit.
@@ -40,14 +40,14 @@ You can then interact with the agent by typing your requests. Type 'exit' to qui
 To start the agent as an HTTP server, run:
 
 ```
-{{ httpServerCommand }}
+python3.11 src/main.py --http
 ```
 
 By default, the server will run on `http://localhost:8000`. 
 
 For more detailed information on how to use these endpoints, refer to the original FAQtiv Agent Toolkit documentation.
 
-## Deploying to AWS (only for node runtime)
+## Deploying to AWS
 
 Edit the `sst.config.ts` file to set the lambda configuration for your environment.
 

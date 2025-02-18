@@ -3,9 +3,11 @@ const { ChatPromptTemplate, MessagesPlaceholder } = require('@langchain/core/pro
 const { ChatOpenAI } = require('@langchain/openai');
 const { AIMessage, HumanMessage, SystemMessage, ToolMessage } = require('@langchain/core/messages');
 const z = require('zod');
+const { log, logErr } = require('./logger');
 const { createToolsFromSchemas, generateAndExecuteAdhoc } = require('./tools');
 const { getMessagesWithinContextLimit } = require('./context-manager');
 const { TASK_TOOL_SCHEMAS, COMPLETION_PROMPT_TEXT } = require('../constants');
+const { calculateCost } = require('./pricing');
 
 // Create tools from schemas
 const taskTools = createToolsFromSchemas(TASK_TOOL_SCHEMAS);
@@ -150,7 +152,13 @@ async function generateCompletion(completionId, messages, includeToolMessages = 
     apiKey,
     model,
     maxTokens,
-    temperature
+    temperature,
+    configuration: {
+      defaultHeaders: {
+        'Connection': 'keep-alive',
+        'Keep-Alive': 'timeout=900'
+      },
+    },
   }).bindTools(completionTools);
   const completionChain = completionPrompt.pipe(llm);
 
@@ -159,10 +167,12 @@ async function generateCompletion(completionId, messages, includeToolMessages = 
   let conversation = await getConversationFromMessagesRequest(messages);
   let finalContent = '';
   const toolResultsMessages = [];
+  let finalUsage = null;
 
   const processRequest = async (inputData) => {
     try {
       const result = await completionChain.invoke(inputData);
+      finalUsage = result.usage_metadata;
       return result;
     } catch (e) {
       const errorMessage = e.message.toLowerCase();
@@ -183,7 +193,9 @@ async function generateCompletion(completionId, messages, includeToolMessages = 
             new HumanMessage("The previous tool call returned too much data. Please adjust your approach and try again.")
           ]
         };
-        return await completionChain.invoke(retryInput);
+        const result = await completionChain.invoke(retryInput);
+        finalUsage = result.usage_metadata;
+        return result;
       } else {
         throw e;
       }
@@ -224,6 +236,11 @@ async function generateCompletion(completionId, messages, includeToolMessages = 
     ]
   };
 
+  if (finalUsage) {
+    response.usage = finalUsage;
+    response.cost = calculateCost(model, finalUsage.input_tokens, finalUsage.output_tokens);
+  }
+
   if (includeToolMessages) {
     const tool_messages = [];
     for (const message of toolResultsMessages) {
@@ -256,7 +273,14 @@ async function* streamCompletion(completionId, messages, includeToolMessages = f
     apiKey,
     model,
     maxTokens,
-    temperature
+    temperature,
+    streamUsage: true,
+    configuration: {
+      defaultHeaders: {
+        'Connection': 'keep-alive',
+        'Keep-Alive': 'timeout=900'
+      },
+    },
   }).bindTools(completionTools);
   const completionChain = completionPrompt.pipe(llm);
 
@@ -303,6 +327,7 @@ async function* streamCompletion(completionId, messages, includeToolMessages = f
     while (true) {
       let hasToolCalls = false;
       for await (const event of processRequest({ conversation })) {
+        log('completions', 'stream-event', { event });
         if (insertNewline) {
           // Insert a newline before processing new tokens
           const newlineChunk = {
@@ -359,12 +384,16 @@ async function* streamCompletion(completionId, messages, includeToolMessages = f
               }
             }
           } else {
+            const usage = event.data.output.usage_metadata;
+            const cost = calculateCost(model, usage.input_tokens, usage.output_tokens);
             const tokenChunk = {
               id: completionId,
               object: 'chat.completion.chunk',
               created: currentTime,
               model,
               choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
+              usage: usage,
+              cost: cost
             };
             yield tokenChunk;
             return;

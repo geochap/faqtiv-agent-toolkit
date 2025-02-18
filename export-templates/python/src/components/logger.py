@@ -3,12 +3,14 @@ import json
 import logging
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
+from constants import IS_LAMBDA
 
 log_dir = os.path.join(os.getcwd(), 'logs')
 logs_file_path = os.path.join(log_dir, 'app.log')
 error_logs_file_path = os.path.join(log_dir, 'err.log')
 
-os.makedirs(log_dir, exist_ok=True)
+if not IS_LAMBDA:
+    os.makedirs(log_dir, exist_ok=True)
 
 class JsonFormatter(logging.Formatter):
     def format(self, record):
@@ -29,13 +31,21 @@ error_logger = logging.getLogger('error')
 error_logger.setLevel(logging.ERROR)
 error_logger.propagate = False
 
-app_file_handler = RotatingFileHandler(logs_file_path, maxBytes=10*1024*1024, backupCount=5)
-app_file_handler.setFormatter(JsonFormatter())
-app_logger.addHandler(app_file_handler)
+if IS_LAMBDA:
+    # Use stdout for Lambda logging
+    stdout_handler = logging.StreamHandler()
+    stdout_handler.setFormatter(JsonFormatter())
+    app_logger.addHandler(stdout_handler)
+    error_logger.addHandler(stdout_handler)
+else:
+    # Use file handlers for local environment
+    app_file_handler = RotatingFileHandler(logs_file_path, maxBytes=10*1024*1024, backupCount=5)
+    app_file_handler.setFormatter(JsonFormatter())
+    app_logger.addHandler(app_file_handler)
 
-error_file_handler = RotatingFileHandler(error_logs_file_path, maxBytes=10*1024*1024, backupCount=5)
-error_file_handler.setFormatter(JsonFormatter())
-error_logger.addHandler(error_file_handler)
+    error_file_handler = RotatingFileHandler(error_logs_file_path, maxBytes=10*1024*1024, backupCount=5)
+    error_file_handler.setFormatter(JsonFormatter())
+    error_logger.addHandler(error_file_handler)
 
 def log(command, event, body):
     app_logger.info(json.dumps({

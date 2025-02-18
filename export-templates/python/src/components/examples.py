@@ -5,6 +5,7 @@ import numpy as np
 from langchain_openai import OpenAIEmbeddings
 from typing import List, Dict
 from langchain_community.vectorstores import FAISS
+from constants import IS_LAMBDA
 
 # Initialize embeddings
 embeddings = OpenAIEmbeddings(model="text-embedding-ada-002")
@@ -13,7 +14,7 @@ def decode_base64_embedding(b64_string):
     decoded_bytes = base64.b64decode(b64_string)
     return np.frombuffer(decoded_bytes, dtype=np.float32)
 
-examples_directory = os.path.join(os.path.dirname(__file__), '..', 'examples')
+examples_directory = os.path.join('/var/task/examples' if IS_LAMBDA else os.path.dirname(__file__), '..', 'examples')
 examples_with_embeddings = []
 
 for filename in os.listdir(examples_directory):

@@ -79,8 +79,6 @@ export default async function serve(options) {
 
   async function startServer() {
     console.log('Starting the standalone agent server...');
-    const agentPath = path.join(tmpDir, `agent${codeFileExtension}`);
-    
     shutdownKey = uuidv4();
     
     let agentCommand;
@@ -88,9 +86,9 @@ export default async function serve(options) {
       const activateCommand = process.platform === 'win32' ?
         `${venvPath}\\Scripts\\activate.bat && ` :
         `source ${venvPath}/bin/activate && `;
-      agentCommand = `${activateCommand}${config.project.runtime.command} ${agentPath} --http`;
+      agentCommand = `${activateCommand}${config.project.runtime.command} src/main.py --http`;
     } else {
-      agentCommand = `${config.project.runtime.command} ${agentPath} --http`;
+      agentCommand = `${config.project.runtime.command} src/index.js --http`;
     }
 
     serverProcess = exec(agentCommand, { 

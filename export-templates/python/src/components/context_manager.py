@@ -9,11 +9,14 @@ encoder_mutex = Lock()
 model_limits = {
     'gpt-3.5': 16000,
     'gpt-4o': 128000,
+    'gpt-4o-2024-11-20': 128000,
 }
 
 def create_encoder(model_name):
+    # todo: figure out support for gpt-4o-2024-11-20
+    model = 'gpt-4o' if 'gpt-4o' in model_name else model_name
     if 'gpt-4' in model_name or 'gpt-3.5' in model_name:
-        return tiktoken.encoding_for_model(model_name)
+        return tiktoken.encoding_for_model(model)
     return tiktoken.get_encoding('cl100k_base')
 
 # Using Lock to prevent race conditions
