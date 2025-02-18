@@ -1,6 +1,7 @@
 import os
 import uuid
 import json
+import base64
 import asyncio
 from typing import Dict, Any
 import uvicorn
@@ -9,8 +10,7 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from mangum import Mangum
-from constants import TASK_NAME_TO_FUNCTION_NAME_MAP, TASKS, IS_LAMBDA
+from constants import TASK_NAME_TO_FUNCTION_NAME_MAP, TASKS
 from components.completions import stream_completion, generate_completion
 from components.logger import log, log_err
 from components.tools import capture_and_process_output, generate_and_execute_adhoc
@@ -21,10 +21,10 @@ app = FastAPI()
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods
-    allow_headers=["*"],  # Allows all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 @app.middleware("http")
 async def increase_request_body_size(request: Request, call_next):
@@ -127,21 +127,6 @@ def start_http_server():
     print("Starting HTTP server...", flush=True)
     print("HTTP server running on port", port, flush=True)
     uvicorn.run(app, host="0.0.0.0", port=port, log_level="error")
-
-# Lambda handler
-handler = Mangum(app, lifespan="off")
-
-async def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    # Check if it's a streaming request
-    is_completions_request = event.get('path') == '/completions' or event.get('rawPath') == '/completions'
-    is_streaming_request = 'accept' in event.get('headers', {}) and 'text/event-stream' in event['headers']['accept']
-
-    if is_completions_request and is_streaming_request:
-        response = await handle_streaming_completion(event, context)
-        return response
-    
-    # Handle non-streaming requests using Mangum
-    return await handler(event, context)
 
 async def handle_streaming_completion(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     try:
