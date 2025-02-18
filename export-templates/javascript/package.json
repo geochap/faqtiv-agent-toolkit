@@ -4,8 +4,9 @@
   "main": "src/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node src/index.js --http",
     "build": "esbuild src/index.js --bundle --outfile=dist/index.js --platform=node --target=node20",
-    "dev": "npm run build && sst dev",
+    "sst-dev": "npm run build && sst dev",
     "deploy-dev": "npm run build && sst deploy --stage=dev",
     "deploy-staging": "npm run build && sst deploy --stage=staging",
     "deploy-prod": "npm run build && sst deploy --stage=production"
@@ -22,9 +23,7 @@
     "@langchain/core": "^0.3.30",
     "@langchain/openai": "^0.3.17",
     "async-mutex": "^0.5.0",
-    "axios": "^1.7.9",
     "body-parser": "^1.20.2",
-    "exceljs": "^4.4.0",
     "express": "^4.19.2",
     "figlet": "^1.7.0",
     "js-tiktoken": "^1.0.15",
