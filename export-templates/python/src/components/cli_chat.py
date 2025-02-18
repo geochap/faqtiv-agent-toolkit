@@ -1,6 +1,7 @@
 import json
 import traceback
 import asyncio
+import uuid
 from components.completions import stream_completion
 from components.types import Message, CompletionRequest
 
@@ -27,7 +28,14 @@ async def async_cliAgent():
             full_response = ""
 
             # Use stream_completion for token streaming
-            async for event in stream_completion(request):
+            completion_id = f"cli-{uuid.uuid4()}"
+            async for event in stream_completion(
+                completion_id=completion_id,
+                messages=request.messages,
+                include_tool_messages=request.include_tool_messages,
+                max_tokens=request.max_tokens,
+                temperature=request.temperature
+            ):
                 if event.startswith("data: ") and "[DONE]" not in event:
                     data = json.loads(event[6:])
                     if isinstance(data, dict) and 'choices' in data:

@@ -1,5 +1,6 @@
 const readline = require('readline');
 const { streamCompletion } = require('./completions');
+const { v4: uuidv4 } = require('uuid');
 
 async function startCliChat() {
   console.log("Welcome, please type your request. Type 'exit' to quit.");
@@ -33,8 +34,12 @@ async function startCliChat() {
       conversation.push({ role: 'user', content: userInput });
 
       let fullResponse = '';
+      const completionId = `cli-${uuidv4()}`;
 
-      for await (const chunk of streamCompletion(conversation)) {
+      for await (const chunk of streamCompletion(
+        completionId,
+        conversation
+      )) {
         if (chunk.choices[0].delta.content) {
           const content = chunk.choices[0].delta.content;
           process.stdout.write(content);
