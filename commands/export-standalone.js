@@ -137,6 +137,58 @@ function escapeInstructions(instructions) {
     .replace(/'''/g, "\\'\\'\\'"); // Escape triple single quotes
 }
 
+function injectAgentModules(outputDir, runtimeConfig) {
+  const dependenciesPath = path.join(outputDir, runtimeConfig.dependenciesFile);
+  const agentDependenciesPath = path.join(config.project.rootDir, runtimeConfig.dependenciesFile);
+  
+  if (runtimeName === 'python') {
+    // Read agent's requirements
+    const agentRequirements = fs.readFileSync(agentDependenciesPath, 'utf8')
+      .split('\n')
+      .filter(r => r.trim())
+      .reduce((acc, req) => {
+        const [name] = req.split('==');
+        acc[name] = req;
+        return acc;
+      }, {});
+    
+    // Read current requirements
+    let requirements = fs.readFileSync(dependenciesPath, 'utf8').split('\n').filter(r => r.trim());
+    
+    // Add project modules if not already present, using agent versions if available
+    const moduleNames = (config.project.modules || []).map(module => module.name);
+    
+    for (const module of moduleNames) {
+      if (!requirements.some(r => r.startsWith(module))) {
+        // Use agent version if available, otherwise just add the module name
+        requirements.push(agentRequirements[module] || module);
+      }
+    }
+    
+    // Write back updated requirements
+    fs.writeFileSync(dependenciesPath, requirements.join('\n') + '\n');
+  } else if (runtimeName === 'javascript') {
+    // Read agent's package.json
+    const agentPackageJson = JSON.parse(fs.readFileSync(agentDependenciesPath, 'utf8'));
+    
+    // Read current package.json
+    const packageJson = JSON.parse(fs.readFileSync(dependenciesPath, 'utf8'));
+    
+    // Add project modules to dependencies if not already present
+    const moduleNames = (config.project.modules || []).map(module => module.name);
+    
+    for (const module of moduleNames) {
+      if (!packageJson.dependencies[module]) {
+        // Use agent version if available, otherwise use latest
+        packageJson.dependencies[module] = agentPackageJson.dependencies?.[module] || '*';
+      }
+    }
+    
+    // Write back updated package.json
+    fs.writeFileSync(dependenciesPath, JSON.stringify(packageJson, null, 2) + '\n');
+  }
+}
+
 export default async function exportStandalone(outputDir = process.cwd(), options = {}) {
   const { silent = false } = options;
   const log = silent ? () => {} : console.log;
@@ -260,6 +312,9 @@ export default async function exportStandalone(outputDir = process.cwd(), option
   } else {
     copyDir(dataDir, path.join(outputDir, 'src/data'));
   }
+
+  // Inject the agent modules to the dependencies template
+  injectAgentModules(outputDir, runtimeConfig);
 
   log(`Standalone agent exported to ${outputDir}`);
   if (!shouldDoPartialUpdate) {
