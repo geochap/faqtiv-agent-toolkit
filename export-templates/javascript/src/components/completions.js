@@ -51,7 +51,7 @@ const completionPrompt = ChatPromptTemplate.fromMessages(
   ]
 );
 
-async function processToolCalls(toolCalls) {
+async function processToolCalls(toolCalls, emitEvent) {
   const toolMessages = [
     new AIMessage({
       content: '',
@@ -66,7 +66,7 @@ async function processToolCalls(toolCalls) {
 
     if (tool) {
       try {
-        const toolResult = await tool.func(JSON.parse(toolCall.function.arguments));
+        const toolResult = await tool.func(JSON.parse(toolCall.function.arguments), emitEvent);
         console.warn("Tool result:", toolResult);
         toolMessages.push(new ToolMessage({
           content: JSON.stringify({
@@ -268,7 +268,7 @@ async function generateCompletion(completionId, messages, includeToolMessages = 
   return response;
 }
 
-async function* streamCompletion(completionId, messages, includeToolMessages = false, maxTokens, temperature) {
+async function* streamCompletion(completionId, messages, includeToolMessages = false, maxTokens, temperature, emitEvent) {
   const llm = new ChatOpenAI({
     apiKey,
     model,
@@ -356,7 +356,7 @@ async function* streamCompletion(completionId, messages, includeToolMessages = f
         } else if (event.event === 'on_chain_end') {
           if (event.data.output.additional_kwargs.tool_calls) {
             const toolCalls = event.data.output.additional_kwargs.tool_calls;
-            const toolMessages = await processToolCalls(toolCalls);
+            const toolMessages = await processToolCalls(toolCalls, emitEvent);
             conversation = conversation.concat(toolMessages);
             hasToolCalls = true;
             insertNewline = true; // Set flag to insert newline before next tokens
