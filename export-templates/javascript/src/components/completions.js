@@ -51,7 +51,7 @@ const completionPrompt = ChatPromptTemplate.fromMessages(
   ]
 );
 
-async function processToolCalls(toolCalls) {
+async function processToolCalls(toolCalls, emitEvent) {
   const toolMessages = [
     new AIMessage({
       content: '',
@@ -66,7 +66,7 @@ async function processToolCalls(toolCalls) {
 
     if (tool) {
       try {
-        const toolResult = await tool.func(JSON.parse(toolCall.function.arguments));
+        const toolResult = await tool.func(JSON.parse(toolCall.function.arguments), emitEvent);
         console.warn("Tool result:", toolResult);
         toolMessages.push(new ToolMessage({
           content: JSON.stringify({
@@ -145,6 +145,41 @@ function convertToolMessageToOpenAIFormat(toolMessage) {
     tool_call_id: toolMessage.tool_call_id,
     content: toolMessage.content
   };
+}
+
+function getToolDescription(toolCall) {
+  const tool = TASK_TOOL_SCHEMAS.find(t => t.name === toolCall.function.name);
+  
+  if (!tool) return '';
+  
+  let args;
+  try {
+    args = JSON.parse(toolCall.function.arguments);
+  } catch (error) {
+    console.error("Error parsing arguments:", error);
+    return 'Error getting tool description: Unable to parse tool arguments.';
+  }
+
+  const shape = tool.schema._def.shape();
+  const descriptions = [];
+  
+  console.warn(args, tool);
+
+  // Iterate over each field in the shape
+  for (const key in shape) {
+    const field = shape[key];
+    const description = field._def.description || 'No description';
+    let value = args[key] !== undefined ? String(args[key]) : 'N/A';
+    // Truncate value if too long
+    if (value.length > 30) {
+      value = value.substring(0, 27) + '...';
+    }
+    descriptions.push(`${key}: ${description} (Value: ${value})`);
+  }
+
+  console.warn("Calling tool:", toolCall.function.name, toolCall.function.arguments);
+
+  return `${tool.description}\nParameters:\n${descriptions.join('\n')}`;
 }
 
 async function generateCompletion(completionId, messages, includeToolMessages = false, maxTokens, temperature) {
@@ -268,7 +303,7 @@ async function generateCompletion(completionId, messages, includeToolMessages = 
   return response;
 }
 
-async function* streamCompletion(completionId, messages, includeToolMessages = false, maxTokens, temperature) {
+async function* streamCompletion(completionId, messages, includeToolMessages = false, maxTokens, temperature, emitEvent) {
   const llm = new ChatOpenAI({
     apiKey,
     model,
@@ -356,7 +391,21 @@ async function* streamCompletion(completionId, messages, includeToolMessages = f
         } else if (event.event === 'on_chain_end') {
           if (event.data.output.additional_kwargs.tool_calls) {
             const toolCalls = event.data.output.additional_kwargs.tool_calls;
-            const toolMessages = await processToolCalls(toolCalls);
+            
+            if (false){
+              for (const toolCall of toolCalls) {
+                const toolCallChunk = {
+                  id: completionId,
+                  object: 'chat.completion.chunk',
+                  created: currentTime,
+                  model,
+                  choices: [{ index: 0, delta: { role: 'assistant', content: `\n\`\`\`agent-message\nRunning tool: ${getToolDescription(toolCall)}\n\`\`\`\n` }, finish_reason: null }],
+                };
+                yield toolCallChunk;
+              }
+            }
+            const toolMessages = await processToolCalls(toolCalls, (data) => {if(emitEvent) emitEvent(data, model)}); 
+
             conversation = conversation.concat(toolMessages);
             hasToolCalls = true;
             insertNewline = true; // Set flag to insert newline before next tokens
