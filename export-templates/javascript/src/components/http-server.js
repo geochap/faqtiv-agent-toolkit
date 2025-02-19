@@ -74,10 +74,22 @@ app.post('/run_task/:taskName', async (req, res) => {
   }
 });
 
+function createEmitEvent(completionId, responseWriter) {
+  return async function emitEvent(data, model) {
+    const eventChunk = {
+      id: completionId,
+      object: 'chat.completion.chunk',
+      created: Math.floor(Date.now() / 1000),
+      model,
+      choices: [{ index: 0, delta: { role: 'assistant', content: `\n\`\`\`agent-message\n${data}\n\`\`\`\n` }, finish_reason: null }],
+    };
+    responseWriter(`data: ${JSON.stringify(eventChunk)}\n\n`);
+  };
+}
+
 app.post('/completions', async (req, res) => {
   try {
     const { 
-      stream,
       messages, 
       include_tool_messages,
       max_tokens,
@@ -103,7 +115,7 @@ app.post('/completions', async (req, res) => {
 
     console.log("Completion request: ", messages.length > 0 ? messages[messages.length - 1].content : "");
 
-    if (stream) {
+    if (req.headers.accept?.includes('text/event-stream')) {
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
@@ -112,16 +124,7 @@ app.post('/completions', async (req, res) => {
       res.setHeader('Transfer-Encoding', 'chunked');
 
       try {
-        async function emitEvent(data, model){
-          const eventChunk = {
-            id: completionId,
-            object: 'chat.completion.chunk',
-            created: Math.floor(Date.now() / 1000),
-            model,
-            choices: [{ index: 0, delta: { role: 'assistant', content: `\n\`\`\`agent-message\n${data}\n\`\`\`\n` }, finish_reason: null }],
-          };
-          res.write(`data: ${JSON.stringify(eventChunk)}\n\n`);
-        }
+        const emitEvent = createEmitEvent(completionId, data => res.write(data));
 
         for await (const chunk of streamCompletion(completionId, messages, include_tool_messages, max_tokens, temperature, emitEvent)) {
           const data = `data: ${JSON.stringify(chunk)}\n\n`;
@@ -243,16 +246,7 @@ const lambdaHandler = IS_LAMBDA ? awslambda.streamifyResponse(async (event, resp
       
       log('completions', 'stream', logBody);
 
-      async function emitEvent(data, model){
-        const eventChunk = {
-          id: completionId,
-          object: 'chat.completion.chunk',
-          created: Math.floor(Date.now() / 1000),
-          model,
-          choices: [{ index: 0, delta: { role: 'assistant', content: `\n\`\`\`agent-message\n${data}\n\`\`\`\n` }, finish_reason: null }],
-        };
-        res.write(`data: ${JSON.stringify(eventChunk)}\n\n`);
-      }
+      const emitEvent = createEmitEvent(completionId, data => responseStream.write(data));
 
       for await (const chunk of streamCompletion(completionId, messages, include_tool_messages, max_tokens, temperature, emitEvent)) {
         const data = `data: ${JSON.stringify(chunk)}\n\n`;
