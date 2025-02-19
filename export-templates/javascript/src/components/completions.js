@@ -4,7 +4,7 @@ const { ChatOpenAI } = require('@langchain/openai');
 const { AIMessage, HumanMessage, SystemMessage, ToolMessage } = require('@langchain/core/messages');
 const z = require('zod');
 const { log, logErr } = require('./logger');
-const { createToolsFromSchemas, generateAndExecuteAdhoc } = require('./tools');
+const { createToolsFromSchemas, generateAndExecuteAdhoc, getToolCallDescription } = require('./tools');
 const { getMessagesWithinContextLimit } = require('./context-manager');
 const { TASK_TOOL_SCHEMAS, COMPLETION_PROMPT_TEXT } = require('../constants');
 const { calculateCost } = require('./pricing');
@@ -66,7 +66,15 @@ async function processToolCalls(toolCalls, emitEvent) {
 
     if (tool) {
       try {
-        const toolResult = await tool.func(JSON.parse(toolCall.function.arguments), emitEvent);
+        const args = JSON.parse(toolCall.function.arguments);
+        const toolCallDescription = getToolCallDescription(toolCall.function.name, args);
+
+        if (toolCallDescription) {
+          emitEvent(toolCallDescription, model);
+        }
+
+        const toolResult = await tool.func(args, emitEvent);
+
         console.warn("Tool result:", toolResult);
         toolMessages.push(new ToolMessage({
           content: JSON.stringify({

@@ -4,7 +4,7 @@ const { ChatOpenAI } = require('@langchain/openai');
 const { getRelevantExamples } = require('./examples');
 const { createAdhocLogFile } = require('./logger');
 const { extractFunctionCode } = require('./parser');
-const { ADHOC_PROMPT_TEXT, LIBS, FUNCTIONS, IS_LAMBDA } = require('../constants');
+const { ADHOC_PROMPT_TEXT, LIBS, FUNCTIONS, IS_LAMBDA, TASK_TOOL_CALL_DESCRIPTION_TEMPLATES } = require('../constants');
 
 const TOOL_TIMEOUT = parseInt(process.env.TOOL_TIMEOUT || '60000');
 
@@ -199,8 +199,18 @@ async function generateAndExecuteAdhoc(userInput, maxRetries = 5) {
   throw new Error("Unexpected error occurred");
 }
 
+function getToolCallDescription(toolName, args) {
+  const toolCallDescriptionTemplate = TASK_TOOL_CALL_DESCRIPTION_TEMPLATES[toolName];
+  if (!toolCallDescriptionTemplate) {
+    return null;
+  }
+
+  return toolCallDescriptionTemplate.replace(/#(\w+)#/g, (match, p1) => args[p1]);
+}
+
 module.exports = {
   captureAndProcessOutput,
   createToolsFromSchemas,
-  generateAndExecuteAdhoc
+  generateAndExecuteAdhoc,
+  getToolCallDescription
 };

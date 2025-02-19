@@ -129,9 +129,11 @@ export async function generateResponse(taskName, vectorStore, conversation) {
   const aiAgent = new CodeAgent('code-gen', instructions, functions, functionsHeader.signatures, config.openai);
   const response = await aiAgent.generateResponse(conversation, examples);
   const taskSchema = await aiAgent.generateTaskSchema(taskName, response.code);
+  const toolCallDescriptionTemplate = await aiAgent.generateToolCallDescriptionTemplate(taskSchema);
 
   response.code = formatCode(libs, functions, response.code);
   response.task_schema = taskSchema;
+  response.tool_call_description_template = toolCallDescriptionTemplate;
 
   return { 
     id: uuidv4(),
