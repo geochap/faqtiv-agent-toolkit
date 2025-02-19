@@ -6,12 +6,12 @@ Given this tool schema:
 ${taskSchema}
 \`\`\`
 
-Generate a template for a tool call description.
+Generate a template for a tool call description
 
 - It must be a markdown formatted string.
-- Include the tool name in the template.
-- Add a placeholder #param_name# for each parameter that will be replaced with the actual parameter value when the tool is used.
+- Add a placeholder #param_name# for each parameter that will be replaced with the actual parameter value when the tool is used if needed.
 - Make the description concise but friendly, leave out technical details. Use any information like description, returns_description, etc from the task schema to make the description more detailed.
+- This is not a technical description, it is a natural language description of the tool call that will be used by the user to understand the tool call.
 - Do not surround the template with \`\`\`markdown tags.
 
 Example
@@ -42,12 +42,7 @@ For this tool call:
 
 Description template:
 
-Calling tool bank-report with parameters:
-- **Bank Name**: #bankName#
-- **Year**: #year#
-
-This tool generates a report for a specific bank and year.
-The report is an array of objects, where each object contains the report date and total deposits for the corresponding year.
+Retrieving institution and regulatory info about #bankName# for the year #year#.
 `;
 
   return prompt;
