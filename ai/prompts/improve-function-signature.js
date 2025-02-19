@@ -25,6 +25,7 @@ Improve the existing signature or add missing ones for this function applying th
 - These signatures will be later used for code generation so keep that in mind when filling in any missing signature components, all relevant information for proper function usage is needed.
 - Reply back with the signature without any other additional text, leave out the function and annotations.
 - The signatures must be plain text with the following structure: function_name(parameters) : return_type - description
+- Do not surround the signature with \`\`\`text tags or anything else, just return the signature as is.
 `;
 
   return prompt;
