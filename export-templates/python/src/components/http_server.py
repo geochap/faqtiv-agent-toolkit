@@ -126,12 +126,9 @@ async def completions_endpoint(request: CompletionRequest, raw_request: Request)
                 try:
                     while True:
                         chunk = await chunk_queue.get()
-                        if chunk == "data: [DONE]\n\n":  # Special marker for completion end
+                        if chunk == "[DONE]":  # Special marker for completion end
                             break
                         yield chunk
-                        
-                    # Ensure we yield the final [DONE] marker
-                    yield "data: [DONE]\n\n"
                 finally:
                     if not completion_task.done():
                         completion_task.cancel()
