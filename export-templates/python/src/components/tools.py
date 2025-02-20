@@ -4,6 +4,7 @@ import io
 import json
 import sys
 import traceback
+import re
 from typing import Dict, Any, List
 from langchain_core.tools import StructuredTool
 from langchain_openai import ChatOpenAI
@@ -14,7 +15,7 @@ from contextlib import redirect_stdout
 from components.examples import get_relevant_examples
 from components.parser import extract_function_code
 from components.logger import create_adhoc_log_file
-from constants import ADHOC_PROMPT_TEXT, LIBS, FUNCTIONS
+from constants import ADHOC_PROMPT_TEXT, LIBS, FUNCTIONS, TASK_TOOL_CALL_DESCRIPTION_TEMPLATES
 
 TOOL_TIMEOUT = int(os.getenv('TOOL_TIMEOUT', 60000)) / 1000
 
@@ -189,3 +190,10 @@ async def generate_and_execute_adhoc(user_input: str, max_retries: int = 5):
 
     # This line should never be reached, but just in case
     raise ValueError("Unexpected error occurred")
+
+def get_tool_call_description(tool_name, args):
+    tool_call_description_template = TASK_TOOL_CALL_DESCRIPTION_TEMPLATES[tool_name]
+    if not tool_call_description_template:
+        return None
+
+    return re.sub(r'#(\w+)#', lambda match: args[match.group(1)], tool_call_description_template)

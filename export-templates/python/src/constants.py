@@ -22,6 +22,8 @@ COMPLETION_PROMPT_TEXT = """{{ getAssistantInstructionsPrompt }}"""
 
 TASK_NAME_TO_FUNCTION_NAME_MAP = {{ taskNameToFunctionNameMap }}
 
+TASK_TOOL_CALL_DESCRIPTION_TEMPLATES = {{ taskToolCallDescriptionTemplates }}
+
 ADHOC_PROMPT_TEXT = """{{ generateAnsweringFunctionPrompt }}"""
 
 LIBS = { {{ libsNames }} }

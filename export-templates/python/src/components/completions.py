@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from typing import Any
 from pydantic import create_model
 from components.logger import log_err
-from components.tools import generate_and_execute_adhoc
+from components.tools import generate_and_execute_adhoc, get_tool_call_description
 from constants import TASK_TOOL_SCHEMAS, COMPLETION_PROMPT_TEXT
 from components.context_manager import get_messages_within_context_limit
 from components.tools import create_tools_from_schemas
@@ -80,6 +80,11 @@ async def process_tool_calls(tool_calls, emit_event=None):
         if tool:
             try:
                 args = json.loads(tool_call["function"]["arguments"])
+                tool_call_description = get_tool_call_description(tool_call["function"]["name"], args)
+                
+                if tool_call_description:
+                    emit_event(tool_call_description, model)
+                
                 tool_result = await tool.coroutine(args, emit_event=emit_event)
                 print("Tool result:", tool_result, flush=True)
             except Exception as e:
