@@ -22,6 +22,8 @@ const COMPLETION_PROMPT_TEXT = `{{ getAssistantInstructionsPrompt }}`;
 
 const TASK_NAME_TO_FUNCTION_NAME_MAP = {{ taskNameToFunctionNameMap }};
 
+const TASK_TOOL_CALL_DESCRIPTION_TEMPLATES = {{ taskToolCallDescriptionTemplates }};
+
 const ADHOC_PROMPT_TEXT = `{{ generateAnsweringFunctionPrompt }}`;
 
 const LIBS = { {{ libsNames }} };
@@ -39,6 +41,7 @@ module.exports = {
   TASK_TOOL_SCHEMAS,
   COMPLETION_PROMPT_TEXT,
   TASK_NAME_TO_FUNCTION_NAME_MAP,
+  TASK_TOOL_CALL_DESCRIPTION_TEMPLATES,
   ADHOC_PROMPT_TEXT,
   LIBS,
   FUNCTIONS,
