@@ -1,7 +1,6 @@
 import os
 import uuid
 import json
-import base64
 import asyncio
 from typing import Dict, Any
 import uvicorn
@@ -15,6 +14,7 @@ from components.completions import stream_completion, generate_completion
 from components.logger import log, log_err
 from components.tools import capture_and_process_output, generate_and_execute_adhoc
 from components.types import CompletionRequest
+import time
 
 app = FastAPI()
 
@@ -70,10 +70,28 @@ async def run_task_endpoint(task_name: str, request: Request):
         log_err('run_task', task_name, {'id': request_id, **data}, e)
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
+def create_emit_event(completion_id, response_writer):
+    def emit_event(data, model=None):
+        event_chunk = {
+            "id": completion_id,
+            "object": "chat.completion.chunk",
+            "created": int(time.time()),
+            "model": model,
+            "choices": [{
+                "index": 0,
+                "delta": {
+                    "role": "assistant",
+                    "content": f"\n```agent-message\n{data}\n```\n"
+                },
+                "finish_reason": None
+            }]
+        }
+        response_writer(f"data: {json.dumps(event_chunk)}\n\n")
+    return emit_event
+
 @app.post("/completions")
-async def completions_endpoint(request: CompletionRequest):
+async def completions_endpoint(request: CompletionRequest, raw_request: Request):
     completion_id = f"cmpl-{uuid.uuid4()}"
-    stream = request.stream
     messages = request.messages
     include_tool_messages = request.include_tool_messages
     max_tokens = request.max_tokens
@@ -81,7 +99,6 @@ async def completions_endpoint(request: CompletionRequest):
 
     log_body = {
         'id': completion_id,
-        'stream': stream,
         'prompt': messages[-1].content if messages else "",
         'messageCount': len(messages),
         'include_tool_messages': include_tool_messages,
@@ -93,14 +110,47 @@ async def completions_endpoint(request: CompletionRequest):
     print("Completion request: ", messages[-1].content if messages else "", flush=True)
 
     try:
-        if stream:
-            return StreamingResponse(stream_completion(completion_id, messages, include_tool_messages, max_tokens, temperature), media_type="text/event-stream")
+        if raw_request.headers.get('accept') == 'text/event-stream':
+            async def stream_response():
+                # Create a queue for all events (both completion chunks and emitted events)
+                chunk_queue = asyncio.Queue()
+                
+                def write_chunk(chunk):
+                    chunk_queue.put_nowait(chunk)
+
+                emit_event = create_emit_event(completion_id, write_chunk)
+                completion_task = asyncio.create_task(
+                    stream_chunks(stream_completion(completion_id, messages, include_tool_messages, max_tokens, temperature, emit_event), chunk_queue)
+                )
+
+                try:
+                    while True:
+                        chunk = await chunk_queue.get()
+                        if chunk == "data: [DONE]\n\n":  # Special marker for completion end
+                            break
+                        yield chunk
+                        
+                    # Ensure we yield the final [DONE] marker
+                    yield "data: [DONE]\n\n"
+                finally:
+                    if not completion_task.done():
+                        completion_task.cancel()
+                    
+            return StreamingResponse(stream_response(), media_type="text/event-stream")
         else:
             return await generate_completion(completion_id, messages, include_tool_messages, max_tokens, temperature)
     except Exception as e:
         print(f"Error during completion: {e}", flush=True)
         log_err('completions', 'completions', log_body, e)
         raise HTTPException(status_code=500, detail=str(e))
+
+async def stream_chunks(generator, queue):
+    """Helper function to stream chunks from a generator into a queue."""
+    try:
+        async for chunk in generator:
+            await queue.put(chunk)
+    finally:
+        await queue.put("[DONE]")  # Signal that the stream is complete
 
 shutdown_key = os.getenv('SHUTDOWN_KEY')
 if shutdown_key:
@@ -127,41 +177,3 @@ def start_http_server():
     print("Starting HTTP server...", flush=True)
     print("HTTP server running on port", port, flush=True)
     uvicorn.run(app, host="0.0.0.0", port=port, log_level="error")
-
-async def handle_streaming_completion(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    try:
-        body = json.loads(event['body'] if not event.get('isBase64Encoded') else 
-                         base64.b64decode(event['body']).decode('utf-8'))
-        
-        request = CompletionRequest(**body)
-        completion_id = f"cmpl-{uuid.uuid4()}"
-
-        async def generate():
-            async for chunk in stream_completion(
-                completion_id=completion_id,
-                messages=request.messages,
-                include_tool_messages=request.include_tool_messages,
-                max_tokens=request.max_tokens,
-                temperature=request.temperature
-            ):
-                yield chunk
-
-        return {
-            'statusCode': 200,
-            'headers': {
-                'Content-Type': 'text/event-stream',
-                'Cache-Control': 'no-cache',
-                'Connection': 'keep-alive',
-                'X-Accel-Buffering': 'no',
-                'Transfer-Encoding': 'chunked',
-                'Keep-Alive': 'timeout=900'
-            },
-            'body': generate(),
-            'isBase64Encoded': False
-        }
-    except Exception as e:
-        return {
-            'statusCode': 500,
-            'body': json.dumps({'error': str(e)}),
-            'headers': {'Content-Type': 'application/json'}
-        }

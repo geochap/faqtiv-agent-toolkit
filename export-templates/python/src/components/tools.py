@@ -19,11 +19,19 @@ from constants import ADHOC_PROMPT_TEXT, LIBS, FUNCTIONS
 TOOL_TIMEOUT = int(os.getenv('TOOL_TIMEOUT', 60000)) / 1000
 
 # todo: do we need to handle warn and error logs?
-async def capture_and_process_output(func, *args, **kwargs):
+async def capture_and_process_output(func, *args, emit_event=None, **kwargs):
     f = io.StringIO()
     try:
         async def execute():
             with redirect_stdout(f):
+                builtins_dict = sys.modules['builtins'].__dict__
+                
+                def info(*args, **kwargs):
+                    if emit_event:
+                        emit_event(*args, **kwargs)
+                
+                builtins_dict['info'] = info
+
                 if asyncio.iscoroutinefunction(func):
                     return await func(*args, **kwargs)
                 else:
@@ -48,7 +56,7 @@ async def capture_and_process_output(func, *args, **kwargs):
         raise
 
 # Capture stdout of tasks
-async def tool_wrapper(func, *args, **kwargs):
+async def tool_wrapper(func, *args, emit_event=None, **kwargs):
     # todo: make sure the args are in the correct positional order
     # this code extracts the args map from the object and passes them as individual value arguments
     arguments = args[0] if isinstance(args, tuple) and len(args) == 1 else args
@@ -56,7 +64,7 @@ async def tool_wrapper(func, *args, **kwargs):
     arguments_map = json.loads(arguments_json)
     positional_args = list(arguments_map.values())
             
-    return await capture_and_process_output(func, *positional_args, **kwargs)
+    return await capture_and_process_output(func, *positional_args, emit_event=emit_event, **kwargs)
 
 def create_tools_from_schemas(schemas: Dict[str, Dict[str, Any]]) -> List[StructuredTool]:
     tools = []
