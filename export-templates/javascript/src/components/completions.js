@@ -51,7 +51,7 @@ const completionPrompt = ChatPromptTemplate.fromMessages(
   ]
 );
 
-async function processToolCalls(toolCalls, emitEvent) {
+async function processToolCalls(toolCalls, streamWriter) {
   const toolMessages = [
     new AIMessage({
       content: '',
@@ -70,10 +70,10 @@ async function processToolCalls(toolCalls, emitEvent) {
         const toolCallDescription = getToolCallDescription(toolCall.function.name, args);
 
         if (toolCallDescription) {
-          emitEvent(toolCallDescription, model);
+          streamWriter.writeEvent(toolCallDescription, model);
         }
 
-        const toolResult = await tool.func(args, emitEvent);
+        const toolResult = await tool.func(args, streamWriter);
 
         console.warn("Tool result:", toolResult);
         toolMessages.push(new ToolMessage({
@@ -276,7 +276,7 @@ async function generateCompletion(completionId, messages, includeToolMessages = 
   return response;
 }
 
-async function* streamCompletion(completionId, messages, includeToolMessages = false, maxTokens, temperature, emitEvent) {
+async function* streamCompletion(completionId, messages, includeToolMessages = false, maxTokens, temperature, streamWriter) {
   const llm = new ChatOpenAI({
     apiKey,
     model,
@@ -364,7 +364,7 @@ async function* streamCompletion(completionId, messages, includeToolMessages = f
         } else if (event.event === 'on_chain_end') {
           if (event.data.output.additional_kwargs.tool_calls) {
             const toolCalls = event.data.output.additional_kwargs.tool_calls;
-            const toolMessages = await processToolCalls(toolCalls, emitEvent);
+            const toolMessages = await processToolCalls(toolCalls, streamWriter);
             conversation = conversation.concat(toolMessages);
             hasToolCalls = true;
             insertNewline = true; // Set flag to insert newline before next tokens

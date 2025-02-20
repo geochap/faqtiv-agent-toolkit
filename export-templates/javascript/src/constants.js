@@ -31,7 +31,7 @@ const LIBS = { {{ libsNames }} };
 const FUNCTIONS = { {{ functionNames }} };
 
 const ENV_VARS = {
-  DATA_FILES: "./data"
+  DATA_FILES: "./src/data"
 }
 
 const IS_LAMBDA = !!process.env.AWS_LAMBDA_FUNCTION_NAME;

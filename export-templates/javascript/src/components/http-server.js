@@ -74,7 +74,7 @@ app.post('/run_task/:taskName', async (req, res) => {
   }
 });
 
-function createEmitEvent(completionId, responseWriter) {
+function createEventWriter(completionId, responseWriter) {
   return async function emitEvent(data, model) {
     const eventChunk = {
       id: completionId,
@@ -84,6 +84,19 @@ function createEmitEvent(completionId, responseWriter) {
       choices: [{ index: 0, delta: { role: 'assistant', content: `\n\`\`\`agent-message\n${data}\n\`\`\`\n` }, finish_reason: null }],
     };
     responseWriter(`data: ${JSON.stringify(eventChunk)}\n\n`);
+  };
+}
+
+function createRawWriter(completionId, responseWriter) {
+  return async function emitEvent(data, model) {
+    const chunk = {
+      id: completionId,
+      object: 'chat.completion.chunk',
+      created: Math.floor(Date.now() / 1000),
+      model,
+      choices: [{ index: 0, delta: { role: 'assistant', content: `${data}` }, finish_reason: null }],
+    };
+    responseWriter(`data: ${JSON.stringify(chunk)}\n\n`);
   };
 }
 
@@ -124,9 +137,12 @@ app.post('/completions', async (req, res) => {
       res.setHeader('Transfer-Encoding', 'chunked');
 
       try {
-        const emitEvent = createEmitEvent(completionId, data => res.write(data));
+        const streamWriter = {
+          writeEvent: createEventWriter(completionId, data => res.write(data)),
+          writeRaw: createRawWriter(completionId, data => res.write(data)),
+        };
 
-        for await (const chunk of streamCompletion(completionId, messages, include_tool_messages, max_tokens, temperature, emitEvent)) {
+        for await (const chunk of streamCompletion(completionId, messages, include_tool_messages, max_tokens, temperature, streamWriter)) {
           const data = `data: ${JSON.stringify(chunk)}\n\n`;
           res.write(data);
         }
@@ -246,9 +262,12 @@ const lambdaHandler = IS_LAMBDA ? awslambda.streamifyResponse(async (event, resp
       
       log('completions', 'stream', logBody);
 
-      const emitEvent = createEmitEvent(completionId, data => responseStream.write(data));
+      const streamWriter = {
+        writeEvent: createEventWriter(completionId, data => res.write(data)),
+        writeRaw: createRawWriter(completionId, data => res.write(data)),
+      };
 
-      for await (const chunk of streamCompletion(completionId, messages, include_tool_messages, max_tokens, temperature, emitEvent)) {
+      for await (const chunk of streamCompletion(completionId, messages, include_tool_messages, max_tokens, temperature, streamWriter)) {
         const data = `data: ${JSON.stringify(chunk)}\n\n`;
         responseStream.write(data);
       }
