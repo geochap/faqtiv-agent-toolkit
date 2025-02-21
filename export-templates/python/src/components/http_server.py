@@ -2,7 +2,7 @@ import os
 import uuid
 import json
 import asyncio
-from typing import Dict, Any
+from typing import Callable
 import uvicorn
 from starlette.responses import Response
 from fastapi import FastAPI, Request, HTTPException
@@ -15,6 +15,45 @@ from components.logger import log, log_err
 from components.tools import capture_and_process_output, generate_and_execute_adhoc
 from components.types import CompletionRequest
 import time
+
+class StreamWriter:
+    def __init__(self, completion_id: str, response_writer: Callable[[str], None]):
+        self.completion_id = completion_id
+        self.response_writer = response_writer
+
+    def write_event(self, data: str, model: str = None):
+        event_chunk = {
+            "id": self.completion_id,
+            "object": "chat.completion.chunk",
+            "created": int(time.time()),
+            "model": model,
+            "choices": [{
+                "index": 0,
+                "delta": {
+                    "role": "assistant",
+                    "content": f"\n```agent-message\n{data}\n```\n"
+                },
+                "finish_reason": None
+            }]
+        }
+        self.response_writer(f"data: {json.dumps(event_chunk)}\n\n")
+
+    def write_raw(self, data: str, model: str = None):
+        chunk = {
+            "id": self.completion_id,
+            "object": "chat.completion.chunk",
+            "created": int(time.time()),
+            "model": model,
+            "choices": [{
+                "index": 0,
+                "delta": {
+                    "role": "assistant",
+                    "content": f"{data}"
+                },
+                "finish_reason": None
+            }]
+        }
+        self.response_writer(f"data: {json.dumps(chunk)}\n\n")
 
 app = FastAPI()
 
@@ -70,25 +109,6 @@ async def run_task_endpoint(task_name: str, request: Request):
         log_err('run_task', task_name, {'id': request_id, **data}, e)
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
-def create_emit_event(completion_id, response_writer):
-    def emit_event(data, model=None):
-        event_chunk = {
-            "id": completion_id,
-            "object": "chat.completion.chunk",
-            "created": int(time.time()),
-            "model": model,
-            "choices": [{
-                "index": 0,
-                "delta": {
-                    "role": "assistant",
-                    "content": f"\n```agent-message\n{data}\n```\n"
-                },
-                "finish_reason": None
-            }]
-        }
-        response_writer(f"data: {json.dumps(event_chunk)}\n\n")
-    return emit_event
-
 @app.post("/completions")
 async def completions_endpoint(request: CompletionRequest, raw_request: Request):
     completion_id = f"cmpl-{uuid.uuid4()}"
@@ -118,9 +138,9 @@ async def completions_endpoint(request: CompletionRequest, raw_request: Request)
                 def write_chunk(chunk):
                     chunk_queue.put_nowait(chunk)
 
-                emit_event = create_emit_event(completion_id, write_chunk)
+                stream_writer = StreamWriter(completion_id, write_chunk)
                 completion_task = asyncio.create_task(
-                    stream_chunks(stream_completion(completion_id, messages, include_tool_messages, max_tokens, temperature, emit_event), chunk_queue)
+                    stream_chunks(stream_completion(completion_id, messages, include_tool_messages, max_tokens, temperature, stream_writer), chunk_queue)
                 )
 
                 try:

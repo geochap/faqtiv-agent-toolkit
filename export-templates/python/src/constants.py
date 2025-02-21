@@ -33,5 +33,5 @@ FUNCTIONS = { {{ functionNames }} }
 IS_LAMBDA = bool(os.getenv('AWS_LAMBDA_FUNCTION_NAME'))
 
 ENV_VARS = {
-  "DATA_FILES": "./data"
+  "DATA_FILES": "./src/data" if not IS_LAMBDA else "./data"
 }
