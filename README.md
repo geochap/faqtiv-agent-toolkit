@@ -154,7 +154,7 @@ The `streamWriter` object provides two main functions for writing to the stream:
 
 This is useful for providing feedback about the progress of the task or for providing additional information that is not part of the function's return value.
 
-#### Updating Function Headers
+### Updating Function Headers
 In order to generate code first we need to generate function signature headers for your functions, use the `update-headers` command:
 
 ```bash
@@ -162,7 +162,7 @@ faqtiv update-headers
 ```
 
 ### Managing Tasks
-A task is a natural language description of a specific action that the agent can perform by generating code using the set of functions and libraries available to the agent.
+A task is a natural language description of a specific action that the agent can perform by generating code using the set of functions available to the agent.
 
 Tasks are stored as text files that live within the "tasks" folder of a project. You can add, edit, or delete files in that folder manually or you can use the commands below to do the same. The task name is the file name without the .txt extension. 
 
@@ -298,13 +298,14 @@ This command starts an HTTP server with three endpoints:
 
 3. `/completions`: Provides a chat-like interface for interacting with the agent.
    - Method: POST
-   - Body: JSON object with `messages`, `max_tokens` (optional), `temperature` (optional), `stream` (optional), and `include_tool_messages` (optional).
-   - `messages`: An array of message objects, each with a `role` ("user" or "assistant") and `content`.
-   - `max_tokens` (optional): The maximum number of tokens to generate. Defaults to 1000. Must be between 1 and 4096.
-   - `temperature` (optional): Controls randomness in the output. Defaults to 0.7. Must be between 0 and 2.
-   - `stream` (optional): If true, the response will be streamed. Defaults to false.
-   - `include_tool_messages` (optional): If true, tool messages will be included in the response. Defaults to false.
-   - Response: JSON object with `id`, `object`, `created`, `model`, and `choices` array with the generated message.
+   - Headers: 
+     - (optional) `Accept: text/event-stream` to stream the response.
+   - Body: JSON object
+     - `messages`: An array of message objects, each with a `role` ("user" or "assistant") and `content`.
+     - `max_tokens` (optional): The maximum number of tokens to generate. Defaults to 1000. Must be between 1 and 4096.
+     - `temperature` (optional): Controls randomness in the output. Defaults to 0.7. Must be between 0 and 2.
+     - `include_tool_messages` (optional): If true, tool messages will be included in the response. Defaults to false.
+    - Response: JSON object with `id`, `object`, `created`, `model`, and `choices` array with the generated message.
 
 Example usage with curl:
 
@@ -322,6 +323,7 @@ curl -X POST http://localhost:8000/run_adhoc \
 # Use the completions endpoint
 curl -X POST http://localhost:8000/completions \
   -H "Content-Type: application/json" \
+  -H "Accept: text/event-stream" \
   -d '{
     "messages": [
       {"role": "user", "content": "What is the capital of France?"}
