@@ -21,7 +21,7 @@ class StreamWriter:
         self.completion_id = completion_id
         self.response_writer = response_writer
 
-    def write_event(self, data: str, model: str = None):
+    def writeEvent(self, data: str, model: str = None):
         event_chunk = {
             "id": self.completion_id,
             "object": "chat.completion.chunk",
@@ -38,7 +38,7 @@ class StreamWriter:
         }
         self.response_writer(f"data: {json.dumps(event_chunk)}\n\n")
 
-    def write_raw(self, data: str, model: str = None):
+    def writeRaw(self, data: str, model: str = None):
         chunk = {
             "id": self.completion_id,
             "object": "chat.completion.chunk",
@@ -138,9 +138,9 @@ async def completions_endpoint(request: CompletionRequest, raw_request: Request)
                 def write_chunk(chunk):
                     chunk_queue.put_nowait(chunk)
 
-                stream_writer = StreamWriter(completion_id, write_chunk)
+                streamWriter = StreamWriter(completion_id, write_chunk)
                 completion_task = asyncio.create_task(
-                    stream_chunks(stream_completion(completion_id, messages, include_tool_messages, max_tokens, temperature, stream_writer), chunk_queue)
+                    stream_chunks(stream_completion(completion_id, messages, include_tool_messages, max_tokens, temperature, streamWriter), chunk_queue)
                 )
 
                 try:

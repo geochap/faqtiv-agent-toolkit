@@ -20,9 +20,9 @@ def get_bank_financials(bank_id):
     response = requests.get(url)
     response_data = response.json()
     # this will be handled as an agent event
-    stream_writer.write_event(f"Getting bank financials for bank id: {bank_id}")
+    streamWriter.writeEvent(f"streamWriter event: Getting bank financials for bank id: {bank_id}")
     # this will be inserted into the stream as a raw chunk
-    stream_writer.write_raw(f"RAW: Getting bank financials for bank id: {bank_id}")
+    streamWriter.writeRaw(f"streamWriter raw: Getting bank financials for bank id: {bank_id}\n")
     return [
         {
             'report_date': f"{r['data']['REPDTE'][:4]}-{r['data']['REPDTE'][4:6]}-{r['data']['REPDTE'][6:]}",

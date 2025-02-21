@@ -105,9 +105,9 @@ async function getBankIdByName(name) {
   const url = `https://banks.data.fdic.gov/api/institutions?filters=ACTIVE%3A1&search=NAME:${encodeURIComponent(name)}&fields=NAME`;
   const response = await axios.get(url);
   // this will be handled as an agent event
-  streamWriter.writeEvent(`Found ${response.data.data.length} banks with name ${name}`);
+  streamWriter.writeEvent(`streamWriter event: Found ${response.data.data.length} banks with name ${name}`);
   // this will be inserted into the stream as a raw chunk
-  streamWriter.writeRaw(`RAW: Found ${response.data.data.length} banks with name ${name}`);
+  streamWriter.writeRaw(`streamWriter raw: Found ${response.data.data.length} banks with name ${name}\n`);
   return response.data.data[0].data.ID;
 }
 /**
@@ -120,24 +120,24 @@ async function doTask(bankName) {
     
     const bankId = await getBankIdByName(bankName);
     const financials = await getBankFinancials(bankId);
-
+    
     const workbook = createWorkbook();
     const sheetName = 'Financial Report';
     const worksheet = addWorksheet(workbook, sheetName);
-
+    
     const columnNames = ['Report Date', 'Total Deposits'];
     addTableHeader(worksheet, 1, 1, columnNames);
-
+    
     const rows = financials.map(record => [record.report_date, record.total_deposits]);
     addTableRows(worksheet, 2, 1, rows);
-
+    
     autoSizeColumnWidth(worksheet);
-
+    
     const fileName = `${bankName.replace(/[\s/]/g, '_')}_Financial_Report.xlsx`;
     const filePath = path.resolve(process.cwd(), fileName);
-
+    
     await workbook.xlsx.writeFile(filePath);
-
+    
     console.log(JSON.stringify({
         result: "Financial report generated successfully.",
         files: [

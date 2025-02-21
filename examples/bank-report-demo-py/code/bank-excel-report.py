@@ -40,8 +40,10 @@ def get_bank_financials(bank_id):
     url = f'https://banks.data.fdic.gov/api/financials?filters=CERT%3A{bank_id}&fields=CERT%2CREPDTE%2CASSET%2CDEP&sort_by=REPDTE&sort_order=DESC&limit=10&offset=0&agg_by=REPDTE&agg_sum_fields=DEP&agg_limit=1000&format=json&download=false&filename=data_file'
     response = requests.get(url)
     response_data = response.json()
-    stream_writer.write_event(f"Getting bank financials for bank id: {bank_id}")
-    stream_writer.write_raw(f"RAW: Getting bank financials for bank id: {bank_id}")
+    # this will be handled as an agent event
+    streamWriter.writeEvent(f"streamWriter event: Getting bank financials for bank id: {bank_id}")
+    # this will be inserted into the stream as a raw chunk
+    streamWriter.writeRaw(f"streamWriter raw: Getting bank financials for bank id: {bank_id}\n")
     return [
         {
             'report_date': f"{r['data']['REPDTE'][:4]}-{r['data']['REPDTE'][4:6]}-{r['data']['REPDTE'][6:]}",
