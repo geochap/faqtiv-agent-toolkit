@@ -263,8 +263,8 @@ const lambdaHandler = IS_LAMBDA ? awslambda.streamifyResponse(async (event, resp
       log('completions', 'stream', logBody);
 
       const streamWriter = {
-        writeEvent: createEventWriter(completionId, data => res.write(data)),
-        writeRaw: createRawWriter(completionId, data => res.write(data)),
+        writeEvent: createEventWriter(completionId, data => responseStream.write(data)),
+        writeRaw: createRawWriter(completionId, data => responseStream.write(data)),
       };
 
       for await (const chunk of streamCompletion(completionId, messages, include_tool_messages, max_tokens, temperature, streamWriter)) {
