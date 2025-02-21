@@ -1,6 +1,6 @@
 {
   "name": "@intellidimension/faqtiv-agent-toolkit",
-  "version": "0.9.13",
+  "version": "0.9.14",
   "type": "module",
   "description": "A command line tool for code generation",
   "main": "cli.js",
