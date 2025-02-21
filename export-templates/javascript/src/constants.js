@@ -22,23 +22,26 @@ const COMPLETION_PROMPT_TEXT = `{{ getAssistantInstructionsPrompt }}`;
 
 const TASK_NAME_TO_FUNCTION_NAME_MAP = {{ taskNameToFunctionNameMap }};
 
+const TASK_TOOL_CALL_DESCRIPTION_TEMPLATES = {{ taskToolCallDescriptionTemplates }};
+
 const ADHOC_PROMPT_TEXT = `{{ generateAnsweringFunctionPrompt }}`;
 
 const LIBS = { {{ libsNames }} };
 
 const FUNCTIONS = { {{ functionNames }} };
 
-const ENV_VARS = {
-  DATA_FILES: "./data"
-}
-
 const IS_LAMBDA = !!process.env.AWS_LAMBDA_FUNCTION_NAME;
+
+const ENV_VARS = {
+  DATA_FILES: IS_LAMBDA ? "./data" : "./src/data"
+};
 
 module.exports = {
   TASKS,
   TASK_TOOL_SCHEMAS,
   COMPLETION_PROMPT_TEXT,
   TASK_NAME_TO_FUNCTION_NAME_MAP,
+  TASK_TOOL_CALL_DESCRIPTION_TEMPLATES,
   ADHOC_PROMPT_TEXT,
   LIBS,
   FUNCTIONS,

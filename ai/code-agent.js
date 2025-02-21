@@ -5,6 +5,7 @@ import { generateAnsweringFunctionPrompt } from './prompts/generate-answering-fu
 import { extractFunctionCode } from '../lib/parse-utils.js';
 import { improveFunctionSignaturePrompt } from './prompts/improve-function-signature.js';
 import { generateLangchainToolSchemaFromFunctionPrompt } from './prompts/generate-langchain-tool-schema-from-function.js';
+import { generateToolCallDescriptionTemplatePrompt } from './prompts/generate-tool-call-description-template.js';
 
 function codeResponse(response) {
   try {
@@ -111,6 +112,14 @@ export default class CodeAgent {
   async improveFunctionSignature(functionCode, signature) {
     const prompt = [new HumanMessage(improveFunctionSignaturePrompt([functionCode], [signature]))];
     const messages = await this.ai.start(null, prompt, [], 'improve-function-signature');
+    const response = messages[messages.length - 1].content.trim();
+
+    return response;
+  }
+
+  async generateToolCallDescriptionTemplate(taskSchema) {
+    const prompt = [new HumanMessage(generateToolCallDescriptionTemplatePrompt(taskSchema))];
+    const messages = await this.ai.start(null, prompt, [], 'generate-tool-call-description-template');
     const response = messages[messages.length - 1].content.trim();
 
     return response;

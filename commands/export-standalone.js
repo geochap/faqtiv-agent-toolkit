@@ -24,6 +24,7 @@ function getTaskFunctions() {
   const tasks = {};
   const taskNameToFunctionNameMap = {};
   const taskToolSchemas = [];
+  const taskToolCallDescriptionTemplates = {};
 
   taskFiles.forEach(file => {
     const code = fs.readFileSync(file.fullPath, 'utf8');
@@ -50,11 +51,14 @@ function getTaskFunctions() {
           schemaString = schemaString.replace(/\bdoTask\b/g, `TASKS.${validFunctionName}`);
           taskToolSchemas.push(schemaString);
         }
+        if (metadata.output && metadata.output.tool_call_description_template) {
+          taskToolCallDescriptionTemplates[validFunctionName] = metadata.output.tool_call_description_template;
+        }
       }
     }
   });
 
-  return { tasks, taskNameToFunctionNameMap, taskToolSchemas };
+  return { tasks, taskNameToFunctionNameMap, taskToolSchemas, taskToolCallDescriptionTemplates };
 }
 
 function getExamples() {
@@ -216,7 +220,7 @@ export default async function exportStandalone(outputDir = process.cwd(), option
   const libsCode = libs.map(l => l.code);
   const libsNames = libs.map(f => f.name);
   const imports = getDeduplicatedImports(libs, functions);
-  const { tasks, taskNameToFunctionNameMap, taskToolSchemas } = getTaskFunctions();
+  const { tasks, taskNameToFunctionNameMap, taskToolSchemas, taskToolCallDescriptionTemplates } = getTaskFunctions();
   const examples = getExamples();
 
   // Get the current file's path
@@ -239,6 +243,7 @@ export default async function exportStandalone(outputDir = process.cwd(), option
     taskNameToFunctionNameMap: JSON.stringify(taskNameToFunctionNameMap, null, 2),
     tasks: formatTaskFunctions(tasks),
     taskToolSchemas: taskToolSchemas.join(',\n'),
+    taskToolCallDescriptionTemplates: JSON.stringify(taskToolCallDescriptionTemplates, null, 2),
     generateAnsweringFunctionPrompt: escapeInstructions(generateAnsweringFunctionPrompt(instructions, functionsHeader.signatures, true)),
     getAssistantInstructionsPrompt: escapeInstructions(getAssistantInstructionsPrompt(assistantInstructions)),
     installCommand: runtimeConfig.installCommand,

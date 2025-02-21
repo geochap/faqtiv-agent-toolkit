@@ -4,6 +4,7 @@ import io
 import json
 import sys
 import traceback
+import re
 from typing import Dict, Any, List
 from langchain_core.tools import StructuredTool
 from langchain_openai import ChatOpenAI
@@ -14,16 +15,19 @@ from contextlib import redirect_stdout
 from components.examples import get_relevant_examples
 from components.parser import extract_function_code
 from components.logger import create_adhoc_log_file
-from constants import ADHOC_PROMPT_TEXT, LIBS, FUNCTIONS
+from constants import ADHOC_PROMPT_TEXT, LIBS, FUNCTIONS, TASK_TOOL_CALL_DESCRIPTION_TEMPLATES
 
 TOOL_TIMEOUT = int(os.getenv('TOOL_TIMEOUT', 60000)) / 1000
 
 # todo: do we need to handle warn and error logs?
-async def capture_and_process_output(func, *args, **kwargs):
+async def capture_and_process_output(func, *args, streamWriter=None, **kwargs):
     f = io.StringIO()
     try:
         async def execute():
             with redirect_stdout(f):
+                builtins_dict = sys.modules['builtins'].__dict__
+                builtins_dict['streamWriter'] = streamWriter
+
                 if asyncio.iscoroutinefunction(func):
                     return await func(*args, **kwargs)
                 else:
@@ -48,7 +52,7 @@ async def capture_and_process_output(func, *args, **kwargs):
         raise
 
 # Capture stdout of tasks
-async def tool_wrapper(func, *args, **kwargs):
+async def tool_wrapper(func, *args, streamWriter=None, **kwargs):
     # todo: make sure the args are in the correct positional order
     # this code extracts the args map from the object and passes them as individual value arguments
     arguments = args[0] if isinstance(args, tuple) and len(args) == 1 else args
@@ -56,7 +60,7 @@ async def tool_wrapper(func, *args, **kwargs):
     arguments_map = json.loads(arguments_json)
     positional_args = list(arguments_map.values())
             
-    return await capture_and_process_output(func, *positional_args, **kwargs)
+    return await capture_and_process_output(func, *positional_args, streamWriter=streamWriter, **kwargs)
 
 def create_tools_from_schemas(schemas: Dict[str, Dict[str, Any]]) -> List[StructuredTool]:
     tools = []
@@ -181,3 +185,10 @@ async def generate_and_execute_adhoc(user_input: str, max_retries: int = 5):
 
     # This line should never be reached, but just in case
     raise ValueError("Unexpected error occurred")
+
+def get_tool_call_description(tool_name, args):
+    tool_call_description_template = TASK_TOOL_CALL_DESCRIPTION_TEMPLATES[tool_name]
+    if not tool_call_description_template:
+        return None
+
+    return re.sub(r'#(\w+)#', lambda match: args[match.group(1)], tool_call_description_template)

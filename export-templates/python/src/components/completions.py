@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from typing import Any
 from pydantic import create_model
 from components.logger import log_err
-from components.tools import generate_and_execute_adhoc
+from components.tools import generate_and_execute_adhoc, get_tool_call_description
 from constants import TASK_TOOL_SCHEMAS, COMPLETION_PROMPT_TEXT
 from components.context_manager import get_messages_within_context_limit
 from components.tools import create_tools_from_schemas
@@ -29,7 +29,7 @@ if not api_key:
 if not model:
     raise ValueError("OPENAI_MODEL environment variable is not set")
 
-async def run_adhoc_task(input: str) -> str:
+async def run_adhoc_task(input: str, emit_event=None) -> str:
     try:
         result = await generate_and_execute_adhoc(input["description"])
         # Ensure the result is a string
@@ -65,7 +65,7 @@ completion_prompt = ChatPromptTemplate.from_messages(
     ]
 )
 
-async def process_tool_calls(tool_calls):
+async def process_tool_calls(tool_calls, streamWriter=None):
     tool_messages = [
         AIMessage(
             content='',
@@ -79,7 +79,13 @@ async def process_tool_calls(tool_calls):
         tool = next((t for t in completion_tools if t.name == tool_call["function"]["name"]), None)
         if tool:
             try:
-                tool_result = await tool.coroutine(json.loads(tool_call["function"]["arguments"]))
+                args = json.loads(tool_call["function"]["arguments"])
+                tool_call_description = get_tool_call_description(tool_call["function"]["name"], args)
+                
+                if tool_call_description:
+                    streamWriter.writeEvent(tool_call_description, model)
+                
+                tool_result = await tool.coroutine(args, streamWriter=streamWriter)
                 print("Tool result:", tool_result, flush=True)
             except Exception as e:
                 error_message = f"Error in tool '{tool_call['function']['name']}': {str(e)}"
@@ -241,11 +247,11 @@ async def generate_completion(completion_id, messages, include_tool_messages, ma
 
     return JSONResponse(content=response.dict())
 
-async def stream_completion(completion_id, messages, include_tool_messages, max_tokens, temperature):
-    async for event in _stream_completion(completion_id, messages, include_tool_messages, max_tokens, temperature):
+async def stream_completion(completion_id, messages, include_tool_messages, max_tokens, temperature, streamWriter=None):
+    async for event in _stream_completion(completion_id, messages, include_tool_messages, max_tokens, temperature, streamWriter):
         yield event
 
-async def _stream_completion(completion_id, messages, include_tool_messages, max_tokens, temperature):
+async def _stream_completion(completion_id, messages, include_tool_messages, max_tokens, temperature, streamWriter=None):
     llm = ChatOpenAI(
         api_key=api_key,
         model=model,
@@ -318,7 +324,7 @@ async def _stream_completion(completion_id, messages, include_tool_messages, max
                 elif event['event'] == 'on_chain_end':
                     if event['data']['output'].additional_kwargs.get('tool_calls'):
                         tool_calls = event['data']['output'].additional_kwargs['tool_calls']
-                        tool_messages = await process_tool_calls(tool_calls)
+                        tool_messages = await process_tool_calls(tool_calls, streamWriter)
                         conversation.extend(tool_messages)
                         has_tool_calls = True
                         insert_newline = True # set flag to insert newline before next tokens

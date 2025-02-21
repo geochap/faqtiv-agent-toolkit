@@ -4,7 +4,7 @@ const { ChatOpenAI } = require('@langchain/openai');
 const { AIMessage, HumanMessage, SystemMessage, ToolMessage } = require('@langchain/core/messages');
 const z = require('zod');
 const { log, logErr } = require('./logger');
-const { createToolsFromSchemas, generateAndExecuteAdhoc } = require('./tools');
+const { createToolsFromSchemas, generateAndExecuteAdhoc, getToolCallDescription } = require('./tools');
 const { getMessagesWithinContextLimit } = require('./context-manager');
 const { TASK_TOOL_SCHEMAS, COMPLETION_PROMPT_TEXT } = require('../constants');
 const { calculateCost } = require('./pricing');
@@ -51,7 +51,7 @@ const completionPrompt = ChatPromptTemplate.fromMessages(
   ]
 );
 
-async function processToolCalls(toolCalls) {
+async function processToolCalls(toolCalls, streamWriter) {
   const toolMessages = [
     new AIMessage({
       content: '',
@@ -66,7 +66,15 @@ async function processToolCalls(toolCalls) {
 
     if (tool) {
       try {
-        const toolResult = await tool.func(JSON.parse(toolCall.function.arguments));
+        const args = JSON.parse(toolCall.function.arguments);
+        const toolCallDescription = getToolCallDescription(toolCall.function.name, args);
+
+        if (toolCallDescription) {
+          streamWriter.writeEvent(toolCallDescription, model);
+        }
+
+        const toolResult = await tool.func(args, streamWriter);
+
         console.warn("Tool result:", toolResult);
         toolMessages.push(new ToolMessage({
           content: JSON.stringify({
@@ -268,7 +276,7 @@ async function generateCompletion(completionId, messages, includeToolMessages = 
   return response;
 }
 
-async function* streamCompletion(completionId, messages, includeToolMessages = false, maxTokens, temperature) {
+async function* streamCompletion(completionId, messages, includeToolMessages = false, maxTokens, temperature, streamWriter) {
   const llm = new ChatOpenAI({
     apiKey,
     model,
@@ -356,7 +364,7 @@ async function* streamCompletion(completionId, messages, includeToolMessages = f
         } else if (event.event === 'on_chain_end') {
           if (event.data.output.additional_kwargs.tool_calls) {
             const toolCalls = event.data.output.additional_kwargs.tool_calls;
-            const toolMessages = await processToolCalls(toolCalls);
+            const toolMessages = await processToolCalls(toolCalls, streamWriter);
             conversation = conversation.concat(toolMessages);
             hasToolCalls = true;
             insertNewline = true; // Set flag to insert newline before next tokens
