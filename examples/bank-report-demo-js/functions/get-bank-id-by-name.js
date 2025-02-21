@@ -10,6 +10,9 @@ const axios = require('axios');
 async function getBankIdByName(name) {
   const url = `https://banks.data.fdic.gov/api/institutions?filters=ACTIVE%3A1&search=NAME:${encodeURIComponent(name)}&fields=NAME`;
   const response = await axios.get(url);
-//    console.log(JSON.stringify(response.data, null, ' '))
+  // this will be handled as an agent event
+  streamWriter.writeEvent(`Found ${response.data.data.length} banks with name ${name}`);
+  // this will be inserted into the stream as a raw chunk
+  streamWriter.writeRaw(`RAW: Found ${response.data.data.length} banks with name ${name}`);
   return response.data.data[0].data.ID;
 }

@@ -40,6 +40,8 @@ def get_bank_financials(bank_id):
     url = f'https://banks.data.fdic.gov/api/financials?filters=CERT%3A{bank_id}&fields=CERT%2CREPDTE%2CASSET%2CDEP&sort_by=REPDTE&sort_order=DESC&limit=10&offset=0&agg_by=REPDTE&agg_sum_fields=DEP&agg_limit=1000&format=json&download=false&filename=data_file'
     response = requests.get(url)
     response_data = response.json()
+    stream_writer.write_event(f"Getting bank financials for bank id: {bank_id}")
+    stream_writer.write_raw(f"RAW: Getting bank financials for bank id: {bank_id}")
     return [
         {
             'report_date': f"{r['data']['REPDTE'][:4]}-{r['data']['REPDTE'][4:6]}-{r['data']['REPDTE'][6:]}",
@@ -106,13 +108,8 @@ def add_table_header(worksheet, row, col, column_names):
 
 def doTask(bank_name: str):
     import json
-    
+
     bank_id = get_bank_id_by_name(bank_name)
     financials = get_bank_financials(bank_id)
-    
-    report = [
-        {"Report Date": record["report_date"], "Total Deposits": record["total_deposits"]}
-        for record in financials
-    ]
-    
-    print(json.dumps(report))
+
+    print(json.dumps(financials))
