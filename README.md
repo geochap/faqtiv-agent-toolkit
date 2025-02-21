@@ -134,15 +134,13 @@ Start by adding some functions and libs to your project. Functions will be provi
 
 Note that the function code should not include library imports or requires, for that you can use the `add-module` command which will inject the dependencies for you.
 
-## Functions
-
 ### Writing Functions
 
 Functions are written in javascript or python and are stored in the `functions` directory of a project.
 
 You can see examples of functions in the `examples` directory.
 
-### Globally available utilities
+#### Globally available utilities
 
 The toolkit provides globally available utilities that are available to all functions.
 
@@ -156,7 +154,7 @@ The `streamWriter` object provides two main functions for writing to the stream:
 
 This is useful for providing feedback about the progress of the task or for providing additional information that is not part of the function's return value.
 
-### Updating Function Headers
+#### Updating Function Headers
 In order to generate code first we need to generate function signature headers for your functions, use the `update-headers` command:
 
 ```bash
@@ -164,6 +162,8 @@ faqtiv update-headers
 ```
 
 ### Managing Tasks
+A task is a natural language description of a specific action that the agent can perform by generating code using the set of functions and libraries available to the agent.
+
 Tasks are stored as text files that live within the "tasks" folder of a project. You can add, edit, or delete files in that folder manually or you can use the commands below to do the same. The task name is the file name without the .txt extension. 
 
 #### Adding a Task
