@@ -134,6 +134,28 @@ Start by adding some functions and libs to your project. Functions will be provi
 
 Note that the function code should not include library imports or requires, for that you can use the `add-module` command which will inject the dependencies for you.
 
+## Functions
+
+### Writing Functions
+
+Functions are written in javascript or python and are stored in the `functions` directory of a project.
+
+You can see examples of functions in the `examples` directory.
+
+### Globally available utilities
+
+The toolkit provides globally available utilities that are available to all functions.
+
+#### streamWriter
+A utility for writing to the stream.
+
+The `streamWriter` object provides two main functions for writing to the stream:
+
+1. `writeEvent(data)`: This function is used to write structured event data to the stream. The contents will be sent to the stream as a Markdown formatted text block of type `agent-message`, FAQtiv desktop will display these in the agent's chat as events.
+2. `writeRaw(data)`: This function is used to write raw data to the stream. The contents will be inserted into the stream as a raw chunk.
+
+This is useful for providing feedback about the progress of the task or for providing additional information that is not part of the function's return value.
+
 ### Updating Function Headers
 In order to generate code first we need to generate function signature headers for your functions, use the `update-headers` command:
 

@@ -104,7 +104,10 @@ async function getBankFinancials(bankId) {
 async function getBankIdByName(name) {
   const url = `https://banks.data.fdic.gov/api/institutions?filters=ACTIVE%3A1&search=NAME:${encodeURIComponent(name)}&fields=NAME`;
   const response = await axios.get(url);
-//    console.log(JSON.stringify(response.data, null, ' '))
+  // this will be handled as an agent event
+  streamWriter.writeEvent(`streamWriter event: Found ${response.data.data.length} banks with name ${name}`);
+  // this will be inserted into the stream as a raw chunk
+  streamWriter.writeRaw(`streamWriter raw: Found ${response.data.data.length} banks with name ${name}\n`);
   return response.data.data[0].data.ID;
 }
 /**
@@ -115,11 +118,5 @@ async function getBankIdByName(name) {
 async function doTask(bankName) {
     const bankId = await getBankIdByName(bankName);
     const financials = await getBankFinancials(bankId);
-    
-    const report = financials.map(record => ({
-        report_date: record.report_date,
-        total_deposits: record.total_deposits
-    }));
-    
-    console.log(JSON.stringify(report));
+    console.log(JSON.stringify(financials));
 }
