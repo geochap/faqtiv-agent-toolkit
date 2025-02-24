@@ -3,8 +3,8 @@ auto_add_examples: true
 modules:
   - name: swagger-parser
     alias: swagger-parser
-  - name: node-fetch@2
-    alias: node-fetch@2
+  - name: node-fetch
+    alias: node-fetch
   - name: js-yaml
     alias: js-yaml
 task_examples:

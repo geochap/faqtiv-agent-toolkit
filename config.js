@@ -43,7 +43,10 @@ export function loadConfig() {
   openai = {
     organization: process.env.OPENAI_ORGANIZATION,
     apiKey: process.env.OPENAI_API_KEY,
-    model: process.env.OPENAI_MODEL || 'gpt-4o'
+    model: process.env.OPENAI_MODEL || 'gpt-4o',
+    baseUrl: process.env.OPENAI_BASE_URL || 'https://api.openai.com',
+    frequencyPenalty: process.env.OPENAI_FREQUENCY_PENALTY,
+    topP: process.env.OPENAI_TOP_P,
   };
   
   logging = {
