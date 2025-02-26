@@ -31,9 +31,9 @@ const completionTools = [
     schema: z.object({
       description: z.string(),
     }),
-    func: async ({ description }) => {
+    func: async ({ description }, streamWriter) => {
       try {
-        const result = await generateAndExecuteAdhoc(description);
+        const result = await generateAndExecuteAdhoc(description, streamWriter);
         return typeof result === 'object' ? JSON.stringify(result) : String(result);
       } catch (error) {
         return `Error during execution: ${error.message}`;
