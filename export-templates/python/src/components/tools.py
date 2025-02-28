@@ -114,7 +114,7 @@ async def execute_generated_function(function_code):
     return result
 
 # Adhoc task execution
-async def generate_and_execute_adhoc(user_input: str, max_retries: int = 5):
+async def generate_and_execute_adhoc(user_input: str, streamWriter=None, max_retries: int = 5):
     retry_count = 0
     errors = []
     previous_code = None
@@ -165,7 +165,7 @@ async def generate_and_execute_adhoc(user_input: str, max_retries: int = 5):
 
             print("Generated code:", function_code, flush=True)
 
-            result = await capture_and_process_output(execute_generated_function, function_code)
+            result = await capture_and_process_output(execute_generated_function, function_code, streamWriter=streamWriter)
             
             create_adhoc_log_file(user_input, function_code, result)
             

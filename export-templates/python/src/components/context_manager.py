@@ -10,6 +10,7 @@ model_limits = {
     'gpt-3.5': 16000,
     'gpt-4o': 128000,
     'gpt-4o-2024-11-20': 128000,
+    'sonar': 127000
 }
 
 def create_encoder(model_name):
