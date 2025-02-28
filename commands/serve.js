@@ -96,6 +96,9 @@ export default async function serve(options) {
         ...process.env,
         OPENAI_API_KEY: config.openai.apiKey,
         OPENAI_MODEL: config.openai.model,
+        OPENAI_BASE_URL: config.openai.baseUrl,
+        OPENAI_FREQUENCY_PENALTY: config.openai.frequencyPenalty,
+        OPENAI_TOP_P: config.openai.topP,
         PORT: port.toString(),
         SHUTDOWN_KEY: shutdownKey
       },

@@ -117,7 +117,7 @@ const adhocLLM = new ChatOpenAI({
   },
 });
 
-async function generateAndExecuteAdhoc(userInput, maxRetries = 5) {
+async function generateAndExecuteAdhoc(userInput, streamWriter, maxRetries = 5) {
   let retryCount = 0;
   const errors = [];
   let previousCode = null;
@@ -173,7 +173,7 @@ async function generateAndExecuteAdhoc(userInput, maxRetries = 5) {
 
       console.log("Generated code:", functionCode);
 
-      const result = await captureAndProcessOutput(functionCode);
+      const result = await captureAndProcessOutput(functionCode, [], streamWriter);
       
       if (!IS_LAMBDA) createAdhocLogFile(userInput, functionCode, result);
       

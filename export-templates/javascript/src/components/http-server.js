@@ -142,7 +142,7 @@ app.post('/completions', async (req, res) => {
           writeRaw: createRawWriter(completionId, data => res.write(data)),
         };
 
-        for await (const chunk of streamCompletion(completionId, messages, include_tool_messages, max_tokens, temperature, streamWriter)) {
+        for await (const chunk of streamCompletion(completionId, messages, {includeToolMessages:include_tool_messages, maxTokens:max_tokens, temperature}, streamWriter)) {
           const data = `data: ${JSON.stringify(chunk)}\n\n`;
           res.write(data);
         }
@@ -159,7 +159,7 @@ app.post('/completions', async (req, res) => {
     }
 
     try {
-      const result = await generateCompletion(completionId, messages, include_tool_messages, max_tokens, temperature);
+      const result = await generateCompletion(completionId, messages, {include_tool_messages, maxTokens:max_tokens, temperature});
       res.json(result);
       log('completions', 'done', { id: completionId, status: 'done' });
     } catch (error) {
@@ -267,7 +267,7 @@ const lambdaHandler = IS_LAMBDA ? awslambda.streamifyResponse(async (event, resp
         writeRaw: createRawWriter(completionId, data => responseStream.write(data)),
       };
 
-      for await (const chunk of streamCompletion(completionId, messages, include_tool_messages, max_tokens, temperature, streamWriter)) {
+      for await (const chunk of streamCompletion(completionId, messages, {includeToolMessages:include_tool_messages, maxTokens:max_tokens, temperature}, streamWriter)) {
         const data = `data: ${JSON.stringify(chunk)}\n\n`;
         responseStream.write(data);
       }

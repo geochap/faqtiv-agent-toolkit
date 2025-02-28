@@ -31,9 +31,9 @@ const completionTools = [
     schema: z.object({
       description: z.string(),
     }),
-    func: async ({ description }) => {
+    func: async ({ description }, streamWriter) => {
       try {
-        const result = await generateAndExecuteAdhoc(description);
+        const result = await generateAndExecuteAdhoc(description, streamWriter);
         return typeof result === 'object' ? JSON.stringify(result) : String(result);
       } catch (error) {
         return `Error during execution: ${error.message}`;
@@ -155,12 +155,15 @@ function convertToolMessageToOpenAIFormat(toolMessage) {
   };
 }
 
-async function generateCompletion(completionId, messages, includeToolMessages = false, maxTokens, temperature) {
+async function generateCompletion(completionId, messages, options) {
+  let { includeToolMessages, ...completionOptions } = setOptionsFromEnv(options);
+
+  includeToolMessages = !!includeToolMessages;
+
   const llm = new ChatOpenAI({
     apiKey,
     model,
-    maxTokens,
-    temperature,
+    ...completionOptions,
     configuration: {
       defaultHeaders: {
         'Connection': 'keep-alive',
@@ -276,13 +279,25 @@ async function generateCompletion(completionId, messages, includeToolMessages = 
   return response;
 }
 
-async function* streamCompletion(completionId, messages, includeToolMessages = false, maxTokens, temperature, streamWriter) {
+function setOptionsFromEnv(options) {
+  if (process.env.OPENAI_FREQUENCY_PENALTY && options.frequencyPenalty == null) 
+    options.frequencyPenalty = parseFloat(process.env.OPENAI_FREQUENCY_PENALTY);
+  if (process.env.OPENAI_TOP_P && options.topP == null) 
+    options.topP = parseFloat(process.env.OPENAI_TOP_P);
+
+  return options;
+}
+
+async function* streamCompletion(completionId, messages, options, streamWriter) {
+  let { includeToolMessages, ...completionOptions } = setOptionsFromEnv(options);
+
+  includeToolMessages = !!includeToolMessages;
+  completionOptions.streamUsage = true;
+
   const llm = new ChatOpenAI({
     apiKey,
     model,
-    maxTokens,
-    temperature,
-    streamUsage: true,
+    ...options,
     configuration: {
       defaultHeaders: {
         'Connection': 'keep-alive',
