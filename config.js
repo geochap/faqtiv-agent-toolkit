@@ -46,6 +46,7 @@ export function loadConfig() {
     model: process.env.OPENAI_MODEL || 'gpt-4o',
     baseUrl: process.env.OPENAI_BASE_URL,
     frequencyPenalty: process.env.OPENAI_FREQUENCY_PENALTY,
+    stripConsecutiveUserMsgs: process.env.STRIP_CONSECUTIVE_USER_MSGS == 'true',
     topP: process.env.OPENAI_TOP_P,
   };
   
