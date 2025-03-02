@@ -98,6 +98,7 @@ export default async function serve(options) {
         OPENAI_MODEL: config.openai.model,
         OPENAI_BASE_URL: config.openai.baseUrl,
         OPENAI_FREQUENCY_PENALTY: config.openai.frequencyPenalty,
+        STRIP_CONSECUTIVE_USER_MSGS: config.openai.stripConsecutiveUserMsgs ? 'true' : 'false',
         OPENAI_TOP_P: config.openai.topP,
         PORT: port.toString(),
         SHUTDOWN_KEY: shutdownKey

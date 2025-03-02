@@ -112,7 +112,26 @@ async function processToolCalls(toolCalls, streamWriter) {
 }
 
 async function getConversationFromMessagesRequest(messages) {
-  const truncatedMessages = await getMessagesWithinContextLimit(model, messages);
+  let truncatedMessages = await getMessagesWithinContextLimit(model, messages);
+
+  if (process.env.STRIP_CONSECUTIVE_USER_MSGS == "true") {
+    const filteredMessages = [];
+    let prevRole = null;
+
+    // Remove consecutive user messages
+    for (const msg of truncatedMessages) {
+      if (msg.role === 'user') {
+        if (prevRole !== 'user') {
+          filteredMessages.push(msg);
+        }
+      } else {
+        filteredMessages.push(msg);
+      }
+      prevRole = msg.role;
+    }
+
+    truncatedMessages = filteredMessages;
+  }
 
   return truncatedMessages.map(msg => {
     if (msg.role === 'user') {
