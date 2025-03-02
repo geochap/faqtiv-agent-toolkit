@@ -29,9 +29,9 @@ if not api_key:
 if not model:
     raise ValueError("OPENAI_MODEL environment variable is not set")
 
-async def run_adhoc_task(input: str, emit_event=None) -> str:
+async def run_adhoc_task(input: str, streamWriter=None) -> str:
     try:
-        result = await generate_and_execute_adhoc(input["description"])
+        result = await generate_and_execute_adhoc(input["description"], streamWriter)
         # Ensure the result is a string
         if isinstance(result, dict):
             result = json.dumps(result)
@@ -166,12 +166,14 @@ def convert_tool_message_to_openai_format(tool_message):
         "content": tool_message.content
     }
 
-async def generate_completion(completion_id, messages, include_tool_messages, max_tokens, temperature):
+async def generate_completion(completion_id, messages, params):
+    completion_options = set_options_from_env(params)
+    includeToolMessages = bool(params.get("include_tool_messages"))
+
     llm = ChatOpenAI(
         api_key=api_key,
         model=model,
-        max_tokens=max_tokens,
-        temperature=temperature
+        **completion_options
     ).bind_tools(completion_tools)
     completion_chain = completion_prompt.pipe(llm)
 
@@ -241,7 +243,7 @@ async def generate_completion(completion_id, messages, include_tool_messages, ma
         ]
     )
 
-    if include_tool_messages:
+    if includeToolMessages:
         tool_messages = []
         for message in tool_results_messages:
             openai_message = None
@@ -264,16 +266,18 @@ async def generate_completion(completion_id, messages, include_tool_messages, ma
 
     return JSONResponse(content=response.dict())
 
-async def stream_completion(completion_id, messages, include_tool_messages, max_tokens, temperature, streamWriter=None):
-    async for event in _stream_completion(completion_id, messages, include_tool_messages, max_tokens, temperature, streamWriter):
+async def stream_completion(completion_id, messages, params={"include_tool_messages": None, "max_tokens": None, "temperature": None}, streamWriter=None):
+    async for event in _stream_completion(completion_id, messages, params, streamWriter):
         yield event
 
-async def _stream_completion(completion_id, messages, include_tool_messages, max_tokens, temperature, streamWriter=None):
+async def _stream_completion(completion_id, messages, params, streamWriter=None):
+    includeToolMessages = bool(params.get("include_tool_messages"))
+    completion_options = set_options_from_env(params)
+
     llm = ChatOpenAI(
         api_key=api_key,
         model=model,
-        max_tokens=max_tokens,
-        temperature=temperature
+        **completion_options
     ).bind_tools(completion_tools)
     completion_chain = completion_prompt.pipe(llm)
 
@@ -347,7 +351,7 @@ async def _stream_completion(completion_id, messages, include_tool_messages, max
                         insert_newline = True # set flag to insert newline before next tokens
 
                         # Include tool messages only if includeToolMessages is true
-                        if include_tool_messages:
+                        if includeToolMessages:
                             for message in tool_messages:
                                 openai_message = None
                                 if isinstance(message, AIMessage):
@@ -398,3 +402,29 @@ async def _stream_completion(completion_id, messages, include_tool_messages, max
         }
         yield f"data: {json.dumps(error_chunk)}\n\n"
         yield "data: [DONE]\n\n"
+
+def set_options_from_env(options):
+    completion_options = {}
+    
+    # Handle standard parameters
+    if os.getenv('OPENAI_FREQUENCY_PENALTY') and options.get('frequencyPenalty') is None:
+        completion_options['frequency_penalty'] = float(os.getenv('OPENAI_FREQUENCY_PENALTY'))
+    elif options.get('frequencyPenalty') is not None:
+        completion_options['frequency_penalty'] = float(options.get('frequency_penalty'))
+        
+    if os.getenv('OPENAI_TOP_P') and options.get('topP') is None:
+        completion_options['top_p'] = float(os.getenv('OPENAI_TOP_P'))
+    elif options.get('topP') is not None:
+        completion_options['top_p'] = float(options.get('top_p'))
+    
+    # Handle temperature - ensure we don't lose this value
+    if options.get('temperature') is not None:
+        completion_options['temperature'] = float(options.get('temperature'))
+    
+    # Handle max tokens - ensure we don't lose this value
+    if options.get('max_tokens') is not None:
+        completion_options['max_tokens'] = int(options.get('max_tokens'))
+    
+    # We don't pass include_tool_messages to the LLM, it's used elsewhere
+    
+    return completion_options

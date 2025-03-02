@@ -140,7 +140,7 @@ async def completions_endpoint(request: CompletionRequest, raw_request: Request)
 
                 streamWriter = StreamWriter(completion_id, write_chunk)
                 completion_task = asyncio.create_task(
-                    stream_chunks(stream_completion(completion_id, messages, include_tool_messages, max_tokens, temperature, streamWriter), chunk_queue)
+                    stream_chunks(stream_completion(completion_id, messages, params={"include_tool_messages": include_tool_messages, "max_tokens": max_tokens, "temperature": temperature}, streamWriter=streamWriter), chunk_queue)
                 )
 
                 try:
@@ -155,7 +155,7 @@ async def completions_endpoint(request: CompletionRequest, raw_request: Request)
                     
             return StreamingResponse(stream_response(), media_type="text/event-stream")
         else:
-            return await generate_completion(completion_id, messages, include_tool_messages, max_tokens, temperature)
+            return await generate_completion(completion_id, messages, params={"include_tool_messages": include_tool_messages, "max_tokens": max_tokens, "temperature": temperature})
     except Exception as e:
         print(f"Error during completion: {e}", flush=True)
         log_err('completions', 'completions', log_body, e)
