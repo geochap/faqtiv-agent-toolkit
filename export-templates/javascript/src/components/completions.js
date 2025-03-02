@@ -369,7 +369,6 @@ async function* streamCompletion(completionId, messages, options, streamWriter) 
     while (true) {
       let hasToolCalls = false;
       for await (const event of processRequest({ conversation })) {
-        console.log(event.data);
         log('completions', 'stream-event', { event });
         if (insertNewline) {
           // Insert a newline before processing new tokens

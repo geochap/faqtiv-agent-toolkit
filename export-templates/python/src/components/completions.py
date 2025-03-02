@@ -117,6 +117,23 @@ async def process_tool_calls(tool_calls, streamWriter=None):
 
 def get_conversation_from_messages_request(messages):
     truncated_messages = get_messages_within_context_limit(model, messages)
+    
+    # Strip consecutive user messages if enabled
+    if os.getenv('STRIP_CONSECUTIVE_USER_MSGS', 'false').lower() == 'true':
+        filtered_messages = []
+        prev_role = None
+        
+        # Remove consecutive user messages
+        for msg in truncated_messages:
+            if msg.role == 'user':
+                if prev_role != 'user':
+                    filtered_messages.append(msg)
+            else:
+                filtered_messages.append(msg)
+            prev_role = msg.role
+        
+        truncated_messages = filtered_messages
+    
     def create_ai_message(msg):
         content = msg.content
         additional_kwargs = {}
