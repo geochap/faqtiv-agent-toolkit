@@ -69,7 +69,7 @@ async function processToolCalls(toolCalls, streamWriter) {
         const args = JSON.parse(toolCall.function.arguments);
         const toolCallDescription = getToolCallDescription(toolCall.function.name, args);
 
-        if (toolCallDescription) {
+        if (toolCallDescription && streamWriter && streamWriter.writeEvent) {
           streamWriter.writeEvent(toolCallDescription, model);
         }
 
@@ -316,7 +316,7 @@ async function* streamCompletion(completionId, messages, options, streamWriter) 
   const llm = new ChatOpenAI({
     apiKey,
     model,
-    ...options,
+    ...completionOptions,
     configuration: {
       defaultHeaders: {
         'Connection': 'keep-alive',
@@ -369,7 +369,6 @@ async function* streamCompletion(completionId, messages, options, streamWriter) 
     while (true) {
       let hasToolCalls = false;
       for await (const event of processRequest({ conversation })) {
-        console.log(event.data);
         log('completions', 'stream-event', { event });
         if (insertNewline) {
           // Insert a newline before processing new tokens
