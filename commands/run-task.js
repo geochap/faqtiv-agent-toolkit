@@ -7,11 +7,13 @@ import * as config from '../config.js';
 import { extractFunctionCode, getFunctionParameters } from '../lib/parse-utils.js';
 import { log, logErr } from '../lib/log4j.js';
 import { unescapeText } from '../lib/shell-utils.js';
+import { getTaskDescription, getTaskEvalPayload, recordTaskExecution } from '../lib/task-utils.js';
 
 const tmpdir = config.project.tmpDir;
 const faqtivCodeMetadataDir = config.project.metadataDir;
 const tasksDir = config.project.tasksDir;
 const codeDir = config.project.codeDir;
+const evalsDir = config.project.evalsDir;
 const { codeFileExtension, runtimeName } = config.project.runtime;
 
 function getParametrizedCode(code, parameters) {
@@ -138,12 +140,16 @@ export default async function(taskName, ...args) {
   const outputFilePath = options.output || null;
   const errorFilePath = options.error || null;
   const filesOutputDir = options.files ? path.resolve(options.files) : null;
+  const evalsFilePath = options.saveEval ? path.join(evalsDir, `${taskName}.json`) : null;
 
   const taskFile = path.join(tasksDir, `${taskName}.txt`);
   if (!fs.existsSync(taskFile)) {
     console.error(`Task "${taskName}" doesn't exist`);
     process.exit(1);
   }
+
+  // Get task description if we need to record it
+  const taskDescription = evalsFilePath ? getTaskDescription(taskFile) : '';
 
   const codeFilePath = path.join(codeDir, `${taskName}${codeFileExtension}`);
   const codeMetadataFilePath = path.join(faqtivCodeMetadataDir, `${taskName}.yml`);
@@ -161,6 +167,11 @@ export default async function(taskName, ...args) {
   if (!fs.existsSync(tmpdir)) mkdirpSync(tmpdir);
   if (filesOutputDir && !fs.existsSync(filesOutputDir)) mkdirpSync(filesOutputDir);
 
+  // Ensure evals directory exists if evalsFilePath is enabled
+  if (evalsFilePath && !fs.existsSync(evalsDir)) {
+    mkdirpSync(evalsDir);
+  }
+
   const execOptions = {
     cwd: filesOutputDir || process.cwd(),
     encoding: 'buffer'
@@ -170,18 +181,29 @@ export default async function(taskName, ...args) {
   if (outputFilePath) console.warn(`Result will be stored in ${outputFilePath}`);
   if (errorFilePath) console.warn(`Error log will be stored in ${errorFilePath}`);
   if (filesOutputDir) console.warn(`Working directory changed to ${filesOutputDir}`);
+  if (evalsFilePath) console.warn(`Task execution record will be saved to evals/${taskName}.json`);
 
   try {
     const result = await executeCodeAsync(taskName, code, runParameters, outputFilePath, errorFilePath, execOptions);
+
+    let output;
+    try {
+      output = JSON.parse(result.stdout);
+    } catch (error) {
+      output = result.stdout;
+    }
+
+    // Record task execution if evalsFilePath is enabled
+    if (evalsFilePath) {      
+     const taskEvalPayload = getTaskEvalPayload(taskName, taskDescription, runParameters, output, result.stderr);
+     recordTaskExecution(evalsFilePath, taskEvalPayload);
+    }
     
     if (result.stderr && result.stderr.length > 0) {
       throw new Error(result.stderr);
     }
-    try {
-      return JSON.parse(result.stdout);
-    } catch (error) {
-      return result.stdout;
-    }
+
+    return output
   } catch (error) {
     console.error('Error executing task:', error);
     process.exit(1);
