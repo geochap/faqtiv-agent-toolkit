@@ -5,6 +5,7 @@ import * as config from '../config.js';
 import runTask from './run-task.js';
 import { log, logErr } from '../lib/log4j.js';
 import { getTaskDescription, getTaskEvalPayload, recordTaskExecution } from '../lib/task-utils.js';
+import TaskJudgeAgent from '../ai/task-judge-agent.js';
 
 const tasksDir = config.project.tasksDir;
 const evalsDir = config.project.evalsDir;
@@ -64,10 +65,10 @@ function saveEvalComparison(taskName, previousEval, currentEval) {
 
     try {
         fs.writeFileSync(comparisonFilePath, JSON.stringify(comparisonData, null, 2));
-        console.log(`Evaluation comparison saved to ${comparisonFilePath}`);
+        console.log(`\nEvaluation comparison saved to ${comparisonFilePath}`);
         return comparisonFilePath;
     } catch (error) {
-        console.error(`Error saving evaluation comparison: ${error.message}`);
+        console.error(`\nError saving evaluation comparison: ${error.message}`);
         return null;
     }
 }
@@ -113,10 +114,54 @@ export default async function (taskName) {
             });
         }
 
-        return result;
+        // Compare previous and current executions using TaskJudgeAgent
+        const evaluation = await judgeEvals(taskName, previousEval, currentEval);
+        if (evaluation) {
+            console.log('\nEvaluation results:');
+            console.log(evaluation.evaluation);
+        }
+
+        return evaluation;
     } catch (error) {
         logErr('eval-task', taskName, { task_name: taskName }, error);
         console.error('Error evaluating task:', error);
         process.exit(1);
+    }
+}
+
+/**
+ * Evaluates task outputs using TaskJudgeAgent to compare previous and current executions
+ * @param {string} taskName - Name of the task being evaluated
+ * @param {Object} previousEval - Previous task evaluation data containing task description and output
+ * @param {string} previousEval.task_description - Task description from previous execution
+ * @param {Object} previousEval.output - Output from previous execution
+ * @param {Object} currentEval - Current task evaluation data containing task description and output
+ * @param {string} currentEval.task_description - Task description from current execution  
+ * @param {Object} currentEval.output - Output from current execution
+ * @returns {Object|null} Evaluation results containing previous and current eval data, judge evaluation text, and token usage logs. Returns null on error.
+ */
+async function judgeEvals(taskName, previousEval, currentEval) {
+    try {        
+        const taskJudge = new TaskJudgeAgent(
+            'task-judge',
+            config.openai
+        );
+
+        const evaluation = await taskJudge.evaluateTask(
+            previousEval.task_description,
+            JSON.stringify(previousEval.output, null, 2),
+            currentEval.task_description, 
+            JSON.stringify(currentEval.output, null, 2)
+        );
+
+        return {
+            previous: previousEval,
+            current: currentEval,
+            evaluation: evaluation,
+            token_usage_logs: taskJudge.getTokenUsageLogs()
+        };
+    } catch (error) {
+        console.error('Error saving evaluation comparison:', error);
+        return null;
     }
 }
