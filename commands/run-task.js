@@ -7,7 +7,7 @@ import * as config from '../config.js';
 import { extractFunctionCode, getFunctionParameters } from '../lib/parse-utils.js';
 import { log, logErr } from '../lib/log4j.js';
 import { unescapeText } from '../lib/shell-utils.js';
-import { getTaskDescription, getTaskEvalPayload, recordTaskExecution } from '../lib/task-utils.js';
+import { getTaskDescription, recordTaskExecution } from '../lib/task-utils.js';
 
 const tmpdir = config.project.tmpDir;
 const faqtivCodeMetadataDir = config.project.metadataDir;
@@ -195,8 +195,15 @@ export default async function(taskName, ...args) {
 
     // Record task execution if evalsFilePath is enabled
     if (evalsFilePath) {      
-     const taskEvalPayload = getTaskEvalPayload(taskName, taskDescription, runParameters, output, result.stderr);
-     recordTaskExecution(evalsFilePath, taskEvalPayload);
+      recordTaskExecution(
+        evalsFilePath,
+        taskName,
+        runParameters,
+        taskDescription,
+        output,
+        result.stderr,
+        true // Mark as validated by default
+      );
     }
     
     if (result.stderr && result.stderr.length > 0) {

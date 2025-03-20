@@ -4,124 +4,113 @@ import { mkdirpSync } from 'mkdirp';
 import * as config from '../config.js';
 import runTask from './run-task.js';
 import { log, logErr } from '../lib/log4j.js';
-import { getTaskDescription, getTaskEvalPayload, recordTaskExecution } from '../lib/task-utils.js';
+import { getTaskDescription, recordTaskExecution } from '../lib/task-utils.js';
 import TaskJudgeAgent from '../ai/task-judge-agent.js';
 
 const tasksDir = config.project.tasksDir;
 const evalsDir = config.project.evalsDir;
+
 /**
- * Reads the previous task execution record from the evals directory
+ * Gets all executions that have validated data
  * @param {string} taskName - Name of the task
- * @returns {object|null} - The previous task execution record or null if not found
+ * @returns {Array|null} - Array of executions with validated data, or null if not found
  */
-function readPreviousEvaluation(taskName) {
+function getExecutionsToEvaluate(taskName) {
     const evalsFilePath = path.join(evalsDir, `${taskName}.json`);
 
     try {
         if (!fs.existsSync(evalsFilePath)) {
-            console.error(`No previous evaluation found for task "${taskName}". Run the task with --save-eval first.`);
+            console.error(`No evaluation found for task "${taskName}". Run the task with --save-eval first.`);
             return null;
         }
 
         const evalData = JSON.parse(fs.readFileSync(evalsFilePath, 'utf8'));
-        return evalData;
-    } catch (error) {
-        console.error(`Error reading previous evaluation: ${error.message}`);
-        return null;
-    }
-}
-
-/**
- * Saves the comparison of previous and current task executions
- * @param {string} taskName - Name of the task
- * @param {object} previousEval - Previous task execution record
- * @param {object} currentEval - Current task execution record
- */
-function saveEvalComparison(taskName, previousEval, currentEval) {
-    // Ensure evals directory exists
-    if (!fs.existsSync(evalsDir)) {
-        mkdirpSync(evalsDir);
-    }
-
-    // Create a comparison record
-    const comparisonData = {
-        task_name: taskName,
-        parameters: previousEval.parameters,
-        previous_execution: {
-            task_description: previousEval.task_description,
-            time: previousEval.execution_time,
-            output: previousEval.output,
-            error: previousEval.error
-        },
-        current_execution: {
-            task_description: currentEval.task_description,
-            time: currentEval.execution_time,
-            output: currentEval.output,
-            error: currentEval.error
+        
+        // Filter executions that have validated data
+        const executionsToEvaluate = evalData.executions.filter(exec => 
+            exec.validated && 
+            exec.validated.task_description
+        );
+        
+        if (executionsToEvaluate.length === 0) {
+            console.error(`No executions found with validated data for task "${taskName}".`);
+            return null;
         }
-    };
-
-    const comparisonFilePath = path.join(evalsDir, `${taskName}-comparison.json`);
-
-    try {
-        fs.writeFileSync(comparisonFilePath, JSON.stringify(comparisonData, null, 2));
-        console.log(`\nEvaluation comparison saved to ${comparisonFilePath}`);
-        return comparisonFilePath;
+        
+        return executionsToEvaluate;
     } catch (error) {
-        console.error(`\nError saving evaluation comparison: ${error.message}`);
+        console.error(`Error reading evaluation data: ${error.message}`);
         return null;
     }
 }
 
 /**
- * Re-runs a task using input from a previous run and saves both outputs for comparison
+ * Evaluates all executions of a task by comparing validated and unvalidated outputs
  * @param {string} taskName - Name of the task to evaluate
  */
 export default async function (taskName) {
-    // Read previous evaluation
-    const previousEval = readPreviousEvaluation(taskName);
-    if (!previousEval) {
+    // Get all executions to evaluate
+    const executionsToEvaluate = getExecutionsToEvaluate(taskName);
+    if (!executionsToEvaluate) {
         process.exit(1);
     }
 
-    console.log(`Re-running task "${taskName}" with parameters: ${previousEval.parameters.join(', ')}`);
+    console.log(`Found ${executionsToEvaluate.length} executions to evaluate for task "${taskName}"\n`);
 
     try {
-        const evalsFilePath = path.join(evalsDir, `${taskName}-rerun.json`);
+        const evalsFilePath = path.join(evalsDir, `${taskName}.json`);
 
-        // Ensure evals directory exists if evalsFilePath is enabled
+        // Ensure evals directory exists
         if (!fs.existsSync(evalsDir)) {
             mkdirpSync(evalsDir);
         }
 
         const taskDescription = getTaskDescription(path.join(tasksDir, `${taskName}.txt`));
 
-        // Run the task with the same parameters as the previous run
-        const result = await runTask(taskName, previousEval.parameters, {});
-        const currentEval = getTaskEvalPayload(taskName, taskDescription, previousEval.parameters, result, null);
+        // Evaluate each execution
+        for (const execution of executionsToEvaluate) {
+            console.log(`\nEvaluating execution with parameters: ${execution.parameters.join(', ')}`);
+            
+            // Run the task with the same parameters as the validated execution
+            const result = await runTask(taskName, execution.parameters, {});
+            
+            // Update the main evaluation file with the unvalidated execution
+            recordTaskExecution(
+                evalsFilePath,
+                taskName,
+                execution.parameters,
+                taskDescription,
+                result,
+                null,
+                false // Mark as unvalidated
+            );
 
-        // Save the current evaluation
-        recordTaskExecution(evalsFilePath, currentEval);
-
-        // Save the comparison
-        const comparisonFilePath = saveEvalComparison(taskName, previousEval, currentEval);
-
-        if (comparisonFilePath) {
             log('eval-task', taskName, {
                 task_name: taskName,
-                parameters: previousEval.parameters,
-                comparison_file: comparisonFilePath
+                parameters: execution.parameters
             });
+
+            // Get the updated execution data with both validated and unvalidated parts
+            const updatedEvalsFilePath = path.join(evalsDir, `${taskName}.json`);
+            const updatedEvalData = JSON.parse(fs.readFileSync(updatedEvalsFilePath, 'utf8'));
+            const updatedExecution = updatedEvalData.executions.find(exec => 
+                JSON.stringify(exec.parameters) === JSON.stringify(execution.parameters)
+            );
+
+            // Compare validated and unvalidated executions using TaskJudgeAgent
+            if (updatedExecution && updatedExecution.validated && updatedExecution.unvalidated) {
+                const evaluation = await judgeEvals(taskName, updatedExecution);
+                if (evaluation) {
+                    console.log('\nEvaluation results:\n');
+                    console.log(evaluation.evaluation);
+                    console.log('\n' + '='.repeat(80) + '\n');
+                }
+            } else {
+                console.error(`Error: Unable to find updated execution data with both validated and unvalidated parts for parameters: ${execution.parameters.join(', ')}`);
+            }
         }
 
-        // Compare previous and current executions using TaskJudgeAgent
-        const evaluation = await judgeEvals(taskName, previousEval, currentEval);
-        if (evaluation) {
-            console.log('\nEvaluation results:');
-            console.log(evaluation.evaluation);
-        }
-
-        return evaluation;
+        return executionsToEvaluate;
     } catch (error) {
         logErr('eval-task', taskName, { task_name: taskName }, error);
         console.error('Error evaluating task:', error);
@@ -130,17 +119,12 @@ export default async function (taskName) {
 }
 
 /**
- * Evaluates task outputs using TaskJudgeAgent to compare previous and current executions
+ * Evaluates task outputs using TaskJudgeAgent to compare validated and unvalidated executions
  * @param {string} taskName - Name of the task being evaluated
- * @param {Object} previousEval - Previous task evaluation data containing task description and output
- * @param {string} previousEval.task_description - Task description from previous execution
- * @param {Object} previousEval.output - Output from previous execution
- * @param {Object} currentEval - Current task evaluation data containing task description and output
- * @param {string} currentEval.task_description - Task description from current execution  
- * @param {Object} currentEval.output - Output from current execution
- * @returns {Object|null} Evaluation results containing previous and current eval data, judge evaluation text, and token usage logs. Returns null on error.
+ * @param {Object} executionData - Execution data containing validated and unvalidated outputs
+ * @returns {Object|null} Evaluation results containing evaluation text and token usage logs. Returns null on error.
  */
-async function judgeEvals(taskName, previousEval, currentEval) {
+async function judgeEvals(taskName, executionData) {
     try {        
         const taskJudge = new TaskJudgeAgent(
             'task-judge',
@@ -148,20 +132,20 @@ async function judgeEvals(taskName, previousEval, currentEval) {
         );
 
         const evaluation = await taskJudge.evaluateTask(
-            previousEval.task_description,
-            JSON.stringify(previousEval.output, null, 2),
-            currentEval.task_description, 
-            JSON.stringify(currentEval.output, null, 2)
+            executionData.validated.task_description,
+            JSON.stringify(executionData.validated.output, null, 2),
+            executionData.unvalidated.task_description, 
+            JSON.stringify(executionData.unvalidated.output, null, 2)
         );
 
         return {
-            previous: previousEval,
-            current: currentEval,
+            validated: executionData.validated,
+            unvalidated: executionData.unvalidated,
             evaluation: evaluation,
             token_usage_logs: taskJudge.getTokenUsageLogs()
         };
     } catch (error) {
-        console.error('Error saving evaluation comparison:', error);
+        console.error('Error in evaluation process:', error);
         return null;
     }
 }
