@@ -45,6 +45,71 @@ function getExecutionsToEvaluate(taskName) {
 }
 
 /**
+ * Ensures the CSV file exists with headers
+ * @param {string} csvFilePath - Path to the CSV file
+ */
+function ensureCsvFileWithHeaders(csvFilePath) {
+    const headers = [
+        'ValidatedTaskDescription',
+        'UnvalidatedTaskDescription',
+        'Parameters',
+        'CorrectnessScore',
+        'CompletenessScore',
+        'RobustnessScore',
+        'Verdict',
+    ].join(',');
+    
+    if (!fs.existsSync(csvFilePath)) {
+        fs.writeFileSync(csvFilePath, headers + '\n');
+    }
+}
+
+/**
+ * Adds a row to the CSV file with evaluation data
+ * @param {string} csvFilePath - Path to the CSV file
+ * @param {Object} execution - Execution data
+ * @param {Object} jsonAnalysis - JSON analysis from the judge
+ */
+function addEvaluationRowToCsv(csvFilePath, execution, jsonAnalysis) {
+    try {
+        // Properly escape fields for CSV format 
+        const escapeForCsv = (text) => {
+            if (text === null || text === undefined) return '';
+            
+            // Convert to string, remove newlines, and properly escape by:
+            // 1. Enclosing the entire field in double quotes
+            // 2. Doubling any internal quotes (CSV standard for escaping quotes)
+            const escaped = String(text)
+                .replace(/\r?\n/g, ' ')  // Replace newlines with spaces
+                .replace(/"/g, '""');    // Double any quotes (CSV escaping standard)
+                
+            return `"${escaped}"`;  // Enclose in quotes to handle commas properly
+        };
+        
+        // Format parameters as a string
+        const formatParams = (params) => {
+            if (!params || !Array.isArray(params)) return '';
+            return escapeForCsv(params.join(', '));
+        };
+        
+        const row = [
+            escapeForCsv(execution.validated.task_description),
+            escapeForCsv(execution.unvalidated.task_description),
+            formatParams(execution.parameters),
+            jsonAnalysis.scores.correctness,
+            jsonAnalysis.scores.completeness, 
+            jsonAnalysis.scores.robustness,
+            escapeForCsv(jsonAnalysis.verdict)
+        ].join(',');
+        
+        fs.appendFileSync(csvFilePath, row + '\n');
+        console.warn(`\nEvaluation data added to CSV file: ${csvFilePath}`);
+    } catch (error) {
+        console.error(`Error adding evaluation to CSV: ${error.message}`);
+    }
+}
+
+/**
  * Evaluates all executions of a task by comparing validated and unvalidated outputs
  * @param {string} taskName - Name of the task to evaluate
  */
@@ -59,11 +124,15 @@ export default async function (taskName) {
 
     try {
         const evalsFilePath = path.join(evalsDir, `${taskName}.json`);
+        const csvFilePath = path.join(evalsDir, `${taskName}.csv`);
 
         // Ensure evals directory exists
         if (!fs.existsSync(evalsDir)) {
             mkdirpSync(evalsDir);
         }
+        
+        // Ensure CSV file exists with headers
+        ensureCsvFileWithHeaders(csvFilePath);
 
         const taskDescription = getTaskDescription(path.join(tasksDir, `${taskName}.txt`));
 
@@ -147,6 +216,9 @@ export default async function (taskName) {
                         
                         // Save the jsonAnalysis to the evaluation file
                         saveEvaluationAnalysis(evalsFilePath, execution.parameters, json);
+                        
+                        // Add evaluation data to CSV
+                        addEvaluationRowToCsv(csvFilePath, updatedExecution, json);
                     }
 
                     console.log('\n' + '='.repeat(80) + '\n');
