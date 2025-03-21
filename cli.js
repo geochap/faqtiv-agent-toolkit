@@ -80,8 +80,9 @@ program
   .action(runTask);
 
 program
-  .command('eval-task <taskName>')
-  .description('Re-run a task using input from a previous run and save both outputs for comparison')
+  .command('eval-task [taskName]')
+  .option('--all', 'Evaluate all tasks with validation data')
+  .description('Compare new task execution outputs with previously validated outputs')
   .action(evalTask);
 
 program

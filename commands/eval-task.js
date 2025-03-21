@@ -11,6 +11,49 @@ const tasksDir = config.project.tasksDir;
 const evalsDir = config.project.evalsDir;
 
 /**
+ * Gets all task names that have validation data
+ * @returns {Array} - Array of task names with validation data
+ */
+function getAllTasksWithValidationData() {
+    try {
+        if (!fs.existsSync(evalsDir)) {
+            return [];
+        }
+
+        // Get all JSON files in the evals directory
+        const evalFiles = fs.readdirSync(evalsDir)
+            .filter(file => file.endsWith('.json'));
+        
+        const tasksWithValidation = [];
+        
+        // Check each file for validated executions
+        for (const evalFile of evalFiles) {
+            try {
+                const evalData = JSON.parse(fs.readFileSync(path.join(evalsDir, evalFile), 'utf8'));
+                
+                // Check if there's at least one validated execution
+                const hasValidatedExecution = evalData.executions && 
+                    evalData.executions.some(exec => exec.validated && exec.validated.task_description);
+                
+                if (hasValidatedExecution) {
+                    // Extract task name from filename (remove .json extension)
+                    const taskName = evalFile.replace(/\.json$/, '');
+                    tasksWithValidation.push(taskName);
+                }
+            } catch (error) {
+                console.warn(`Error parsing ${evalFile}: ${error.message}`);
+                // Continue with other files
+            }
+        }
+        
+        return tasksWithValidation;
+    } catch (error) {
+        console.error(`Error getting tasks with validation data: ${error.message}`);
+        return [];
+    }
+}
+
+/**
  * Gets all executions that have validated data
  * @param {string} taskName - Name of the task
  * @returns {Array|null} - Array of executions with validated data, or null if not found
@@ -110,14 +153,15 @@ function addEvaluationRowToCsv(csvFilePath, execution, jsonAnalysis) {
 }
 
 /**
- * Evaluates all executions of a task by comparing validated and unvalidated outputs
+ * Evaluates a single task by comparing validated and unvalidated outputs
  * @param {string} taskName - Name of the task to evaluate
+ * @returns {Array|null} - Array of evaluated executions or null on error
  */
-export default async function (taskName) {
+async function evaluateTask(taskName) {
     // Get all executions to evaluate
     const executionsToEvaluate = getExecutionsToEvaluate(taskName);
     if (!executionsToEvaluate) {
-        process.exit(1);
+        return null;
     }
 
     console.log(`Found ${executionsToEvaluate.length} executions to evaluate for task "${taskName}"`);
@@ -231,8 +275,68 @@ export default async function (taskName) {
         return executionsToEvaluate;
     } catch (error) {
         logErr('eval-task', taskName, { task_name: taskName }, error);
-        console.error('Error evaluating task:', error);
+        console.error(`Error evaluating task "${taskName}": ${error.message}`);
+        return null;
+    }
+}
+
+/**
+ * Main entrypoint for the evaluation process
+ * @param {string|object} taskNameOrOptions - Either a specific task name to evaluate or options object
+ * @param {object} options - Command options (if taskNameOrOptions is a string)
+ * @returns {Promise<Array>} - Array of tasks that were evaluated
+ */
+export default async function(taskNameOrOptions, options = {}) {
+    // Handle case where first parameter is the options object
+    if (typeof taskNameOrOptions === 'object') {
+        options = taskNameOrOptions;
+        taskNameOrOptions = null;
+    }
+    
+    const taskName = taskNameOrOptions;
+    const processAllTasks = options.all || false;
+    
+    // Require either a task name or --all flag
+    if (!taskName && !processAllTasks) {
+        console.error('Error: You must provide either a task name or the --all flag.');
+        console.error('Usage:');
+        console.error('  eval-task <taskName>   - Evaluate a specific task');
+        console.error('  eval-task --all        - Evaluate all tasks with validation data');
         process.exit(1);
+    }
+    
+    if (processAllTasks) {
+        // Process all tasks that have validation data
+        const allTasks = getAllTasksWithValidationData();
+        
+        if (allTasks.length === 0) {
+            console.error('No tasks found with validation data. Run tasks with --save-eval first.');
+            process.exit(1);
+        }
+        
+        console.log(`Found ${allTasks.length} tasks with validation data: ${allTasks.join(', ')}`);
+        
+        const evaluatedTasks = [];
+        
+        // Evaluate each task sequentially
+        for (const task of allTasks) {
+            console.log(`\n${'='.repeat(40)}\nProcessing task: ${task}\n${'='.repeat(40)}\n`);
+            const result = await evaluateTask(task);
+            if (result) {
+                evaluatedTasks.push(task);
+            }
+        }
+        
+        console.log(`\nEvaluation complete for ${evaluatedTasks.length} of ${allTasks.length} tasks.`);
+        return evaluatedTasks;
+    } else {
+        // Process a single task
+        const result = await evaluateTask(taskName);
+        if (!result) {
+            process.exit(1);
+        }
+        
+        return [taskName];
     }
 }
 
