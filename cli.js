@@ -82,6 +82,7 @@ program
 program
   .command('eval-task [taskName]')
   .option('--all', 'Evaluate all tasks with validation data')
+  .option('--verbose', 'Show detailed output from task execution')
   .description('Compare new task execution outputs with previously validated outputs')
   .action(evalTask);
 

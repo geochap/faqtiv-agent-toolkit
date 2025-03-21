@@ -6,9 +6,11 @@ import runTask from './run-task.js';
 import { log, logErr } from '../lib/log4j.js';
 import { getTaskDescription, recordTaskExecution, saveEvaluationAnalysis } from '../lib/task-utils.js';
 import TaskJudgeAgent from '../ai/task-judge-agent.js';
+import { v4 as uuidv4 } from 'uuid';
 
 const tasksDir = config.project.tasksDir;
 const evalsDir = config.project.evalsDir;
+const tmpDir = config.project.tmpDir;
 
 /**
  * Gets all task names that have validation data
@@ -93,6 +95,7 @@ function getExecutionsToEvaluate(taskName) {
  */
 function ensureCsvFileWithHeaders(csvFilePath) {
     const headers = [
+        'DateTime',
         'ValidatedTaskDescription',
         'UnvalidatedTaskDescription',
         'Parameters',
@@ -135,7 +138,12 @@ function addEvaluationRowToCsv(csvFilePath, execution, jsonAnalysis) {
             return escapeForCsv(params.join(', '));
         };
         
+        // Get current datetime in ISO format
+        const now = new Date();
+        const dateTimeStr = now.toISOString();
+        
         const row = [
+            dateTimeStr,
             escapeForCsv(execution.validated.task_description),
             escapeForCsv(execution.unvalidated.task_description),
             formatParams(execution.parameters),
@@ -153,11 +161,33 @@ function addEvaluationRowToCsv(csvFilePath, execution, jsonAnalysis) {
 }
 
 /**
+ * Ensures temporary directory exists
+ * @returns {string} - Path to the temporary directory
+ */
+function ensureTmpDir() {
+    if (!fs.existsSync(tmpDir)) {
+        mkdirpSync(tmpDir);
+    }
+    return tmpDir;
+}
+
+/**
+ * Gets a temporary file path for redirecting output
+ * @returns {string} - Path to a temporary file
+ */
+function getTempFilePath() {
+    return path.join(ensureTmpDir(), `temp-output-${uuidv4()}.txt`);
+}
+
+/**
  * Evaluates a single task by comparing validated and unvalidated outputs
  * @param {string} taskName - Name of the task to evaluate
+ * @param {Object} options - Evaluation options
  * @returns {Array|null} - Array of evaluated executions or null on error
  */
-async function evaluateTask(taskName) {
+async function evaluateTask(taskName, options = {}) {
+    const verbose = options.verbose || false;
+    
     // Get all executions to evaluate
     const executionsToEvaluate = getExecutionsToEvaluate(taskName);
     if (!executionsToEvaluate) {
@@ -184,8 +214,34 @@ async function evaluateTask(taskName) {
         for (const execution of executionsToEvaluate) {
             console.log(`\nEvaluating execution with parameters: ${execution.parameters.join(', ')}`);
             
-            // Run the task with the same parameters as the validated execution
-            const result = await runTask(taskName, execution.parameters, {});
+            let result;
+            // In verbose mode, don't use temporary files at all so output goes directly to console
+            if (verbose) {
+                result = await runTask(taskName, execution.parameters, {});
+            } else {
+                // Create temporary output files
+                const tempOutputFile = getTempFilePath();
+                const tempErrorFile = getTempFilePath();
+                
+                // Redirect output and errors to temporary files to avoid console clutter
+                result = await runTask(taskName, execution.parameters, {
+                    output: tempOutputFile,
+                    error: tempErrorFile
+                });
+                
+                // Clean up temporary files
+                try {
+                    if (fs.existsSync(tempOutputFile)) {
+                        fs.unlinkSync(tempOutputFile);
+                    }
+                    if (fs.existsSync(tempErrorFile)) {
+                        fs.unlinkSync(tempErrorFile);
+                    }
+                } catch (error) {
+                    // Non-critical error, just log and continue
+                    console.warn(`Warning: Could not clean up temporary files: ${error.message}`);
+                }
+            }
             
             // Update the main evaluation file with the unvalidated execution
             recordTaskExecution(
@@ -213,50 +269,59 @@ async function evaluateTask(taskName) {
             if (updatedExecution && updatedExecution.validated && updatedExecution.unvalidated) {
                 const evaluation = await judgeEvals(updatedExecution);
                 if (evaluation) {
-                    console.log('\nEvaluation results:\n');
+                    if (verbose) {
+                        console.log('\nEvaluation results:\n');
 
-                    // Display the textual analysis if available
-                    if (evaluation.judgeResponse.textAnalysis) {
-                        console.log(evaluation.judgeResponse.textAnalysis);
-                        console.log('\n' + '='.repeat(80) + '\n');
-                    } else {
-                        console.log(evaluation.judgeResponse);
+                        // Display the textual analysis if available
+                        if (evaluation.judgeResponse.textAnalysis) {
+                            console.log(evaluation.judgeResponse.textAnalysis);
+                            console.log('\n' + '='.repeat(80) + '\n');
+                        } else {
+                            console.log(evaluation.judgeResponse);
+                        }
                     }
 
                     // Display the JSON scores and verdict if available
                     if (evaluation.judgeResponse.jsonAnalysis) {
                         const json = evaluation.judgeResponse.jsonAnalysis;
 
-                        // Display summary information
-                        if (json.summary) {
-                            console.log('SUMMARY:');
-                            console.log(`  Validated Task: ${json.summary.validated_task}`);
-                            console.log(`  Evaluated Task: ${json.summary.evaluated_task}`);
+                        // Only display detailed analysis in verbose mode
+                        if (verbose) {
+                            // Display summary information
+                            if (json.summary) {
+                                console.log('SUMMARY:');
+                                console.log(`  Validated Task: ${json.summary.validated_task}`);
+                                console.log(`  Evaluated Task: ${json.summary.evaluated_task}`);
+                            }
+
+                            // Display analysis information
+                            if (json.analysis) {
+                                console.log('\nANALYSIS:');
+                                console.log(`  Similarities: ${json.analysis.similarities}`);
+                                console.log(`  Differences: ${json.analysis.differences}`);
+                            }
+
+                            // Display semantic correctness
+                            if (json.semantic_correctness) {
+                                console.log('\nSEMANTIC CORRECTNESS:');
+                                console.log(`  ${json.semantic_correctness}`);
+                            }
+
+                            // Display scores
+                            console.log('\nSCORES:');
+                            console.log(`  Correctness: ${json.scores.correctness}/5`);
+                            console.log(`  Completeness: ${json.scores.completeness}/5`);
+                            console.log(`  Robustness: ${json.scores.robustness}/5`);
+                            console.log(`  Overall: ${json.overall_score}/15`);
                         }
 
-                        // Display analysis information
-                        if (json.analysis) {
-                            console.log('\nANALYSIS:');
-                            console.log(`  Similarities: ${json.analysis.similarities}`);
-                            console.log(`  Differences: ${json.analysis.differences}`);
-                        }
-
-                        // Display semantic correctness
-                        if (json.semantic_correctness) {
-                            console.log('\nSEMANTIC CORRECTNESS:');
-                            console.log(`  ${json.semantic_correctness}`);
-                        }
-
-                        // Display scores
-                        console.log('\nSCORES:');
-                        console.log(`  Correctness: ${json.scores.correctness}/5`);
-                        console.log(`  Completeness: ${json.scores.completeness}/5`);
-                        console.log(`  Robustness: ${json.scores.robustness}/5`);
-                        console.log(`  Overall: ${json.overall_score}/15`);
-
-                        // Display verdict
+                        // Always display verdict (essential information)
                         console.log(`\nVERDICT: ${json.verdict}`);
-                        console.log(`\nEXPLANATION: ${json.explanation}`);
+                        
+                        // Show explanation only in verbose mode
+                        if (verbose) {
+                            console.log(`\nEXPLANATION: ${json.explanation}`);
+                        }
                         
                         // Save the jsonAnalysis to the evaluation file
                         saveEvaluationAnalysis(evalsFilePath, execution.parameters, json);
@@ -265,7 +330,7 @@ async function evaluateTask(taskName) {
                         addEvaluationRowToCsv(csvFilePath, updatedExecution, json);
                     }
 
-                    console.log('\n' + '='.repeat(80) + '\n');
+                    console.log('\n' + '='.repeat(80));
                 }
             } else {
                 console.error(`Error: Unable to find updated execution data with both validated and unvalidated parts for parameters: ${execution.parameters.join(', ')}`);
@@ -321,7 +386,7 @@ export default async function(taskNameOrOptions, options = {}) {
         // Evaluate each task sequentially
         for (const task of allTasks) {
             console.log(`\n${'='.repeat(40)}\nProcessing task: ${task}\n${'='.repeat(40)}\n`);
-            const result = await evaluateTask(task);
+            const result = await evaluateTask(task, options);
             if (result) {
                 evaluatedTasks.push(task);
             }
@@ -331,7 +396,7 @@ export default async function(taskNameOrOptions, options = {}) {
         return evaluatedTasks;
     } else {
         // Process a single task
-        const result = await evaluateTask(taskName);
+        const result = await evaluateTask(taskName, options);
         if (!result) {
             process.exit(1);
         }
