@@ -19,9 +19,34 @@ export default class TaskJudgeAgent {
     const prompt = [new HumanMessage(promptText)];
     
     const messages = await this.ai.start(null, prompt, [], 'evaluate-task');
-    const evaluation = messages[messages.length - 1].content.trim();
+    const fullResponse = messages[messages.length - 1].content.trim();
+
+    // Extract and parse the JSON part if possible
+    try {
+      // Look for JSON pattern within the response
+      const jsonMatch = fullResponse.match(/```json\s*(\{[\s\S]*?\})\s*```/);
+
+      if (jsonMatch && jsonMatch[1]) {
+        const jsonString = jsonMatch[1].trim();
+        const jsonAnalysis = JSON.parse(jsonString);
+
+        // Remove the JSON part from the textAnalysis to keep only the pure text analysis
+        const textAnalysis = fullResponse
+          .replace(/```json\s*\{[\s\S]*?\}\s*```/, '')
+          .trim();
+
+        // Return both the cleaned text analysis and the structured JSON
+        return {
+          textAnalysis,
+          jsonAnalysis
+        };
+      }
+    } catch (error) {
+      console.warn('Failed to parse JSON from evaluation response:', error);
+    }
     
-    return evaluation;
+    // If JSON parsing fails, return the full text as before
+    return fullResponse;
   }
 
   getTokenUsageLogs() {

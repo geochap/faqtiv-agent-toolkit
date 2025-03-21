@@ -4,7 +4,7 @@ import { mkdirpSync } from 'mkdirp';
 import * as config from '../config.js';
 import runTask from './run-task.js';
 import { log, logErr } from '../lib/log4j.js';
-import { getTaskDescription, recordTaskExecution } from '../lib/task-utils.js';
+import { getTaskDescription, recordTaskExecution, saveEvaluationAnalysis } from '../lib/task-utils.js';
 import TaskJudgeAgent from '../ai/task-judge-agent.js';
 
 const tasksDir = config.project.tasksDir;
@@ -55,7 +55,7 @@ export default async function (taskName) {
         process.exit(1);
     }
 
-    console.log(`Found ${executionsToEvaluate.length} executions to evaluate for task "${taskName}"\n`);
+    console.log(`Found ${executionsToEvaluate.length} executions to evaluate for task "${taskName}"`);
 
     try {
         const evalsFilePath = path.join(evalsDir, `${taskName}.json`);
@@ -91,18 +91,64 @@ export default async function (taskName) {
             });
 
             // Get the updated execution data with both validated and unvalidated parts
-            const updatedEvalsFilePath = path.join(evalsDir, `${taskName}.json`);
-            const updatedEvalData = JSON.parse(fs.readFileSync(updatedEvalsFilePath, 'utf8'));
+            const updatedEvalData = JSON.parse(fs.readFileSync(evalsFilePath, 'utf8'));
             const updatedExecution = updatedEvalData.executions.find(exec => 
                 JSON.stringify(exec.parameters) === JSON.stringify(execution.parameters)
             );
 
             // Compare validated and unvalidated executions using TaskJudgeAgent
             if (updatedExecution && updatedExecution.validated && updatedExecution.unvalidated) {
-                const evaluation = await judgeEvals(taskName, updatedExecution);
+                const evaluation = await judgeEvals(updatedExecution);
                 if (evaluation) {
                     console.log('\nEvaluation results:\n');
-                    console.log(evaluation.evaluation);
+
+                    // Display the textual analysis if available
+                    if (evaluation.judgeResponse.textAnalysis) {
+                        console.log(evaluation.judgeResponse.textAnalysis);
+                        console.log('\n' + '='.repeat(80) + '\n');
+                    } else {
+                        console.log(evaluation.judgeResponse);
+                    }
+
+                    // Display the JSON scores and verdict if available
+                    if (evaluation.judgeResponse.jsonAnalysis) {
+                        const json = evaluation.judgeResponse.jsonAnalysis;
+
+                        // Display summary information
+                        if (json.summary) {
+                            console.log('SUMMARY:');
+                            console.log(`  Validated Task: ${json.summary.validated_task}`);
+                            console.log(`  Evaluated Task: ${json.summary.evaluated_task}`);
+                        }
+
+                        // Display analysis information
+                        if (json.analysis) {
+                            console.log('\nANALYSIS:');
+                            console.log(`  Similarities: ${json.analysis.similarities}`);
+                            console.log(`  Differences: ${json.analysis.differences}`);
+                        }
+
+                        // Display semantic correctness
+                        if (json.semantic_correctness) {
+                            console.log('\nSEMANTIC CORRECTNESS:');
+                            console.log(`  ${json.semantic_correctness}`);
+                        }
+
+                        // Display scores
+                        console.log('\nSCORES:');
+                        console.log(`  Correctness: ${json.scores.correctness}/5`);
+                        console.log(`  Completeness: ${json.scores.completeness}/5`);
+                        console.log(`  Robustness: ${json.scores.robustness}/5`);
+                        console.log(`  Overall: ${json.overall_score}/15`);
+
+                        // Display verdict
+                        console.log(`\nVERDICT: ${json.verdict}`);
+                        console.log(`\nEXPLANATION: ${json.explanation}`);
+                        
+                        // Save the jsonAnalysis to the evaluation file
+                        saveEvaluationAnalysis(evalsFilePath, execution.parameters, json);
+                    }
+
                     console.log('\n' + '='.repeat(80) + '\n');
                 }
             } else {
@@ -120,18 +166,17 @@ export default async function (taskName) {
 
 /**
  * Evaluates task outputs using TaskJudgeAgent to compare validated and unvalidated executions
- * @param {string} taskName - Name of the task being evaluated
  * @param {Object} executionData - Execution data containing validated and unvalidated outputs
  * @returns {Object|null} Evaluation results containing evaluation text and token usage logs. Returns null on error.
  */
-async function judgeEvals(taskName, executionData) {
+async function judgeEvals(executionData) {
     try {        
         const taskJudge = new TaskJudgeAgent(
             'task-judge',
             config.openai
         );
 
-        const evaluation = await taskJudge.evaluateTask(
+        const judgeResponse = await taskJudge.evaluateTask(
             executionData.validated.task_description,
             JSON.stringify(executionData.validated.output, null, 2),
             executionData.unvalidated.task_description, 
@@ -141,7 +186,7 @@ async function judgeEvals(taskName, executionData) {
         return {
             validated: executionData.validated,
             unvalidated: executionData.unvalidated,
-            evaluation: evaluation,
+            judgeResponse,
             token_usage_logs: taskJudge.getTokenUsageLogs()
         };
     } catch (error) {
