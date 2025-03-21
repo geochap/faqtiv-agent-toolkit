@@ -7,6 +7,7 @@ import { log, logErr } from '../lib/log4j.js';
 import { getTaskDescription, recordTaskExecution, saveEvaluationAnalysis } from '../lib/task-utils.js';
 import TaskJudgeAgent from '../ai/task-judge-agent.js';
 import { v4 as uuidv4 } from 'uuid';
+import os from 'os';
 
 const tasksDir = config.project.tasksDir;
 const evalsDir = config.project.evalsDir;
@@ -381,18 +382,62 @@ export default async function(taskNameOrOptions, options = {}) {
         
         console.log(`Found ${allTasks.length} tasks with validation data: ${allTasks.join(', ')}`);
         
-        const evaluatedTasks = [];
+        // Determine the optimal number of concurrent tasks based on available CPU cores
+        // Get the number of available CPU cores
+        const cpuCount = os.cpus().length;
         
-        // Evaluate each task sequentially
-        for (const task of allTasks) {
-            console.log(`\n${'='.repeat(40)}\nProcessing task: ${task}\n${'='.repeat(40)}\n`);
-            const result = await evaluateTask(task, options);
-            if (result) {
-                evaluatedTasks.push(task);
+        // Calculate the optimal concurrency:
+        // - Minimum of 2 tasks to ensure some parallelism
+        // - Maximum of cpuCount-1 to leave one core for the system
+        // - If system has only 1 core, still use 1
+        const MAX_CONCURRENT_TASKS = Math.max(2, Math.min(cpuCount - 1, 8));
+        
+        console.log(`Running with ${MAX_CONCURRENT_TASKS} concurrent tasks based on ${cpuCount} CPU cores`);
+        
+        // Process tasks in parallel with a concurrency limit
+        const evaluatedTasks = [];
+        const failedTasks = [];
+        
+        // Create a function to process tasks in batches
+        async function processBatch(taskBatch) {
+            const promises = taskBatch.map(async (task) => {
+                try {
+                    console.log(`\n${'='.repeat(40)}\nProcessing task: ${task}\n${'='.repeat(40)}\n`);
+                    const result = await evaluateTask(task, options);
+                    if (result) {
+                        return { task, success: true };
+                    } else {
+                        return { task, success: false };
+                    }
+                } catch (error) {
+                    console.error(`Error processing task ${task}: ${error.message}`);
+                    return { task, success: false, error: error.message };
+                }
+            });
+            
+            return Promise.all(promises);
+        }
+        
+        // Process tasks in batches to control concurrency
+        for (let i = 0; i < allTasks.length; i += MAX_CONCURRENT_TASKS) {
+            const taskBatch = allTasks.slice(i, i + MAX_CONCURRENT_TASKS);
+            const results = await processBatch(taskBatch);
+            
+            // Collect results
+            for (const result of results) {
+                if (result.success) {
+                    evaluatedTasks.push(result.task);
+                } else {
+                    failedTasks.push(result.task);
+                }
             }
         }
         
         console.log(`\nEvaluation complete for ${evaluatedTasks.length} of ${allTasks.length} tasks.`);
+        if (failedTasks.length > 0) {
+            console.log(`Failed tasks: ${failedTasks.join(', ')}`);
+        }
+        
         return evaluatedTasks;
     } else {
         // Process a single task
