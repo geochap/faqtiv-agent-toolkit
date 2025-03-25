@@ -7,7 +7,7 @@ import * as config from '../config.js';
 import { extractFunctionCode, getFunctionParameters } from '../lib/parse-utils.js';
 import { log, logErr } from '../lib/log4j.js';
 import { unescapeText } from '../lib/shell-utils.js';
-import { getTaskDescription, recordTaskExecution } from '../lib/task-utils.js';
+import { getTaskDescription, recordTaskExecution, getExecutionFileName } from '../lib/task-utils.js';
 
 const tmpdir = config.project.tmpDir;
 const faqtivCodeMetadataDir = config.project.metadataDir;
@@ -47,7 +47,7 @@ function executeJS(taskName, code, runParameters, outputFilePath, errorFilePath,
         }
       }, 
       (error, stdout, stderr) => {
-        const result = getExecutionHandler(taskName, runParameters, tempFileName, outputFilePath, errorFilePath)(error, stdout, stderr);
+        const result = getExecutionHandler(taskName, runParameters, tempFileName, outputFilePath, errorFilePath, execOptions)(error, stdout, stderr);
         resolve(result);
       }
     );
@@ -65,14 +65,14 @@ function executePython(taskName, code, runParameters, outputFilePath, errorFileP
     exec(
       activateCommand,
       (error, stdout, stderr) => {
-        const result = getExecutionHandler(taskName, runParameters, tempFileName, outputFilePath, errorFilePath)(error, stdout, stderr);
+        const result = getExecutionHandler(taskName, runParameters, tempFileName, outputFilePath, errorFilePath, execOptions)(error, stdout, stderr);
         resolve(result);
       }
     );
   });
 }
 
-function getExecutionHandler(taskName, runParameters, tempFileName, outputFilePath, errorFilePath) {
+function getExecutionHandler(taskName, runParameters, tempFileName, outputFilePath, errorFilePath, options) {
   const startTime = new Date();
 
   return (error, stdout, stderr) => {
@@ -96,7 +96,7 @@ function getExecutionHandler(taskName, runParameters, tempFileName, outputFilePa
     if (stdout) {
       if (outputFilePath) {
         fs.writeFileSync(path.join(outputFilePath), stdout);
-      } else {
+      } else if (!options.silent) {  // Only write to stdout if not silent
         process.stdout.write(stdout);
       }
     }
@@ -107,11 +107,11 @@ function getExecutionHandler(taskName, runParameters, tempFileName, outputFilePa
 
       if (errorFilePath) {
         fs.writeFileSync(path.join(errorFilePath), errorMessage);
-      } else {
+      } else if (!options.silent) {  // Only log errors if not silent
         logErr('run-task', taskName, { task_name: taskName, task_parameters: runParameters }, error);
         process.stderr.write(errorMessage);
       }
-    } else {
+    } else if (!options.silent) {  // Only log success if not silent
       log('run-task', taskName, result.metadata);
     }
 
@@ -140,7 +140,9 @@ export default async function(taskName, ...args) {
   const outputFilePath = options.output || null;
   const errorFilePath = options.error || null;
   const filesOutputDir = options.files ? path.resolve(options.files) : null;
-  const evalsFilePath = options.saveEval ? path.join(evalsDir, `${taskName}.json`) : null;
+  const evalsFilePath = options.saveEval ? 
+    path.join(evalsDir, getExecutionFileName(taskName, runParameters)) : null;
+  const silent = options.silent || false;
 
   const taskFile = path.join(tasksDir, `${taskName}.txt`);
   if (!fs.existsSync(taskFile)) {
@@ -174,17 +176,23 @@ export default async function(taskName, ...args) {
 
   const execOptions = {
     cwd: filesOutputDir || process.cwd(),
-    encoding: 'buffer'
+    encoding: 'buffer',
+    silent
   };
 
-  console.warn(`\nRun process initiated for ${taskName} (${runParameters.join(', ')})...\n`);
-  if (outputFilePath) console.warn(`Result will be stored in ${outputFilePath}`);
-  if (errorFilePath) console.warn(`Error log will be stored in ${errorFilePath}`);
-  if (filesOutputDir) console.warn(`Working directory changed to ${filesOutputDir}`);
-  if (evalsFilePath) console.warn(`Task execution record will be saved to evals/${taskName}.json`);
+  if (!silent) {
+    console.warn(`\nRun process initiated for ${taskName} (${runParameters.join(', ')})...\n`);
+    if (outputFilePath) console.warn(`Result will be stored in ${outputFilePath}`);
+    if (errorFilePath) console.warn(`Error log will be stored in ${errorFilePath}`);
+    if (filesOutputDir) console.warn(`Working directory changed to ${filesOutputDir}`);
+    if (evalsFilePath) console.warn(`Task execution record will be saved to evals/${taskName}.json`);
+  }
 
   try {
-    const result = await executeCodeAsync(taskName, code, runParameters, outputFilePath, errorFilePath, execOptions);
+    const result = await executeCodeAsync(taskName, code, runParameters, 
+      silent ? null : outputFilePath, 
+      silent ? null : errorFilePath, 
+      execOptions);
 
     let output;
     try {
@@ -202,7 +210,8 @@ export default async function(taskName, ...args) {
         taskDescription,
         output,
         result.stderr,
-        true // Mark as validated by default
+        true, // Mark as validated by default
+        { silent: options.silent }
       );
     }
     

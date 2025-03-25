@@ -4,7 +4,7 @@ import { mkdirpSync } from 'mkdirp';
 import * as config from '../config.js';
 import runTask from './run-task.js';
 import { log, logErr } from '../lib/log4j.js';
-import { getTaskDescription, recordTaskExecution, saveEvaluationAnalysis } from '../lib/task-utils.js';
+import { getTaskDescription, recordTaskExecution, saveEvaluationAnalysis, getExecutionFileName } from '../lib/task-utils.js';
 import TaskJudgeAgent from '../ai/task-judge-agent.js';
 import { v4 as uuidv4 } from 'uuid';
 import os from 'os';
@@ -23,25 +23,23 @@ function getAllTasksWithValidationData() {
             return [];
         }
 
+        // Create a Set to store unique task names
+        const tasksWithValidation = new Set();
+        
         // Get all JSON files in the evals directory
         const evalFiles = fs.readdirSync(evalsDir)
             .filter(file => file.endsWith('.json'));
-        
-        const tasksWithValidation = [];
         
         // Check each file for validated executions
         for (const evalFile of evalFiles) {
             try {
                 const evalData = JSON.parse(fs.readFileSync(path.join(evalsDir, evalFile), 'utf8'));
                 
-                // Check if there's at least one validated execution
-                const hasValidatedExecution = evalData.executions && 
-                    evalData.executions.some(exec => exec.validated && exec.validated.task_description);
-                
-                if (hasValidatedExecution) {
-                    // Extract task name from filename (remove .json extension)
-                    const taskName = evalFile.replace(/\.json$/, '');
-                    tasksWithValidation.push(taskName);
+                // Check if this is a validated execution
+                if (evalData.validated && evalData.validated.task_description) {
+                    // Extract task name from the execution file
+                    const taskName = evalData.task_name || evalFile.split('__')[0];
+                    tasksWithValidation.add(taskName);
                 }
             } catch (error) {
                 console.warn(`Error parsing ${evalFile}: ${error.message}`);
@@ -49,7 +47,7 @@ function getAllTasksWithValidationData() {
             }
         }
         
-        return tasksWithValidation;
+        return Array.from(tasksWithValidation);
     } catch (error) {
         console.error(`Error getting tasks with validation data: ${error.message}`);
         return [];
@@ -62,21 +60,42 @@ function getAllTasksWithValidationData() {
  * @returns {Array|null} - Array of executions with validated data, or null if not found
  */
 function getExecutionsToEvaluate(taskName) {
-    const evalsFilePath = path.join(evalsDir, `${taskName}.json`);
-
     try {
-        if (!fs.existsSync(evalsFilePath)) {
-            console.error(`No evaluation found for task "${taskName}". Run the task with --save-eval first.`);
+        if (!fs.existsSync(evalsDir)) {
+            console.error(`Evaluations directory ${evalsDir} not found.`);
             return null;
         }
 
-        const evalData = JSON.parse(fs.readFileSync(evalsFilePath, 'utf8'));
+        const executionsToEvaluate = [];
         
-        // Filter executions that have validated data
-        const executionsToEvaluate = evalData.executions.filter(exec => 
-            exec.validated && 
-            exec.validated.task_description
-        );
+        // Get all JSON files in the evals directory that match the task name
+        const evalFiles = fs.readdirSync(evalsDir)
+            .filter(file => file.startsWith(`${taskName}__`) && file.endsWith('.json'));
+        
+        if (evalFiles.length === 0) {
+            console.error(`No evaluation found for task "${taskName}". Run the task with --save-eval first.`);
+            return null;
+        }
+        
+        // Check each file for validated data
+        for (const evalFile of evalFiles) {
+            try {
+                const evalData = JSON.parse(fs.readFileSync(path.join(evalsDir, evalFile), 'utf8'));
+                
+                // Check if this is a validated execution
+                if (evalData.validated && evalData.validated.task_description) {
+                    executionsToEvaluate.push({
+                        taskName,
+                        parameters: evalData.parameters || [],
+                        validated: evalData.validated,
+                        fileName: evalFile
+                    });
+                }
+            } catch (error) {
+                console.warn(`Error parsing ${evalFile}: ${error.message}`);
+                // Continue with other files
+            }
+        }
         
         if (executionsToEvaluate.length === 0) {
             console.error(`No executions found with validated data for task "${taskName}".`);
@@ -91,10 +110,11 @@ function getExecutionsToEvaluate(taskName) {
 }
 
 /**
- * Ensures the CSV file exists with headers
+ * Creates a new CSV file with headers
  * @param {string} csvFilePath - Path to the CSV file
+ * @param {Object} options - Additional options (e.g. silent mode)
  */
-function ensureCsvFileWithHeaders(csvFilePath) {
+function createCsvFileWithHeaders(csvFilePath, options = {}) {
     const headers = [
         'DateTime',
         'ValidatedTaskDescription',
@@ -106,8 +126,11 @@ function ensureCsvFileWithHeaders(csvFilePath) {
         'Verdict',
     ].join(',');
     
-    if (!fs.existsSync(csvFilePath)) {
-        fs.writeFileSync(csvFilePath, headers + '\n');
+    // Always write headers, overwriting any existing file
+    fs.writeFileSync(csvFilePath, headers + '\n');
+    
+    if (!options.silent) {
+        console.log(`Created new CSV file: ${csvFilePath}`);
     }
 }
 
@@ -116,8 +139,9 @@ function ensureCsvFileWithHeaders(csvFilePath) {
  * @param {string} csvFilePath - Path to the CSV file
  * @param {Object} execution - Execution data
  * @param {Object} jsonAnalysis - JSON analysis from the judge
+ * @param {Object} options - Additional options (e.g. silent mode)
  */
-function addEvaluationRowToCsv(csvFilePath, execution, jsonAnalysis) {
+function addEvaluationRowToCsv(csvFilePath, execution, jsonAnalysis, options = {}) {
     try {
         // Properly escape fields for CSV format 
         const escapeForCsv = (text) => {
@@ -141,8 +165,8 @@ function addEvaluationRowToCsv(csvFilePath, execution, jsonAnalysis) {
         
         // Get current datetime in ISO format
         const now = new Date();
-        const dateTimeStr = now.toISOString();
-        
+        const dateTimeStr = execution.unvalidated.time;
+
         const row = [
             dateTimeStr,
             escapeForCsv(execution.validated.task_description),
@@ -155,122 +179,138 @@ function addEvaluationRowToCsv(csvFilePath, execution, jsonAnalysis) {
         ].join(',');
         
         fs.appendFileSync(csvFilePath, row + '\n');
-        console.warn(`\nEvaluation data added to CSV file: ${csvFilePath}`);
+        
+        if (!options.silent) {
+            console.warn(`\nEvaluation data added to CSV file: ${csvFilePath}`);
+        }
     } catch (error) {
         console.error(`Error adding evaluation to CSV: ${error.message}`);
     }
 }
 
 /**
- * Ensures temporary directory exists
- * @returns {string} - Path to the temporary directory
+ * Main entrypoint for the evaluation process
+ * @param {string|object} taskNameOrOptions - Either a specific task name to evaluate or options object
+ * @param {object} options - Command options (if taskNameOrOptions is a string)
+ * @returns {Promise<Array>} - Array of tasks that were evaluated
  */
-function ensureTmpDir() {
-    if (!fs.existsSync(tmpDir)) {
-        mkdirpSync(tmpDir);
+export default async function(taskNameOrOptions, options = {}) {
+    // Handle case where first parameter is the options object
+    if (typeof taskNameOrOptions === 'object') {
+        options = taskNameOrOptions;
+        taskNameOrOptions = null;
     }
-    return tmpDir;
-}
-
-/**
- * Gets a temporary file path for redirecting output
- * @returns {string} - Path to a temporary file
- */
-function getTempFilePath() {
-    return path.join(ensureTmpDir(), `temp-output-${uuidv4()}.txt`);
-}
-
-/**
- * Evaluates a single task by comparing validated and unvalidated outputs
- * @param {string} taskName - Name of the task to evaluate
- * @param {Object} options - Evaluation options
- * @returns {Array|null} - Array of evaluated executions or null on error
- */
-async function evaluateTask(taskName, options = {}) {
-    const verbose = options.verbose || false;
     
-    // Get all executions to evaluate
-    const executionsToEvaluate = getExecutionsToEvaluate(taskName);
-    if (!executionsToEvaluate) {
-        return null;
+    const taskName = taskNameOrOptions;
+    const processAllTasks = options.all || false;
+    const concurrency = options.concurrency || 10; // Default to 10 concurrent executions
+    
+    // Require either a task name or --all flag
+    if (!taskName && !processAllTasks) {
+        console.error('Error: You must provide either a task name or the --all flag.');
+        console.error('Usage:');
+        console.error('  eval-task <taskName>   - Evaluate a specific task');
+        console.error('  eval-task --all        - Evaluate all tasks with validation data');
+        process.exit(1);
+    }
+    
+    let allTasks = [];
+    
+    if (processAllTasks) {
+        // Get all tasks that have validation data
+        allTasks = getAllTasksWithValidationData();
+        
+        if (allTasks.length === 0) {
+            console.error('No tasks found with validation data. Run tasks with --save-eval first.');
+            process.exit(1);
+        }
+    } else {
+        // Single task
+        allTasks = [taskName];
+    }
+    
+    // Collect all executions from all tasks
+    const allExecutions = [];
+    
+    for (const currentTask of allTasks) {
+        const executions = getExecutionsToEvaluate(currentTask);
+        if (executions) {
+            allExecutions.push(...executions);
+        } else {
+            console.error(`No valid executions found for task "${currentTask}"`);
+        }
+    }
+    
+    if (allExecutions.length === 0) {
+        console.error('No executions found to evaluate.');
+        process.exit(1);
+    }
+    
+    console.log(`Found a total of ${allExecutions.length} executions across ${allTasks.length} tasks to evaluate`);
+
+    // Print list of tasks to process
+    console.log('\nTasks to process:');
+    for (const task of allTasks) {
+        const taskExecutions = allExecutions.filter(e => e.taskName === task);
+        console.log(`- ${task} (${taskExecutions.length} executions)`);
     }
 
-    console.log(`Found ${executionsToEvaluate.length} executions to evaluate for task "${taskName}"`);
-
-    try {
-        const evalsFilePath = path.join(evalsDir, `${taskName}.json`);
-        const csvFilePath = path.join(evalsDir, `${taskName}.csv`);
-
-        // Ensure evals directory exists
-        if (!fs.existsSync(evalsDir)) {
-            mkdirpSync(evalsDir);
-        }
-        
-        // Ensure CSV file exists with headers
-        ensureCsvFileWithHeaders(csvFilePath);
-
-        const taskDescription = getTaskDescription(path.join(tasksDir, `${taskName}.txt`));
-
-        // Evaluate each execution
-        for (const execution of executionsToEvaluate) {
-            console.log(`\nEvaluating execution with parameters: ${execution.parameters.join(', ')}`);
+    // Only mention concurrency if there's more than one execution
+    if (allExecutions.length > 1) {
+        console.log(`\nRunning with concurrency of ${concurrency} executions in parallel`);
+    }
+    
+    // Process all executions in parallel with concurrency limit
+    const successfulExecutions = [];
+    const failedExecutions = [];
+    
+    async function processExecution(execution) {
+        const currentTaskName = execution.taskName;
+        try {
+            console.log(`\nEvaluating task "${currentTaskName}" with parameters: ${execution.parameters.join(', ')}`);
             
+            const taskDescription = getTaskDescription(path.join(tasksDir, `${currentTaskName}.txt`));
+
             let result;
-            // In verbose mode, don't use temporary files at all so output goes directly to console
-            if (verbose) {
-                result = await runTask(taskName, execution.parameters, {});
+            // Run the task with default options
+            if (options.verbose) {
+                result = await runTask(currentTaskName, execution.parameters, {});
             } else {
-                // Create temporary output files
-                const tempOutputFile = getTempFilePath();
-                const tempErrorFile = getTempFilePath();
-                
-                // Redirect output and errors to temporary files to avoid console clutter
-                result = await runTask(taskName, execution.parameters, {
-                    output: tempOutputFile,
-                    error: tempErrorFile
+                // Run the task with silent mode to suppress console output
+                result = await runTask(currentTaskName, execution.parameters, {
+                    silent: !options.verbose
                 });
-                
-                // Clean up temporary files
-                try {
-                    if (fs.existsSync(tempOutputFile)) {
-                        fs.unlinkSync(tempOutputFile);
-                    }
-                    if (fs.existsSync(tempErrorFile)) {
-                        fs.unlinkSync(tempErrorFile);
-                    }
-                } catch (error) {
-                    // Non-critical error, just log and continue
-                    console.warn(`Warning: Could not clean up temporary files: ${error.message}`);
-                }
             }
+
+            // Create a unique filename for this execution
+            const executionFileName = getExecutionFileName(currentTaskName, execution.parameters);
+            const executionFilePath = path.join(evalsDir, executionFileName);
             
-            // Update the main evaluation file with the unvalidated execution
+            // Record the unvalidated execution to its own file
             recordTaskExecution(
-                evalsFilePath,
-                taskName,
+                executionFilePath,
+                currentTaskName,
                 execution.parameters,
                 taskDescription,
                 result,
-                null,
-                false // Mark as unvalidated
+                null, // No error
+                false, // Mark as unvalidated
+                { silent: !options.verbose } // Pass silent option
             );
 
-            log('eval-task', taskName, {
-                task_name: taskName,
+            log('eval-task', currentTaskName, {
+                task_name: currentTaskName,
                 parameters: execution.parameters
             });
 
-            // Get the updated execution data with both validated and unvalidated parts
-            const updatedEvalData = JSON.parse(fs.readFileSync(evalsFilePath, 'utf8'));
-            const updatedExecution = updatedEvalData.executions.find(exec => 
-                JSON.stringify(exec.parameters) === JSON.stringify(execution.parameters)
-            );
+            // Get the updated execution data from file
+            const updatedExecution = JSON.parse(fs.readFileSync(executionFilePath, 'utf8'));
 
             // Compare validated and unvalidated executions using TaskJudgeAgent
-            if (updatedExecution && updatedExecution.validated && updatedExecution.unvalidated) {
+            if (updatedExecution.validated && updatedExecution.unvalidated) {
                 const evaluation = await judgeEvals(updatedExecution);
                 if (evaluation) {
-                    if (verbose) {
+                    if (options.verbose) {
                         console.log('\nEvaluation results:\n');
 
                         // Display the textual analysis if available
@@ -287,7 +327,7 @@ async function evaluateTask(taskName, options = {}) {
                         const json = evaluation.judgeResponse.jsonAnalysis;
 
                         // Only display detailed analysis in verbose mode
-                        if (verbose) {
+                        if (options.verbose) {
                             // Display summary information
                             if (json.summary) {
                                 console.log('SUMMARY:');
@@ -317,137 +357,109 @@ async function evaluateTask(taskName, options = {}) {
                         }
 
                         // Always display verdict (essential information)
-                        console.log(`\nVERDICT: ${json.verdict}`);
+                        console.log(`\nVERDICT for ${currentTaskName} (${execution.parameters.join(', ')}): ${json.verdict}`);
                         
                         // Show explanation only in verbose mode
-                        if (verbose) {
+                        if (options.verbose) {
                             console.log(`\nEXPLANATION: ${json.explanation}`);
                         }
                         
-                        // Save the jsonAnalysis to the evaluation file
-                        saveEvaluationAnalysis(evalsFilePath, execution.parameters, json);
+                        // Save the jsonAnalysis to the execution file
+                        saveEvaluationAnalysis(
+                            executionFilePath, 
+                            execution.parameters, 
+                            json,
+                            { silent: !options.verbose }
+                        );
                         
-                        // Add evaluation data to CSV
-                        addEvaluationRowToCsv(csvFilePath, updatedExecution, json);
+                        // Show separator only in verbose mode
+                        if (options.verbose) {
+                            console.log('\n' + '='.repeat(80));
+                        }
+                        return { 
+                            success: true, 
+                            taskName: currentTaskName, 
+                            parameters: execution.parameters,
+                            executionFilePath: executionFilePath 
+                        };
                     }
-
-                    console.log('\n' + '='.repeat(80));
                 }
             } else {
-                console.error(`Error: Unable to find updated execution data with both validated and unvalidated parts for parameters: ${execution.parameters.join(', ')}`);
+                console.error(`Error: Unable to find both validated and unvalidated data for task "${currentTaskName}" with parameters: ${execution.parameters.join(', ')}`);
+                return { success: false, taskName: currentTaskName, parameters: execution.parameters, error: 'Missing validation data' };
+            }
+        } catch (error) {
+            console.error(`Error processing task "${currentTaskName}" with parameters ${execution.parameters.join(', ')}: ${error.message}`);
+            return { success: false, taskName: currentTaskName, parameters: execution.parameters, error: error.message };
+        }
+    }
+    
+    // Process executions in batches to control concurrency
+    for (let i = 0; i < allExecutions.length; i += concurrency) {
+        const executionBatch = allExecutions.slice(i, i + concurrency);
+        const promises = executionBatch.map(execution => processExecution(execution));
+        const results = await Promise.all(promises);
+        
+        // Collect results
+        for (const result of results) {
+            if (result && result.success) {
+                successfulExecutions.push(result);
+            } else if (result) {
+                failedExecutions.push(result);
             }
         }
-
-        return executionsToEvaluate;
-    } catch (error) {
-        logErr('eval-task', taskName, { task_name: taskName }, error);
-        console.error(`Error evaluating task "${taskName}": ${error.message}`);
-        return null;
-    }
-}
-
-/**
- * Main entrypoint for the evaluation process
- * @param {string|object} taskNameOrOptions - Either a specific task name to evaluate or options object
- * @param {object} options - Command options (if taskNameOrOptions is a string)
- * @returns {Promise<Array>} - Array of tasks that were evaluated
- */
-export default async function(taskNameOrOptions, options = {}) {
-    // Handle case where first parameter is the options object
-    if (typeof taskNameOrOptions === 'object') {
-        options = taskNameOrOptions;
-        taskNameOrOptions = null;
     }
     
-    const taskName = taskNameOrOptions;
-    const processAllTasks = options.all || false;
+    // Now generate all CSV files by reading from JSON files
+    const processedTasks = new Set();
     
-    // Require either a task name or --all flag
-    if (!taskName && !processAllTasks) {
-        console.error('Error: You must provide either a task name or the --all flag.');
-        console.error('Usage:');
-        console.error('  eval-task <taskName>   - Evaluate a specific task');
-        console.error('  eval-task --all        - Evaluate all tasks with validation data');
-        process.exit(1);
-    }
-    
-    if (processAllTasks) {
-        // Process all tasks that have validation data
-        const allTasks = getAllTasksWithValidationData();
+    for (const execution of successfulExecutions) {
+        const currentTaskName = execution.taskName;
         
-        if (allTasks.length === 0) {
-            console.error('No tasks found with validation data. Run tasks with --save-eval first.');
-            process.exit(1);
+        // Process each task only once
+        if (processedTasks.has(currentTaskName)) {
+            continue;
         }
         
-        console.log(`Found ${allTasks.length} tasks with validation data: ${allTasks.join(', ')}`);
+        processedTasks.add(currentTaskName);
         
-        // Determine the optimal number of concurrent tasks based on available CPU cores
-        // Get the number of available CPU cores
-        const cpuCount = os.cpus().length;
+        // Get all successful executions for this task
+        const taskExecutions = successfulExecutions.filter(e => e.taskName === currentTaskName);
         
-        // Calculate the optimal concurrency:
-        // - Minimum of 2 tasks to ensure some parallelism
-        // - Maximum of cpuCount-1 to leave one core for the system
-        // - If system has only 1 core, still use 1
-        const MAX_CONCURRENT_TASKS = Math.max(2, Math.min(cpuCount - 1, 8));
-        
-        console.log(`Running with ${MAX_CONCURRENT_TASKS} concurrent tasks based on ${cpuCount} CPU cores`);
-        
-        // Process tasks in parallel with a concurrency limit
-        const evaluatedTasks = [];
-        const failedTasks = [];
-        
-        // Create a function to process tasks in batches
-        async function processBatch(taskBatch) {
-            const promises = taskBatch.map(async (task) => {
-                try {
-                    console.log(`\n${'='.repeat(40)}\nProcessing task: ${task}\n${'='.repeat(40)}\n`);
-                    const result = await evaluateTask(task, options);
-                    if (result) {
-                        return { task, success: true };
-                    } else {
-                        return { task, success: false };
-                    }
-                } catch (error) {
-                    console.error(`Error processing task ${task}: ${error.message}`);
-                    return { task, success: false, error: error.message };
-                }
-            });
-            
-            return Promise.all(promises);
+        if (taskExecutions.length === 0) {
+            continue;
         }
         
-        // Process tasks in batches to control concurrency
-        for (let i = 0; i < allTasks.length; i += MAX_CONCURRENT_TASKS) {
-            const taskBatch = allTasks.slice(i, i + MAX_CONCURRENT_TASKS);
-            const results = await processBatch(taskBatch);
-            
-            // Collect results
-            for (const result of results) {
-                if (result.success) {
-                    evaluatedTasks.push(result.task);
-                } else {
-                    failedTasks.push(result.task);
+        const csvFilePath = path.join(evalsDir, `${currentTaskName}.csv`);
+        
+        // Create a new CSV file with headers
+        createCsvFileWithHeaders(csvFilePath, { silent: !options.verbose });
+        
+        console.log(`\nGenerating CSV file for task "${currentTaskName}" with ${taskExecutions.length} evaluations`);
+        
+        // Process all execution files for this task
+        for (const exec of taskExecutions) {
+            try {
+                // Read execution data from file
+                const executionData = JSON.parse(fs.readFileSync(exec.executionFilePath, 'utf8'));
+                
+                // Check if execution has evaluation data
+                if (executionData.evaluation) {
+                    // Add to CSV
+                    addEvaluationRowToCsv(csvFilePath, executionData, executionData.evaluation, { silent: !options.verbose });
                 }
+            } catch (error) {
+                console.error(`Error processing execution file ${exec.executionFilePath}: ${error.message}`);
             }
         }
-        
-        console.log(`\nEvaluation complete for ${evaluatedTasks.length} of ${allTasks.length} tasks.`);
-        if (failedTasks.length > 0) {
-            console.log(`Failed tasks: ${failedTasks.join(', ')}`);
-        }
-        
-        return evaluatedTasks;
-    } else {
-        // Process a single task
-        const result = await evaluateTask(taskName, options);
-        if (!result) {
-            process.exit(1);
-        }
-        
-        return [taskName];
     }
+    
+    console.log(`\nEvaluation complete for ${successfulExecutions.length} of ${allExecutions.length} executions across ${allTasks.length} tasks.`);
+    if (failedExecutions.length > 0) {
+        console.log(`Failed executions: ${failedExecutions.map(f => `${f.taskName}(${f.parameters.join(', ')})`).join(' | ')}`);
+    }
+    
+    return allTasks;
 }
 
 /**

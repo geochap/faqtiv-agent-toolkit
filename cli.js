@@ -83,6 +83,7 @@ program
   .command('eval-task [taskName]')
   .option('--all', 'Evaluate all tasks with validation data')
   .option('--verbose', 'Show detailed output from task execution')
+  .option('--concurrency <number>', 'Number of concurrent executions to run (default: 10)', parseInt)
   .description('Compare new task execution outputs with previously validated outputs')
   .action(evalTask);
 
