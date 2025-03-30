@@ -371,6 +371,8 @@ async function* streamCompletion(completionId, messages, options, streamWriter) 
 
   try {
     let insertNewline = false; // Flag to determine if a newline should be inserted
+    let lastCitations = null;
+
     while (true) {
       let hasToolCalls = false;
       for await (const event of processRequest({ conversation })) {
@@ -390,6 +392,8 @@ async function* streamCompletion(completionId, messages, options, streamWriter) 
 
         if (event.event === 'on_chat_model_stream') {
           const citations = event.data.chunk.additional_kwargs?.__raw_response?.citations || [];
+          if (citations)
+            lastCitations = citations;
           const content = event.data.chunk.content;
           if (content) {
             const tokenChunk = {
@@ -402,8 +406,18 @@ async function* streamCompletion(completionId, messages, options, streamWriter) 
             yield tokenChunk;
           }
         } else if (event.event === 'on_chain_end') {
-          if (citations){
-            
+          if (lastCitations && lastCitations.length > 0) {
+            const citations = lastCitations.map((src, idx) => `[${idx + 1}] ${src}`).join('  \n');
+    
+            const citationChunk = {
+              id: completionId,
+              object: 'chat.completion.chunk',
+              created: currentTime,
+              model,
+              choices: [{ index: 0, delta: { role: 'assistant', content: `\n\n**Sources:**  \n${citations}`}, finish_reason: null }],
+            };
+
+            yield citationChunk;
           }
 
           if (event.data.output.additional_kwargs.tool_calls) {
