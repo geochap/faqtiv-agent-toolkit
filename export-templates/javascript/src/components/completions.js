@@ -182,6 +182,7 @@ async function generateCompletion(completionId, messages, options) {
   const llm = new ChatOpenAI({
     apiKey,
     model,
+    __includeRawResponse: true,
     ...completionOptions,
     configuration: {
       defaultHeaders: {
@@ -190,6 +191,8 @@ async function generateCompletion(completionId, messages, options) {
       },
     },
   }).bindTools(completionTools);
+
+
   const completionChain = completionPrompt.pipe(llm);
 
   const currentTime = Math.floor(Date.now() / 1000);
@@ -313,12 +316,14 @@ async function* streamCompletion(completionId, messages, options, streamWriter) 
   includeToolMessages = !!includeToolMessages;
   completionOptions.streamUsage = true;
 
+  
   const llm = new ChatOpenAI({
     apiKey,
     model,
     ...completionOptions,
+    __includeRawResponse: true,
     configuration: {
-      defaultHeaders: {
+    defaultHeaders: {
         'Connection': 'keep-alive',
         'Keep-Alive': 'timeout=900'
       },
@@ -384,6 +389,7 @@ async function* streamCompletion(completionId, messages, options, streamWriter) 
         }
 
         if (event.event === 'on_chat_model_stream') {
+          const citations = event.data.chunk.additional_kwargs?.__raw_response?.citations || [];
           const content = event.data.chunk.content;
           if (content) {
             const tokenChunk = {
@@ -396,6 +402,10 @@ async function* streamCompletion(completionId, messages, options, streamWriter) 
             yield tokenChunk;
           }
         } else if (event.event === 'on_chain_end') {
+          if (citations){
+            
+          }
+
           if (event.data.output.additional_kwargs.tool_calls) {
             const toolCalls = event.data.output.additional_kwargs.tool_calls;
             const toolMessages = await processToolCalls(toolCalls, streamWriter);
