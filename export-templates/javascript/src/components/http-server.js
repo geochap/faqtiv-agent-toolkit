@@ -287,7 +287,47 @@ const lambdaHandler = IS_LAMBDA ? awslambda.streamifyResponse(async (event, resp
   }
   
   // Handle other requests normally
-  return serverlessApp(event, context);
+  try {
+    const response = await serverlessApp(event, context);
+    
+    if (!response.body) {
+      logErr('lambda', 'empty-response', { event, response }, 'Received empty response body');
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ error: 'Empty response from server' }),
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      };
+    }
+    
+    // Log the response
+    log('lambda', 'response', { statusCode: response.statusCode, path: event.path || event.rawPath });
+
+    const httpResponseMetadata = {
+      statusCode: response.statusCode,
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    };
+
+    responseStream = awslambda.HttpResponseStream.from(
+      responseStream,
+      httpResponseMetadata
+    );
+
+    responseStream.write(response.body);
+    responseStream.end();
+  } catch (error) {
+    logErr('lambda', 'server-error', { event }, error);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: error.message }),
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    };
+  }
 }) : null;
 
 module.exports = {
