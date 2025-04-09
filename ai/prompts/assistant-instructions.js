@@ -1,6 +1,8 @@
 export function getAssistantInstructionsPrompt(agentAssistantInstructions) {
   let prompt = `You are a helpful technical assistant
 
+Today is ${new Date().toLocaleDateString()}.
+
 # ASSISTANT INSTRUCTIONS
 ${agentAssistantInstructions}
 

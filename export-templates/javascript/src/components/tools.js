@@ -5,69 +5,160 @@ const { getRelevantExamples } = require('./examples');
 const { createAdhocLogFile } = require('./logger');
 const { extractFunctionCode } = require('./parser');
 const { ADHOC_PROMPT_TEXT, LIBS, FUNCTIONS, IS_LAMBDA, TASK_TOOL_CALL_DESCRIPTION_TEMPLATES } = require('../constants');
+const vm = require('vm');
 
 const TOOL_TIMEOUT = parseInt(process.env.TOOL_TIMEOUT || '60000');
 
+
 function captureAndProcessOutput(func, args = [], streamWriter) {
   return new Promise((resolve, reject) => {
-    const customLog = (arg) => {
-      // Assuming we only need the first argument as tasks return a single object
-      let result = arg;
+    let resolved = false;
 
+    const customLog = (arg) => {
+      if (resolved) return;
+      resolved = true;
+
+      let result = arg;
       if (typeof result === 'string') {
         try {
           result = JSON.parse(result);
-        } catch (error) {
-          // If parsing fails, keep it as a string
-          // No need to do anything here as result is already a string
+        } catch {
+          // leave as string
         }
-      } else {
-        // Convert non-string types to string
-        result = String(result);
       }
-      
       resolve(result);
     };
 
-    // Create a context object with all the necessary functions and variables
-    const context = {
-      require,
-      console: { log: customLog, warn: console.warn, error: console.error  },
-      // Add all the functions and variables from the local scope that the function might need
-      streamWriter: streamWriter,
-      ...LIBS,
-      ...FUNCTIONS
-    };
-
-    // Convert the function to a string
-    const funcString = typeof func === 'function' ? func.toString() : func;
-
-    // Create a new function with the context as its scope
-    const contextFunction = new Function(...Object.keys(context), `
-      return async function() {
+    // Signature-preserving safe wrapper
+    function makeSafeWrapper(fn) {
+      const safe = function (...args) {
         try {
-          global.streamWriter = streamWriter;
+          return fn.apply(null, args);
+        } catch (e) {
+          return { error: e.message };
+        }
+      };
+      Object.defineProperty(safe, 'name', { value: fn.name, configurable: true });
+      return Object.freeze(safe);
+    }
 
-          return await (${funcString}).apply(this, arguments);
-        } catch (error) {
-          console.warn("Error executing tool:", error);
-          throw error;
+    // Recursively wrap all functions in an object
+    function wrapObject(obj) {
+      if (typeof obj !== 'object' || obj === null) return obj;
+
+      const wrapped = {};
+      for (const [key, value] of Object.entries(obj)) {
+        if (typeof value === 'function') {
+          wrapped[key] = makeSafeWrapper(value);
+        } else if (typeof value === 'object' && value !== null) {
+          wrapped[key] = Object.freeze(wrapObject(value)); // nested object
+        } else {
+          wrapped[key] = value;
         }
       }
-    `)(...Object.values(context));
+      return Object.freeze(wrapped);
+    }
+
+    const frozenContext = {
+      ...wrapObject({ streamWriter }),
+      ...wrapObject(LIBS),
+      ...wrapObject(FUNCTIONS),
+      console: Object.freeze({
+        log: customLog,
+        warn: console.warn,
+        error: console.error,
+      }),
+    };
+
+    const context = vm.createContext(frozenContext);
+
+    const funcString = typeof func === 'function' ? func.toString() : func;
+
+    const wrappedCode = `
+      (async () => {
+        const userFunc = ${funcString};
+        const result = await userFunc(...${JSON.stringify(args)});
+        console.log(result);
+      })().catch(console.error);
+    `;
 
     try {
-      // Execute the function with the provided arguments
-      contextFunction(...args).then(resolve).catch(reject);
-
-      setTimeout(() => {
-        reject(new Error(`Function execution timed out after ${TOOL_TIMEOUT} ms`));
-      }, TOOL_TIMEOUT);
-    } catch (error) {
-      reject(error);
+      const script = new vm.Script(wrappedCode, { timeout: TOOL_TIMEOUT });
+      script.runInContext(context);
+    } catch (err) {
+      reject(err);
     }
+
+    setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        reject(new Error(`Function execution timed out after ${TOOL_TIMEOUT} ms`));
+      }
+    }, TOOL_TIMEOUT);
   });
 }
+
+
+// function captureAndProcessOutput(func, args = [], streamWriter) {
+//   return new Promise((resolve, reject) => {
+//     const customLog = (arg) => {
+//       // Assuming we only need the first argument as tasks return a single object
+//       let result = arg;
+
+//       if (typeof result === 'string') {
+//         try {
+//           result = JSON.parse(result);
+//         } catch (error) {
+//           // If parsing fails, keep it as a string
+//           // No need to do anything here as result is already a string
+//         }
+//       } else {
+//         // Convert non-string types to string
+//         result = String(result);
+//       }
+      
+//       resolve(result);
+//     };
+
+//     // Create a context object with all the necessary functions and variables
+//     const context = {
+//       require,
+//       console: { log: customLog, warn: console.warn, error: console.error  },
+//       // Add all the functions and variables from the local scope that the function might need
+//       streamWriter: streamWriter,
+//       ...LIBS,
+//       ...FUNCTIONS
+//     };
+
+//     // Convert the function to a string
+//     const funcString = typeof func === 'function' ? func.toString() : func;
+
+//     // Create a new function with the context as its scope
+//     const contextFunction = new Function(...Object.keys(context), `
+//       return async function() {
+//         try {
+//           global.streamWriter = streamWriter;
+
+//           return await (${funcString}).apply(this, arguments);
+//         } catch (error) {
+//           console.warn("Error executing tool:", error);
+//           throw error;
+//         }
+//       }
+//     `)(...Object.values(context));
+
+//     try {
+//       // Execute the function with the provided arguments
+//       contextFunction(...args).then(resolve).catch(reject);
+
+//       setTimeout(() => {
+//         reject(new Error(`Function execution timed out after ${TOOL_TIMEOUT} ms`));
+//       }, TOOL_TIMEOUT);
+//     } catch (error) {
+//       reject(error);
+//     }
+//   });
+// }
 
 // Capture stdout of tasks
 async function toolWrapper(func, args, streamWriter) {
