@@ -104,7 +104,7 @@ export function loadConfig() {
   
       try {
         if (!fs.existsSync(functionsDir)) {
-          console.error('Functions directory not found.');
+          console.error(`${functionsDir} directory not found. Please create it and add functions to it.`);
           process.exit(1);
         }
   

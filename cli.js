@@ -7,6 +7,7 @@ import updateHeaders from './commands/update-headers.js';
 import compileTask, { migrateTask } from './commands/compile-task.js';
 import runTask from './commands/run-task.js';
 import evalTask from './commands/eval-task.js';
+import evalAgent from './commands/eval-agent.js';
 import addTask from './commands/add-task.js';
 import runAdHocTask from './commands/run-ad-hoc-task.js';
 import addModule from './commands/add-module.js';
@@ -208,6 +209,12 @@ program
   .option('--json', 'Output in JSON format')
   .description('Display the current configuration from faqtiv_config.yml')
   .action(showConfig);
+
+program
+  .command('eval-agent <file>')
+  .option('-p, --port <number>', 'Port to run the server on', '8000')
+  .description('Evaluate agent responses using OpenEvals')
+  .action(evalAgent);
 
 program
   .on('--help', () => {
