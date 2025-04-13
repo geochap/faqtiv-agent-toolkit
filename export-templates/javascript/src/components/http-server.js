@@ -100,7 +100,7 @@ function createRawWriter(completionId, responseWriter) {
   };
 }
 
-app.post('/completions', async (req, res) => {
+const completions = async (req, res) => {
   try {
     const { 
       messages, 
@@ -170,7 +170,11 @@ app.post('/completions', async (req, res) => {
     logErr('completions', 'internal-server-error', logBody, error);
     res.status(500).json({ error: error.message });
   }
-});
+};
+
+app.post('/completions', completions);
+app.post('/chat/completions', completions);
+
 
 function shutdownServer(server) {
   return new Promise((resolve) => {
