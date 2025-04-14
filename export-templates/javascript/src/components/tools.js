@@ -29,7 +29,6 @@ function captureAndProcessOutput(func, args = [], streamWriter) {
       resolve(result);
     };
 
-    // Signature-preserving safe wrapper
     function makeSafeWrapper(fn) {
       const safe = function (...args) {
         try {
@@ -42,7 +41,6 @@ function captureAndProcessOutput(func, args = [], streamWriter) {
       return Object.freeze(safe);
     }
 
-    // Recursively wrap all functions in an object
     function wrapObject(obj) {
       if (typeof obj !== 'object' || obj === null) return obj;
 
@@ -51,7 +49,7 @@ function captureAndProcessOutput(func, args = [], streamWriter) {
         if (typeof value === 'function') {
           wrapped[key] = makeSafeWrapper(value);
         } else if (typeof value === 'object' && value !== null) {
-          wrapped[key] = Object.freeze(wrapObject(value)); // nested object
+          wrapped[key] = Object.freeze(wrapObject(value));
         } else {
           wrapped[key] = value;
         }
@@ -68,6 +66,12 @@ function captureAndProcessOutput(func, args = [], streamWriter) {
         warn: console.warn,
         error: console.error,
       }),
+      __captureError: (err) => {
+        if (!resolved) {
+          resolved = true;
+          reject(typeof err === 'object' ? err.message || String(err) : String(err));
+        }
+      },
     };
 
     const context = vm.createContext(frozenContext);
@@ -76,17 +80,24 @@ function captureAndProcessOutput(func, args = [], streamWriter) {
 
     const wrappedCode = `
       (async () => {
-        const userFunc = ${funcString};
-        const result = await userFunc(...${JSON.stringify(args)});
-        console.log(result);
-      })().catch(console.error);
+        try {
+          const userFunc = ${funcString};
+          const result = await userFunc(...${JSON.stringify(args)});
+          console.log(result);
+        } catch (err) {
+          __captureError(err);
+        }
+      })();
     `;
 
     try {
       const script = new vm.Script(wrappedCode, { timeout: TOOL_TIMEOUT });
       script.runInContext(context);
     } catch (err) {
-      reject(err);
+      if (!resolved) {
+        resolved = true;
+        reject(err);
+      }
     }
 
     setTimeout(() => {
