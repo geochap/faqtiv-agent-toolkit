@@ -116,6 +116,7 @@ async def completions_endpoint(request: CompletionRequest, raw_request: Request)
     include_tool_messages = request.include_tool_messages
     max_tokens = request.max_tokens
     temperature = request.temperature
+    stream = request.stream
 
     log_body = {
         'id': completion_id,
@@ -123,14 +124,16 @@ async def completions_endpoint(request: CompletionRequest, raw_request: Request)
         'messageCount': len(messages),
         'include_tool_messages': include_tool_messages,
         'max_tokens': max_tokens,
-        'temperature': temperature
+        'temperature': temperature,
+        'stream': stream
     }
     log('completions', 'completions', log_body)
 
     print("Completion request: ", messages[-1].content if messages else "", flush=True)
 
     try:
-        if raw_request.headers.get('accept') == 'text/event-stream':
+        is_streaming = stream or raw_request.headers.get('accept') == 'text/event-stream'
+        if is_streaming:
             async def stream_response():
                 # Create a queue for all events (both completion chunks and emitted events)
                 chunk_queue = asyncio.Queue()

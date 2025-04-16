@@ -106,7 +106,8 @@ app.post('/completions', async (req, res) => {
       messages, 
       include_tool_messages,
       max_tokens,
-      temperature
+      temperature,
+      stream
     } = req.body;
 
     const validation = validateCompletionMessages(messages);
@@ -122,13 +123,16 @@ app.post('/completions', async (req, res) => {
       messageCount: messages.length, 
       include_tool_messages, 
       max_tokens, 
-      temperature 
+      temperature,
+      stream
     };
     log('completions', 'request', logBody);
 
     console.log("Completion request: ", messages.length > 0 ? messages[messages.length - 1].content : "");
 
-    if (req.headers.accept?.includes('text/event-stream')) {
+    const isStreaming = stream === true || req.headers.accept?.includes('text/event-stream');
+    
+    if (isStreaming) {
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
@@ -220,7 +224,8 @@ const serverlessApp = serverless(app);
 const lambdaHandler = IS_LAMBDA ? awslambda.streamifyResponse(async (event, responseStream, context) => {
   // Check if it's a streaming request
   const isCompletionsRequest = (event.path === '/completions' || event.rawPath === '/completions');
-  const isStreamingRequest = event.headers?.accept?.includes('text/event-stream');
+  const requestBody = getLambdaBody(event);
+  const isStreamingRequest = requestBody.stream === true || event.headers?.accept?.includes('text/event-stream');
   
   if (isCompletionsRequest && isStreamingRequest) {
     const httpResponseMetadata = {
@@ -241,7 +246,7 @@ const lambdaHandler = IS_LAMBDA ? awslambda.streamifyResponse(async (event, resp
     );
     
     try {
-      const { messages, include_tool_messages, max_tokens, temperature } = getLambdaBody(event);
+      const { messages, include_tool_messages, max_tokens, temperature } = requestBody;
 
       const validation = validateCompletionMessages(messages);
       if (!validation.isValid) {
@@ -287,7 +292,47 @@ const lambdaHandler = IS_LAMBDA ? awslambda.streamifyResponse(async (event, resp
   }
   
   // Handle other requests normally
-  return serverlessApp(event, context);
+  try {
+    const response = await serverlessApp(event, context);
+    
+    if (!response.body) {
+      logErr('lambda', 'empty-response', { event, response }, 'Received empty response body');
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ error: 'Empty response from server' }),
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      };
+    }
+    
+    // Log the response
+    log('lambda', 'response', { statusCode: response.statusCode, path: event.path || event.rawPath });
+
+    const httpResponseMetadata = {
+      statusCode: response.statusCode,
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    };
+
+    responseStream = awslambda.HttpResponseStream.from(
+      responseStream,
+      httpResponseMetadata
+    );
+
+    responseStream.write(response.body);
+    responseStream.end();
+  } catch (error) {
+    logErr('lambda', 'server-error', { event }, error);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: error.message }),
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    };
+  }
 }) : null;
 
 module.exports = {

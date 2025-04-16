@@ -36,7 +36,7 @@ def get_tokens(model_name, text):
     return len(encoder_data['encoder'].encode(text))
 
 def get_model_limit(model):
-    return next((limit for key, limit in model_limits.items() if key in model), None)
+    return next((limit for key, limit in model_limits.items() if key in model), model_limits['gpt-4o'])
 
 def is_assistant_with_tool_calls(message):
     return message.role == 'assistant' and message.tool_calls

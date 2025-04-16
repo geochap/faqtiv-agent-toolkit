@@ -24,7 +24,7 @@ function runCommand(command, options = {}) {
 }
 
 export default async function serve(options) {
-  const port = options.port || 8000;
+  const port = options.port || process.env.PORT || 8000;
   const tmpDir = path.join(config.project.tmpDir, 'standalone_agent');
   const venvPath = path.join(tmpDir, 'venv');
 
