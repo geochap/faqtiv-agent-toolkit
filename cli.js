@@ -212,7 +212,7 @@ program
 
 program
   .command('eval-agent <file>')
-  .option('-p, --port <number>', 'Port to run the server on', '8000')
+  .option('-u, --url <url>', 'URL of an existing server to use instead of starting a new one')
   .description('Evaluate agent responses using OpenEvals')
   .action(evalAgent);
 
