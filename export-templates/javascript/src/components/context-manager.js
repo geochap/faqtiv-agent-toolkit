@@ -42,7 +42,7 @@ async function getTokens(modelName, text) {
 
 function getModelLimit(model) {
   const matchingModel = Object.keys(modelLimits).find(key => model.includes(key));
-  return matchingModel ? modelLimits[matchingModel] : null;
+  return matchingModel ? modelLimits[matchingModel] : modelLimits['gpt-4o'];
 }
 
 function isAssistantWithToolCalls(message) {

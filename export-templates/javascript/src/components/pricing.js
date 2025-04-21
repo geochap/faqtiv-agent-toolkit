@@ -22,7 +22,21 @@ const MODEL_PRICING = {
 
 
 function calculateCost(model, inputTokens, outputTokens) {
-  const pricing = MODEL_PRICING[model] || MODEL_PRICING['gpt-4o'];
+  const pricing = MODEL_PRICING[model];
+  
+  if (!pricing) {
+    return {
+      total_cost: 0,
+      input_cost: 0,
+      output_cost: 0,
+      pricing_details: {
+        input_price_per_token: 0,
+        output_price_per_token: 0,
+        model
+      }
+    };
+  }
+  
   const inputCost = (inputTokens / 1000) * pricing.input;
   const outputCost = (outputTokens / 1000) * pricing.output;
   return {

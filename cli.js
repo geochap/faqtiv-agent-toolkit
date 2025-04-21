@@ -154,7 +154,7 @@ program
 
 program
   .command('serve')
-  .option('--port <number>', 'Port number for the server', 8000)
+  .option('--port <number>', 'Port number for the server')
   .description('Start a server with run_task and run_adhoc endpoints')
   .action(serve);
 

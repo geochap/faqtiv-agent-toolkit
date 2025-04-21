@@ -40,10 +40,12 @@ def get_bank_financials(bank_id):
     url = f'https://banks.data.fdic.gov/api/financials?filters=CERT%3A{bank_id}&fields=CERT%2CREPDTE%2CASSET%2CDEP&sort_by=REPDTE&sort_order=DESC&limit=10&offset=0&agg_by=REPDTE&agg_sum_fields=DEP&agg_limit=1000&format=json&download=false&filename=data_file'
     response = requests.get(url)
     response_data = response.json()
-    # this will be handled as an agent event
-    streamWriter.writeEvent(f"streamWriter event: Getting bank financials for bank id: {bank_id}")
-    # this will be inserted into the stream as a raw chunk
-    streamWriter.writeRaw(f"streamWriter raw: Getting bank financials for bank id: {bank_id}\n")
+    # with faqtiv serve or standalone export, this will be handled as an agent event
+    if 'streamWriter' in globals() and streamWriter:
+        streamWriter.writeEvent(f"streamWriter event: Getting bank financials for bank id: {bank_id}")
+    # with faqtiv serve or standalone export, this will be inserted into the stream as a raw chunk
+    if 'streamWriter' in globals() and streamWriter:
+        streamWriter.writeRaw(f"streamWriter raw: Getting bank financials for bank id: {bank_id}\n")
     return [
         {
             'report_date': f"{r['data']['REPDTE'][:4]}-{r['data']['REPDTE'][4:6]}-{r['data']['REPDTE'][6:]}",
@@ -110,14 +112,13 @@ def add_table_header(worksheet, row, col, column_names):
 
 def doTask(bank_name: str, years: str):
     import json
-
+    
     bank_id = get_bank_id_by_name(bank_name)
     financials = get_bank_financials(bank_id)
     
-    filtered_years = set(years.split('|'))
+    years_set = set(years.split('|'))
     filtered_financials = [
-        {"Report Date": record["report_date"], "Total Deposits": record["total_deposits"]}
-        for record in financials if record['report_date'][:4] in filtered_years
+        record for record in financials if record['report_date'][:4] in years_set
     ]
     
     print(json.dumps(filtered_financials))

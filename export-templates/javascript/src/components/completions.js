@@ -69,7 +69,7 @@ async function processToolCalls(toolCalls, streamWriter) {
         const args = JSON.parse(toolCall.function.arguments);
         const toolCallDescription = getToolCallDescription(toolCall.function.name, args);
 
-        if (toolCallDescription) {
+        if (toolCallDescription && streamWriter && streamWriter.writeEvent) {
           streamWriter.writeEvent(toolCallDescription, model);
         }
 
@@ -182,6 +182,7 @@ async function generateCompletion(completionId, messages, options) {
   const llm = new ChatOpenAI({
     apiKey,
     model,
+    __includeRawResponse: true,
     ...completionOptions,
     configuration: {
       defaultHeaders: {
@@ -190,6 +191,8 @@ async function generateCompletion(completionId, messages, options) {
       },
     },
   }).bindTools(completionTools);
+
+
   const completionChain = completionPrompt.pipe(llm);
 
   const currentTime = Math.floor(Date.now() / 1000);
@@ -313,12 +316,14 @@ async function* streamCompletion(completionId, messages, options, streamWriter) 
   includeToolMessages = !!includeToolMessages;
   completionOptions.streamUsage = true;
 
+  
   const llm = new ChatOpenAI({
     apiKey,
     model,
-    ...options,
+    ...completionOptions,
+    __includeRawResponse: true,
     configuration: {
-      defaultHeaders: {
+    defaultHeaders: {
         'Connection': 'keep-alive',
         'Keep-Alive': 'timeout=900'
       },
@@ -366,6 +371,8 @@ async function* streamCompletion(completionId, messages, options, streamWriter) 
 
   try {
     let insertNewline = false; // Flag to determine if a newline should be inserted
+    let lastCitations = null;
+
     while (true) {
       let hasToolCalls = false;
       for await (const event of processRequest({ conversation })) {
@@ -384,6 +391,9 @@ async function* streamCompletion(completionId, messages, options, streamWriter) 
         }
 
         if (event.event === 'on_chat_model_stream') {
+          const citations = event.data.chunk.additional_kwargs?.__raw_response?.citations || [];
+          if (citations)
+            lastCitations = citations;
           const content = event.data.chunk.content;
           if (content) {
             const tokenChunk = {
@@ -396,6 +406,20 @@ async function* streamCompletion(completionId, messages, options, streamWriter) 
             yield tokenChunk;
           }
         } else if (event.event === 'on_chain_end') {
+          if (lastCitations && lastCitations.length > 0) {
+            const citations = lastCitations.map((src, idx) => `[${idx + 1}] ${src}`).join('  \n');
+    
+            const citationChunk = {
+              id: completionId,
+              object: 'chat.completion.chunk',
+              created: currentTime,
+              model,
+              choices: [{ index: 0, delta: { role: 'assistant', content: `\n\n**Sources:**  \n${citations}`}, finish_reason: null }],
+            };
+
+            yield citationChunk;
+          }
+
           if (event.data.output.additional_kwargs.tool_calls) {
             const toolCalls = event.data.output.additional_kwargs.tool_calls;
             const toolMessages = await processToolCalls(toolCalls, streamWriter);
