@@ -11,12 +11,10 @@ import {
 } from 'openevals';
 import {
   createTrajectoryLLMAsJudge,
-  TRAJECTORY_ACCURACY_PROMPT
+  TRAJECTORY_ACCURACY_PROMPT_WITH_REFERENCE
 } from "agentevals";
 import { setupServer, startServer, shutdownServer } from '../lib/server-manager.js';
 import dotenv from 'dotenv';
-import { Client } from "langsmith";
-import { traceable } from "langsmith/traceable";
 
 dotenv.config();
 
@@ -31,7 +29,7 @@ const AVAILABLE_METRICS = {
   rag_helpfulness: RAG_HELPFULNESS_PROMPT,
   rag_groundedness: RAG_GROUNDEDNESS_PROMPT,
   rag_retrieval_relevance: RAG_RETRIEVAL_RELEVANCE_PROMPT,
-  trajectory_accuracy: TRAJECTORY_ACCURACY_PROMPT
+  trajectory_accuracy: TRAJECTORY_ACCURACY_PROMPT_WITH_REFERENCE
 };
 
 /**
@@ -98,7 +96,6 @@ async function evaluateResponse(context, query, response, originalResponse, thre
     if (metric === 'trajectory_accuracy') {
       // Special case for trajectory accuracy which requires full conversation trajectories
       // This would need to be handled differently in the processConversation function
-      console.warn('Trajectory accuracy metric requires full conversation trajectories and cannot be evaluated in this context');
       continue;
     }
     
@@ -119,40 +116,54 @@ async function evaluateResponse(context, query, response, originalResponse, thre
 }
 
 /**
- * Extract content from a message, handling tool calls and tool responses
+ * Extract content from a message, ignoring tool calls and tool responses
  * @param {object} message - The message object
  * @returns {string} - The message content
  */
 function extractMessageContent(message) {
   if (!message) return "";
   
-  // If message has tool calls, extract the description/task from them
-  if (message.tool_calls) {
-    return message.tool_calls
-      .map(call => {
-        try {
-          // Parse the function arguments to get the description
-          const args = JSON.parse(call.function.arguments);
-          return args.description || args.prompt || "";
-        } catch (e) {
-          return "";
-        }
-      })
-      .filter(content => content)
-      .join("\n");
-  }
-  
-  // For tool responses, extract the result
-  if (message.role === 'tool') {
-    try {
-      const result = JSON.parse(message.content);
-      return result.result || message.content;
-    } catch (e) {
-      return message.content;
-    }
+  // Ignore tool_calls and tool responses
+  if (message.tool_calls || message.role === 'tool') {
+    return "";
   }
   
   return message.content || "";
+}
+
+/**
+ * Find the last user message and its corresponding assistant responses
+ * @param {Array} messages - The conversation messages array
+ * @returns {Object} - Object containing the last user message and assistant responses
+ */
+function findLastUserAssistantPair(messages) {
+  let lastUserIndex = -1;
+  let lastAssistantResponses = [];
+  
+  // Find the last user message
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === 'user') {
+      lastUserIndex = i;
+      break;
+    }
+  }
+  
+  // If we found a user message, collect its assistant responses
+  if (lastUserIndex !== -1) {
+    let j = lastUserIndex + 1;
+    
+    // Collect all assistant responses until next user message or end of conversation
+    while (j < messages.length && messages[j].role !== 'user') {
+      lastAssistantResponses.push(messages[j]);
+      j++;
+    }
+  }
+  
+  return {
+    lastUserIndex,
+    lastUserMessage: lastUserIndex !== -1 ? messages[lastUserIndex] : null,
+    lastAssistantResponses
+  };
 }
 
 /**
@@ -163,7 +174,7 @@ function extractMessageContent(message) {
  */
 async function processConversation(conversationPath, serverUrl) {
   const conversationData = JSON.parse(fs.readFileSync(conversationPath, 'utf8'));
-  const results = [];
+  let results = {};
   const threshold = conversationData.threshold || DEFAULT_THRESHOLD;
   const metrics = conversationData.metrics || ['correctness', 'conciseness', 'hallucination'];
   
@@ -172,82 +183,106 @@ async function processConversation(conversationPath, serverUrl) {
   
   // Check if trajectory_accuracy is one of the metrics
   const hasTrajectoryAccuracy = metrics.some(m => m.toLowerCase() === 'trajectory_accuracy');
+
+  // Find the last user-assistant pair
+  const { lastUserIndex, lastUserMessage, lastAssistantResponses } = findLastUserAssistantPair(conversationData.messages);
   
-  // If trajectory_accuracy is requested, we need to evaluate the entire conversation
-  if (hasTrajectoryAccuracy) {
-    const trajectoryEvaluator = evaluators['trajectory_accuracy'];
+  // If we have a user message and assistant responses, evaluate them
+  if (lastUserIndex !== -1 && lastAssistantResponses.length > 0) {
+    // Check if any assistant response contains tool_calls
+    const hasToolCalls = lastAssistantResponses.some(msg => 
+      msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0
+    );
     
-    // Set up LangSmith tracing for the trajectory evaluator
-    const client = new Client();
-    const tracedFn = traceable(async () => {
-      return await trajectoryEvaluator({
-        outputs: conversationData.outputs
-      });
-    }, {
-      name: "trajectory_accuracy_evaluation",
-      run_type: "chain",
-      client
+    // Fail if trajectory_accuracy is requested but no tool_calls are present
+    if (hasTrajectoryAccuracy && !hasToolCalls) {
+      console.error('Error: Trajectory accuracy evaluation requires tool_calls data, but none were found in the conversation.');
+      process.exit(1);
+    }
+    
+    // Get completion from server
+    const response = await axios.post(`${serverUrl}/completions`, {
+      messages: [{ role: 'user', content: lastUserMessage.content }],
+      include_tool_messages: hasToolCalls
     });
-    
-    // For trajectory accuracy, we just evaluate the existing conversation
-    // No need to get a new response from the server
-    const trajectoryResult = await tracedFn();
-    
-    results.push({
-      trajectory_accuracy: {
+
+    const newResponse = response.data.choices[0].message.content;
+
+    // For trajectory accuracy, we need to update the messages
+    if (hasTrajectoryAccuracy) {
+      const newToolMessages = response.data.tool_messages ? response.data.tool_messages.map(msg => msg.choices[0].delta) : [];
+
+      // Create a new messages array containing lastUserMessage + newToolMessages + newResponse
+      const newMessages = [];
+      
+      // Add the last user message
+      newMessages.push(lastUserMessage);
+      
+      // Add tool messages if they exist
+      if (newToolMessages.length > 0) {
+        newMessages.push(...newToolMessages);
+      }
+      
+      // Add the new assistant response
+      newMessages.push({
+        role: 'assistant',
+        content: newResponse
+      });
+
+      // Create a reference messages array with only the last user-assistant pair
+      const referenceMessages = [];
+      
+      // Add the last user message and assistant responses
+      if (lastUserMessage) {
+        referenceMessages.push(lastUserMessage);
+        referenceMessages.push(...lastAssistantResponses);
+      }
+
+      const trajectoryEvaluator = evaluators['trajectory_accuracy'];
+      
+      // For trajectory accuracy, evaluate with the new messages
+      const trajectoryResult = await trajectoryEvaluator({
+        outputs: newMessages,
+        referenceOutputs: referenceMessages
+      });
+      
+      results['trajectory_accuracy'] = {
         ...trajectoryResult,
         scoreDetails: calculateScore(trajectoryResult.score, threshold)
-      }
-    });
-    
-    return { results, threshold, metrics };
-  }
-
-  // Process each conversation turn
-  for (let i = 0; i < conversationData.outputs.length; i++) {
-    const message = conversationData.outputs[i];
-    
-    if (message.role === 'user') {
-      // Find the corresponding assistant response(s)
-      let assistantResponses = [];
-      let j = i + 1;
-      
-      // Collect all assistant responses and tool responses until next user message
-      while (j < conversationData.outputs.length && conversationData.outputs[j].role !== 'user') {
-        assistantResponses.push(conversationData.outputs[j]);
-        j++;
-      }
-      
-      if (assistantResponses.length > 0) {
-        // Get completion from server
-        const response = await axios.post(`${serverUrl}/completions`, {
-          messages: [{ role: 'user', content: message.content }]
-        });
-
-        const newResponse = response.data.choices[0].message.content;
-        
-        // Combine all assistant responses into a single string for evaluation
-        const originalResponse = assistantResponses
-          .map(msg => extractMessageContent(msg))
-          .filter(content => content)
-          .join("\n");
-        
-        // Evaluate both responses
-        const evalResponse = await evaluateResponse(
-          conversationData.context, 
-          message.content, 
-          newResponse, 
-          originalResponse, 
-          threshold,
-          evaluators
-        );
-
-        results.push(evalResponse);
-      }
-      
-      // Skip to the next user message
-      i = j - 1;
+      };
     }
+    
+    // Combine all assistant responses into a single string for evaluation
+    const originalResponse = lastAssistantResponses
+      .map(msg => extractMessageContent(msg))
+      .filter(content => content)
+      .join("\n");
+    
+    // Create context from previous messages (excluding the last user-assistant pair)
+    const contextMessages = conversationData.messages.slice(0, lastUserIndex);
+    
+    // Convert contextMessages to a string format
+    const contextMessagesString = contextMessages
+      .map(msg => `${msg.role}: ${msg.content}`)
+      .join('\n');
+    
+    // Concatenate contextMessages to conversationData.context
+    const fullContext = conversationData.context 
+      ? `${conversationData.context}\n\nConversation:\n${contextMessagesString}`
+      : `Conversation:\n${contextMessagesString}`;
+    
+    // Evaluate both responses
+    const evaluationResults = await evaluateResponse(
+      fullContext, 
+      lastUserMessage.content, 
+      newResponse, 
+      originalResponse, 
+      threshold,
+      evaluators
+    );
+    
+    // Merge the evaluation results with the existing results
+    results = { ...results, ...evaluationResults };
   }
 
   return { results, threshold, metrics };
@@ -287,16 +322,14 @@ export default async function evalAgent(file, options = {}) {
     const { results, threshold, metrics } = await processConversation(conversationPath, serverUrl);
     
     // Calculate summary statistics
-    const totalMessages = results.length;
-    const summary = {};
-    for (const metric of metrics) {
-      const passedCount = results.filter(r => r[metric]?.scoreDetails.passed).length;
-      summary[metric] = {
-        passRate: (passedCount / totalMessages) * 100,
-        passedCount,
-        totalCount: totalMessages
-      };
-    }
+    const totalMetrics = results ? Object.keys(results).length : 0;
+    const passedMetrics = results ? Object.values(results).filter(r => r.scoreDetails.passed).length : 0;
+    
+    const summary = {
+      passRate: totalMetrics > 0 ? (passedMetrics / totalMetrics) * 100 : 0,
+      passedCount: passedMetrics,
+      totalCount: totalMetrics
+    };
 
     // Create JSON output
     const output = {
@@ -305,15 +338,12 @@ export default async function evalAgent(file, options = {}) {
         metrics: metrics
       },
       summary: summary,
-      results: results.map((result, index) => ({
-        messageIndex: index + 1,
-        metrics: Object.entries(result).map(([metric, evalResult]) => ({
-          metric,
-          score: evalResult.scoreDetails.percentage,
-          passed: evalResult.scoreDetails.passed,
-          comment: evalResult.comment
-        }))
-      }))
+      result: results ? Object.entries(results).map(([metric, evalResult]) => ({
+        metric,
+        score: evalResult.scoreDetails.percentage,
+        passed: evalResult.scoreDetails.passed,
+        comment: evalResult.comment
+      })) : []
     };
 
     // Output JSON to stdout

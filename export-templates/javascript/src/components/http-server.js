@@ -163,7 +163,7 @@ app.post('/completions', async (req, res) => {
     }
 
     try {
-      const result = await generateCompletion(completionId, messages, {include_tool_messages, maxTokens:max_tokens, temperature});
+      const result = await generateCompletion(completionId, messages, {includeToolMessages:include_tool_messages, maxTokens:max_tokens, temperature});
       res.json(result);
       log('completions', 'done', { id: completionId, status: 'done' });
     } catch (error) {
