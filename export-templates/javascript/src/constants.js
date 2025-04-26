@@ -32,6 +32,10 @@ const FUNCTIONS = { {{ functionNames }} };
 
 const IS_LAMBDA = !!process.env.AWS_LAMBDA_FUNCTION_NAME;
 
+const AGENT_GATEWAY_URL = process.env.AGENT_GATEWAY_URL;
+
+const AGENT_GATEWAY_TOKEN = process.env.AGENT_GATEWAY_TOKEN;
+
 const ENV_VARS = {
   DATA_FILES: IS_LAMBDA ? "./data" : "./src/data"
 };
@@ -46,5 +50,7 @@ module.exports = {
   LIBS,
   FUNCTIONS,
   ENV_VARS,
-  IS_LAMBDA
+  IS_LAMBDA,
+  AGENT_GATEWAY_URL,
+  AGENT_GATEWAY_TOKEN
 };

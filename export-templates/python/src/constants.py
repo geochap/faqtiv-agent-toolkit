@@ -32,6 +32,10 @@ FUNCTIONS = { {{ functionNames }} }
 
 IS_LAMBDA = bool(os.getenv('AWS_LAMBDA_FUNCTION_NAME'))
 
+AGENT_GATEWAY_URL = os.getenv('AGENT_GATEWAY_URL')
+
+AGENT_GATEWAY_TOKEN = os.getenv('AGENT_GATEWAY_TOKEN')
+
 ENV_VARS = {
   "DATA_FILES": "./src/data" if not IS_LAMBDA else "./data"
 }

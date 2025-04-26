@@ -6,6 +6,7 @@ const serverless = require('serverless-http');
 const { generateAndExecuteAdhoc, captureAndProcessOutput } = require('./tools');
 const { logErr, log } = require('./logger');
 const { generateCompletion, streamCompletion } = require('./completions');
+const agentGateway = require('./agent-gateway');
 const { TASK_NAME_TO_FUNCTION_NAME_MAP, TASKS, IS_LAMBDA } = require('../constants');
 
 function validateCompletionMessages(messages) {
@@ -100,6 +101,12 @@ function createRawWriter(completionId, responseWriter) {
   };
 }
 
+function createCallAgent(delegationToken) {
+  return async function callAgent({ messages, includeToolMessages, maxTokens, temperature, stream, agentId }) {
+    return agentGateway.callAgent({ messages, includeToolMessages, maxTokens, temperature, stream, agentId, delegationToken });
+  };
+}
+
 app.post('/completions', async (req, res) => {
   try {
     const { 
@@ -107,7 +114,8 @@ app.post('/completions', async (req, res) => {
       include_tool_messages,
       max_tokens,
       temperature,
-      stream
+      stream,
+      delegation_token
     } = req.body;
 
     const validation = validateCompletionMessages(messages);
@@ -124,7 +132,8 @@ app.post('/completions', async (req, res) => {
       include_tool_messages, 
       max_tokens, 
       temperature,
-      stream
+      stream,
+      delegation_token: delegation_token ? true : false
     };
     log('completions', 'request', logBody);
 
@@ -141,12 +150,17 @@ app.post('/completions', async (req, res) => {
       res.setHeader('Transfer-Encoding', 'chunked');
 
       try {
-        const streamWriter = {
-          writeEvent: createEventWriter(completionId, data => res.write(data)),
-          writeRaw: createRawWriter(completionId, data => res.write(data)),
+        const faqtivGlobals = {
+          streamWriter: {
+            writeEvent: createEventWriter(completionId, data => res.write(data)),
+            writeRaw: createRawWriter(completionId, data => res.write(data)),
+          },
+          agentGateway: {
+            callAgent: createCallAgent(delegation_token)
+          }
         };
 
-        for await (const chunk of streamCompletion(completionId, messages, {includeToolMessages:include_tool_messages, maxTokens:max_tokens, temperature}, streamWriter)) {
+        for await (const chunk of streamCompletion(completionId, messages, {includeToolMessages:include_tool_messages, maxTokens:max_tokens, temperature}, faqtivGlobals)) {
           const data = `data: ${JSON.stringify(chunk)}\n\n`;
           res.write(data);
         }
@@ -246,7 +260,7 @@ const lambdaHandler = IS_LAMBDA ? awslambda.streamifyResponse(async (event, resp
     );
     
     try {
-      const { messages, include_tool_messages, max_tokens, temperature } = requestBody;
+      const { messages, include_tool_messages, max_tokens, temperature, delegation_token } = requestBody;
 
       const validation = validateCompletionMessages(messages);
       if (!validation.isValid) {
@@ -262,17 +276,22 @@ const lambdaHandler = IS_LAMBDA ? awslambda.streamifyResponse(async (event, resp
         messageCount: messages.length,
         include_tool_messages, 
         max_tokens, 
-        temperature 
+        temperature
       };
       
       log('completions', 'stream', logBody);
 
-      const streamWriter = {
-        writeEvent: createEventWriter(completionId, data => responseStream.write(data)),
-        writeRaw: createRawWriter(completionId, data => responseStream.write(data)),
+      const faqtivGlobals = {
+        streamWriter: {
+          writeEvent: createEventWriter(completionId, data => responseStream.write(data)),
+          writeRaw: createRawWriter(completionId, data => responseStream.write(data)),
+        },
+        agentGateway: {
+          callAgent: createCallAgent(delegation_token)
+        }
       };
 
-      for await (const chunk of streamCompletion(completionId, messages, {includeToolMessages:include_tool_messages, maxTokens:max_tokens, temperature}, streamWriter)) {
+      for await (const chunk of streamCompletion(completionId, messages, {includeToolMessages:include_tool_messages, maxTokens:max_tokens, temperature}, faqtivGlobals)) {
         const data = `data: ${JSON.stringify(chunk)}\n\n`;
         responseStream.write(data);
       }

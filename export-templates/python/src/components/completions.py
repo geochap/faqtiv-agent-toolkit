@@ -29,9 +29,9 @@ if not api_key:
 if not model:
     raise ValueError("OPENAI_MODEL environment variable is not set")
 
-async def run_adhoc_task(input: str, streamWriter=None) -> str:
+async def run_adhoc_task(input: str, faqtivGlobals=None) -> str:
     try:
-        result = await generate_and_execute_adhoc(input["description"], streamWriter)
+        result = await generate_and_execute_adhoc(input["description"], faqtivGlobals)
         # Ensure the result is a string
         if isinstance(result, dict):
             result = json.dumps(result)
@@ -65,7 +65,7 @@ completion_prompt = ChatPromptTemplate.from_messages(
     ]
 )
 
-async def process_tool_calls(tool_calls, streamWriter=None):
+async def process_tool_calls(tool_calls, faqtivGlobals=None):
     tool_messages = [
         AIMessage(
             content='',
@@ -82,10 +82,10 @@ async def process_tool_calls(tool_calls, streamWriter=None):
                 args = json.loads(tool_call["function"]["arguments"])
                 tool_call_description = get_tool_call_description(tool_call["function"]["name"], args)
                 
-                if tool_call_description:
-                    streamWriter.writeEvent(tool_call_description, model)
+                if tool_call_description and faqtivGlobals.streamWriter and faqtivGlobals.streamWriter.writeEvent:
+                    faqtivGlobals.streamWriter.writeEvent(tool_call_description, model)
                 
-                tool_result = await tool.coroutine(args, streamWriter=streamWriter)
+                tool_result = await tool.coroutine(args, faqtivGlobals=faqtivGlobals)
                 print("Tool result:", tool_result, flush=True)
             except Exception as e:
                 error_message = f"Error in tool '{tool_call['function']['name']}': {str(e)}"
@@ -266,11 +266,11 @@ async def generate_completion(completion_id, messages, params):
 
     return JSONResponse(content=response.dict())
 
-async def stream_completion(completion_id, messages, params={"include_tool_messages": None, "max_tokens": None, "temperature": None}, streamWriter=None):
-    async for event in _stream_completion(completion_id, messages, params, streamWriter):
+async def stream_completion(completion_id, messages, params={"include_tool_messages": None, "max_tokens": None, "temperature": None}, faqtivGlobals=None):
+    async for event in _stream_completion(completion_id, messages, params, faqtivGlobals):
         yield event
 
-async def _stream_completion(completion_id, messages, params, streamWriter=None):
+async def _stream_completion(completion_id, messages, params, faqtivGlobals=None):
     includeToolMessages = bool(params.get("include_tool_messages"))
     completion_options = set_options_from_env(params)
 
@@ -345,7 +345,7 @@ async def _stream_completion(completion_id, messages, params, streamWriter=None)
                 elif event['event'] == 'on_chain_end':
                     if event['data']['output'].additional_kwargs.get('tool_calls'):
                         tool_calls = event['data']['output'].additional_kwargs['tool_calls']
-                        tool_messages = await process_tool_calls(tool_calls, streamWriter)
+                        tool_messages = await process_tool_calls(tool_calls, faqtivGlobals)
                         conversation.extend(tool_messages)
                         has_tool_calls = True
                         insert_newline = True # set flag to insert newline before next tokens
