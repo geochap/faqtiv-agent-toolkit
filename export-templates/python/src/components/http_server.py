@@ -13,6 +13,7 @@ from constants import TASK_NAME_TO_FUNCTION_NAME_MAP, TASKS
 from components.completions import stream_completion, generate_completion
 from components.logger import log, log_err
 from components.tools import capture_and_process_output, generate_and_execute_adhoc
+from components.agent_gateway import AgentGateway
 from components.types import CompletionRequest
 import time
 
@@ -117,6 +118,7 @@ async def completions_endpoint(request: CompletionRequest, raw_request: Request)
     max_tokens = request.max_tokens
     temperature = request.temperature
     stream = request.stream
+    delegation_token = request.delegation_token
 
     log_body = {
         'id': completion_id,
@@ -125,7 +127,8 @@ async def completions_endpoint(request: CompletionRequest, raw_request: Request)
         'include_tool_messages': include_tool_messages,
         'max_tokens': max_tokens,
         'temperature': temperature,
-        'stream': stream
+        'stream': stream,
+        'delegation_token': True if delegation_token else False
     }
     log('completions', 'completions', log_body)
 
@@ -142,8 +145,13 @@ async def completions_endpoint(request: CompletionRequest, raw_request: Request)
                     chunk_queue.put_nowait(chunk)
 
                 streamWriter = StreamWriter(completion_id, write_chunk)
+                agentGateway = AgentGateway(delegation_token)
+                faqtivGlobals = {
+                    "streamWriter": streamWriter,
+                    "agentGateway": agentGateway
+                }
                 completion_task = asyncio.create_task(
-                    stream_chunks(stream_completion(completion_id, messages, params={"include_tool_messages": include_tool_messages, "max_tokens": max_tokens, "temperature": temperature}, streamWriter=streamWriter), chunk_queue)
+                    stream_chunks(stream_completion(completion_id, messages, params={"include_tool_messages": include_tool_messages, "max_tokens": max_tokens, "temperature": temperature}, faqtivGlobals=faqtivGlobals), chunk_queue)
                 )
 
                 try:

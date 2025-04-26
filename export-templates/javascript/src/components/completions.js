@@ -31,9 +31,9 @@ const completionTools = [
     schema: z.object({
       description: z.string(),
     }),
-    func: async ({ description }, streamWriter) => {
+    func: async ({ description }, faqtivGlobals) => {
       try {
-        const result = await generateAndExecuteAdhoc(description, streamWriter);
+        const result = await generateAndExecuteAdhoc(description, faqtivGlobals);
         return typeof result === 'object' ? JSON.stringify(result) : String(result);
       } catch (error) {
         return `Error during execution: ${error.message}`;
@@ -51,7 +51,7 @@ const completionPrompt = ChatPromptTemplate.fromMessages(
   ]
 );
 
-async function processToolCalls(toolCalls, streamWriter) {
+async function processToolCalls(toolCalls, faqtivGlobals) {
   const toolMessages = [
     new AIMessage({
       content: '',
@@ -69,11 +69,11 @@ async function processToolCalls(toolCalls, streamWriter) {
         const args = JSON.parse(toolCall.function.arguments);
         const toolCallDescription = getToolCallDescription(toolCall.function.name, args);
 
-        if (toolCallDescription && streamWriter && streamWriter.writeEvent) {
-          streamWriter.writeEvent(toolCallDescription, model);
+        if (toolCallDescription && faqtivGlobals.streamWriter && faqtivGlobals.streamWriter.writeEvent) {
+          faqtivGlobals.streamWriter.writeEvent(toolCallDescription, model);
         }
 
-        const toolResult = await tool.func(args, streamWriter);
+        const toolResult = await tool.func(args, faqtivGlobals);
 
         console.warn("Tool result:", toolResult);
         toolMessages.push(new ToolMessage({
@@ -310,7 +310,7 @@ function setOptionsFromEnv(options) {
   return options;
 }
 
-async function* streamCompletion(completionId, messages, options, streamWriter) {
+async function* streamCompletion(completionId, messages, options, faqtivGlobals) {
   let { includeToolMessages, ...completionOptions } = setOptionsFromEnv(options);
 
   includeToolMessages = !!includeToolMessages;
@@ -422,7 +422,7 @@ async function* streamCompletion(completionId, messages, options, streamWriter) 
 
           if (event.data.output.additional_kwargs.tool_calls) {
             const toolCalls = event.data.output.additional_kwargs.tool_calls;
-            const toolMessages = await processToolCalls(toolCalls, streamWriter);
+            const toolMessages = await processToolCalls(toolCalls, faqtivGlobals);
             conversation = conversation.concat(toolMessages);
             hasToolCalls = true;
             insertNewline = true; // Set flag to insert newline before next tokens
