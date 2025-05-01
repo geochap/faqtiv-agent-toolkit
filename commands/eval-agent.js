@@ -15,11 +15,14 @@ import {
 } from "agentevals";
 import { setupServer, startServer, shutdownServer } from '../lib/server-manager.js';
 import dotenv from 'dotenv';
+import path from 'path';
+import * as config from '../config.js';
 
 dotenv.config();
 
 const EVAL_MODEL = process.env.OPENAI_MODEL || "openai:gpt-4o";
 const DEFAULT_THRESHOLD = 0.7;
+const EVAL_CHOICES = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
 
 // Map of available metrics to their prompts
 const AVAILABLE_METRICS = {
@@ -33,46 +36,76 @@ const AVAILABLE_METRICS = {
 };
 
 /**
- * Calculate score and determine pass/fail status based on threshold
+ * Loads a custom metric from the agent-evals/metrics directory
+ * @param {string} metricName - Name of the metric to load
+ * @returns {Promise<string|null>} - The loaded metric prompt or null if not found
+ */
+async function loadCustomMetric(metricName) {
+  try {
+    const metricPath = path.join(config.project.customMetricsDir, `${metricName}.txt`);
+    if (fs.existsSync(metricPath)) {
+      return fs.readFileSync(metricPath, 'utf8');
+    }
+    return null;
+  } catch (error) {
+    console.warn(`Error loading custom metric "${metricName}": ${error.message}`);
+    return null;
+  }
+}
+
+/**
+ * Evaluates a score against a threshold and determines pass/fail status
  * @param {number} score - The raw score
  * @param {number} threshold - The threshold for passing
- * @returns {object} - Score details including percentage and pass/fail status
+ * @returns {boolean} - True if the score is greater than or equal to the threshold, false otherwise
  */
-function calculateScore(score, threshold) {
-  const percentage = score * 100;
-  return {
-    percentage: percentage.toFixed(2),
-    passed: score >= threshold,
-    threshold
-  };
+function evaluateScoreAgainstThreshold(score, threshold) {
+  return score >= threshold;
 }
 
 /**
  * Create evaluators for the specified metrics
- * @param {string[]} metrics - List of metrics to evaluate
- * @returns {object} - Map of metric names to their evaluators
+ * @param {Array} metrics - List of metrics to evaluate, each with name and threshold
+ * @returns {Promise<object>} - Map of metric names to their evaluators and thresholds
  */
-function createEvaluators(metrics) {
+async function createEvaluators(metrics) {
   const evaluators = {};
   
   for (const metric of metrics) {
-    const metricKey = metric.toLowerCase();
-    if (AVAILABLE_METRICS[metricKey]) {
-      if (metricKey === 'trajectory_accuracy') {
-        // Special case for trajectory accuracy which requires a different evaluator
-        evaluators[metricKey] = createTrajectoryLLMAsJudge({
-          prompt: AVAILABLE_METRICS[metricKey],
-          model: EVAL_MODEL,
-        });
+    const metricKey = metric.name.toLowerCase();
+    let prompt = AVAILABLE_METRICS[metricKey];
+    
+    // If not found in AVAILABLE_METRICS, try to load custom metric
+    if (!prompt) {
+      const customMetric = await loadCustomMetric(metricKey);
+      if (customMetric) {
+        prompt = customMetric;
       } else {
-        evaluators[metricKey] = createLLMAsJudge({
-          prompt: AVAILABLE_METRICS[metricKey],
-          feedbackKey: metricKey,
-          model: EVAL_MODEL,
-        });
+        console.warn(`Warning: Unknown metric "${metric.name}" will be skipped`);
+        continue;
       }
+    }
+
+    if (metricKey === 'trajectory_accuracy') {
+      // Special case for trajectory accuracy which requires a different evaluator
+      evaluators[metricKey] = {
+        evaluator: createTrajectoryLLMAsJudge({
+          prompt,
+          choices: EVAL_CHOICES,
+          model: EVAL_MODEL,
+        }),
+        threshold: metric.threshold
+      };
     } else {
-      console.warn(`Warning: Unknown metric "${metric}" will be skipped`);
+      evaluators[metricKey] = {
+        evaluator: createLLMAsJudge({
+          prompt,
+          feedbackKey: metricKey,
+          choices: EVAL_CHOICES,
+          model: EVAL_MODEL,
+        }),
+        threshold: metric.threshold
+      };
     }
   }
   
@@ -85,14 +118,13 @@ function createEvaluators(metrics) {
  * @param {string} query - The user's query
  * @param {string} response - The assistant's response
  * @param {string} originalResponse - The original response to compare against
- * @param {number} threshold - The threshold for passing
- * @param {object} evaluators - Map of metric names to their evaluators
+ * @param {object} evaluators - Map of metric names to their evaluators and thresholds
  * @returns {Promise<object>} - The evaluation scores
  */
-async function evaluateResponse(context, query, response, originalResponse, threshold, evaluators) {
+async function evaluateResponse(context, query, response, originalResponse, evaluators) {
   const results = {};
   
-  for (const [metric, evaluator] of Object.entries(evaluators)) {
+  for (const [metric, {evaluator, threshold}] of Object.entries(evaluators)) {
     if (metric === 'trajectory_accuracy') {
       // Special case for trajectory accuracy which requires full conversation trajectories
       // This would need to be handled differently in the processConversation function
@@ -108,7 +140,7 @@ async function evaluateResponse(context, query, response, originalResponse, thre
     
     results[metric] = {
       ...evalResult,
-      scoreDetails: calculateScore(evalResult.score, threshold)
+      passed: evaluateScoreAgainstThreshold(evalResult.score, threshold)
     };
   }
   
@@ -175,14 +207,21 @@ function findLastUserAssistantPair(messages) {
 async function processConversation(conversationPath, serverUrl) {
   const conversationData = JSON.parse(fs.readFileSync(conversationPath, 'utf8'));
   let results = {};
-  const threshold = conversationData.threshold || DEFAULT_THRESHOLD;
-  const metrics = conversationData.metrics || ['correctness', 'conciseness', 'hallucination'];
+  const defaultThreshold = conversationData.threshold || DEFAULT_THRESHOLD;
+  const metrics = (conversationData.metrics || [
+    { name: 'correctness', threshold: defaultThreshold },
+    { name: 'conciseness', threshold: defaultThreshold },
+    { name: 'hallucination', threshold: defaultThreshold }
+  ]).map(metric => ({
+    ...metric,
+    threshold: metric.threshold || defaultThreshold
+  }));
   
   // Create evaluators for the specified metrics
-  const evaluators = createEvaluators(metrics);
+  const evaluators = await createEvaluators(metrics);
   
   // Check if trajectory_accuracy is one of the metrics
-  const hasTrajectoryAccuracy = metrics.some(m => m.toLowerCase() === 'trajectory_accuracy');
+  const hasTrajectoryAccuracy = metrics.some(m => m.name.toLowerCase() === 'trajectory_accuracy');
 
   // Find the last user-assistant pair
   const { lastUserIndex, lastUserMessage, lastAssistantResponses } = findLastUserAssistantPair(conversationData.messages);
@@ -241,14 +280,14 @@ async function processConversation(conversationPath, serverUrl) {
       const trajectoryEvaluator = evaluators['trajectory_accuracy'];
       
       // For trajectory accuracy, evaluate with the new messages
-      const trajectoryResult = await trajectoryEvaluator({
+      const trajectoryResult = await trajectoryEvaluator.evaluator({
         outputs: newMessages,
         referenceOutputs: referenceMessages
       });
       
       results['trajectory_accuracy'] = {
         ...trajectoryResult,
-        scoreDetails: calculateScore(trajectoryResult.score, threshold)
+        passed: evaluateScoreAgainstThreshold(trajectoryResult.score, trajectoryEvaluator.threshold)
       };
     }
     
@@ -277,7 +316,6 @@ async function processConversation(conversationPath, serverUrl) {
       lastUserMessage.content, 
       newResponse, 
       originalResponse, 
-      threshold,
       evaluators
     );
     
@@ -285,7 +323,7 @@ async function processConversation(conversationPath, serverUrl) {
     results = { ...results, ...evaluationResults };
   }
 
-  return { results, threshold, metrics };
+  return { results, metrics, defaultThreshold };
 }
 
 /**
@@ -319,11 +357,11 @@ export default async function evalAgent(file, options = {}) {
     }
 
     // Process conversation and get results
-    const { results, threshold, metrics } = await processConversation(conversationPath, serverUrl);
+    const { results, metrics, defaultThreshold } = await processConversation(conversationPath, serverUrl);
     
     // Calculate summary statistics
     const totalMetrics = results ? Object.keys(results).length : 0;
-    const passedMetrics = results ? Object.values(results).filter(r => r.scoreDetails.passed).length : 0;
+    const passedMetrics = results ? Object.values(results).filter(r => r.passed).length : 0;
     
     const summary = {
       passRate: totalMetrics > 0 ? (passedMetrics / totalMetrics) * 100 : 0,
@@ -334,14 +372,14 @@ export default async function evalAgent(file, options = {}) {
     // Create JSON output
     const output = {
       configuration: {
-        threshold: threshold * 100,
+        default_threshold: defaultThreshold,
         metrics: metrics
       },
       summary: summary,
       result: results ? Object.entries(results).map(([metric, evalResult]) => ({
         metric,
-        score: evalResult.scoreDetails.percentage,
-        passed: evalResult.scoreDetails.passed,
+        score: evalResult.score,
+        passed: evalResult.passed,
         comment: evalResult.comment
       })) : []
     };

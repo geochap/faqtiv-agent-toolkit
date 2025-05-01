@@ -77,7 +77,8 @@ export function loadConfig() {
       headerPath: path.join(projectWorkdir, 'functions-header.yml'),
       tmpDir: path.join(projectWorkdir, 'tmp'),
       logsDir: path.join(process.cwd(), 'logs'),
-      dataFilesDir: path.join(process.cwd(), 'data')
+      dataFilesDir: path.join(process.cwd(), 'data'),
+      customMetricsDir: path.join(process.cwd(), 'agent-evals', 'metrics')
     };
   } else {
     if (!isInProjectDir) {
@@ -173,7 +174,8 @@ export function loadConfig() {
       headerPath: path.join(projectWorkdir, 'functions-header.yml'),
       tmpDir: path.join(projectWorkdir, 'tmp'),
       logsDir: path.join(process.cwd(), 'logs'),
-      dataFilesDir: path.join(process.cwd(), 'data')
+      dataFilesDir: path.join(process.cwd(), 'data'),
+      customMetricsDir: path.join(process.cwd(), 'agent-evals', 'metrics')
     };
   }
 }
