@@ -20,6 +20,7 @@
     "@babel/traverse": "^7.24.5",
     "@langchain/core": "^0.3.30",
     "@langchain/openai": "^0.3.17",
+    "@opensearch-project/opensearch": "^3.5.1",
     "axios": "^1.7.7",
     "chokidar": "^3.6.0",
     "commander": "^12.1.0",

@@ -12,7 +12,7 @@ if (!apiKey) {
 
 // Initialize embeddings
 const embeddings = new OpenAIEmbeddings({
-  model: 'text-embedding-ada-002',
+  model: 'text-embedding-3-small',
   apiKey: apiKey
 });
 
@@ -46,7 +46,8 @@ async function getEmbedding(text) {
 
 async function getRelevantExamples(query, k = 10) {
   const queryEmbedding = await getEmbedding(query);
-  const results = await vectorStore.similaritySearchVectorWithScore(queryEmbedding, k);
+
+ const results = await vectorStore.similaritySearchVectorWithScore(queryEmbedding, k);
 
   const relevantExamples = [];
   for (const doc of results) {
@@ -58,6 +59,49 @@ async function getRelevantExamples(query, k = 10) {
   }
   return relevantExamples;
 }
+
+async function findClosestExamplesFromRemoteStore(queryEmbedding, k) {
+  const OPENSEARCH_INDEX = process.env.OPENSEARCH_TASK_INDEX;
+  const opensearchConfig = {
+    node: process.env.OPENSEARCH_URL
+  };
+
+  const opensearch = new Client(opensearchConfig);
+
+  const searchResponse = await opensearch.search({
+    index: OPENSEARCH_INDEX,
+    body: {
+      size: k,
+      query: {
+        bool: {
+          must: {
+            knn: {
+              embedding: {
+                vector: queryEmbedding,
+                k: k,
+              },
+            },
+          }
+        }
+      }
+    },
+  });
+
+  if (searchResponse.statusCode !== 200) {
+    console.error('Error in search response:', searchResponse);
+    throw new Error('Search failed');
+  }
+
+  return searchResponse.body.hits.hits.map((hit) => ({
+    id: hit._id,
+    task: hit._source.task,
+    code: hit._source.code,
+    createdAt: hit._source.createdAt,
+    updatedAt: hit._source.updatedAt,
+    score: hit._score
+  }));
+}
+
 
 module.exports = {
   getRelevantExamples

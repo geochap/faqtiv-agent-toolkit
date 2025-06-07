@@ -79,6 +79,7 @@ program
 
 program
   .command('run-ad-hoc-task <description>')
+  .option('--answer <answer>', 'Optional known answer')
   .description('Compile and run an ad hoc task')
   .action(runAdHocTask);
 

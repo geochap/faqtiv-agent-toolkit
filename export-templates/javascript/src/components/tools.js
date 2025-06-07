@@ -49,7 +49,7 @@ function captureAndProcessOutput(func, args = [], streamWriter) {
         if (typeof value === 'function') {
           wrapped[key] = makeSafeWrapper(value);
         } else if (typeof value === 'object' && value !== null) {
-          wrapped[key] = Object.freeze(wrapObject(value));
+          wrapped[key] = Object.freeze(wrapObject(value)); // nested object
         } else {
           wrapped[key] = value;
         }
@@ -64,17 +64,26 @@ function captureAndProcessOutput(func, args = [], streamWriter) {
       console: Object.freeze({
         log: customLog,
         warn: console.warn,
-        error: console.error,
+        error: (err) => {
+          if (!resolved) {
+            resolved = true;
+            const message = err?.stack || err?.message || String(err);
+            reject(new Error(`console.error: ${message}`));
+          }
+        },
       }),
       __captureError: (err) => {
         if (!resolved) {
           resolved = true;
-          reject(typeof err === 'object' ? err.message || String(err) : String(err));
+          const message = err?.stack || err?.message || String(err);
+          reject(new Error(`Sandbox error: ${message}`));
         }
       },
     };
 
     const context = vm.createContext(frozenContext);
+
+    globalThis.streamWriter = streamWriter;
 
     const funcString = typeof func === 'function' ? func.toString() : func;
 
@@ -90,13 +99,15 @@ function captureAndProcessOutput(func, args = [], streamWriter) {
       })();
     `;
 
+    console.log(wrappedCode);
+
     try {
       const script = new vm.Script(wrappedCode, { timeout: TOOL_TIMEOUT });
       script.runInContext(context);
     } catch (err) {
       if (!resolved) {
         resolved = true;
-        reject(err);
+        reject(new Error(`VM script error: ${err.message || err}`));
       }
     }
 
@@ -219,10 +230,12 @@ const adhocLLM = new ChatOpenAI({
   },
 });
 
-async function generateAndExecuteAdhoc(userInput, streamWriter, maxRetries = 5) {
+async function generateAndExecuteAdhoc(userInput, streamWriter, maxRetries = 3) {
   let retryCount = 0;
   const errors = [];
   let previousCode = null;
+
+  const match = await getMatch(userInput);
 
   // Get relevant examples
   const relevantExamples = await getRelevantExamples(userInput);
@@ -265,11 +278,14 @@ async function generateAndExecuteAdhoc(userInput, streamWriter, maxRetries = 5) 
         throw new Error(response.content);
       }
 
-      const functionCode = extractFunctionCode(response.content);
+      const adhocTaskCode = extractFunctionCode(response.content, 'doAdhocTask');
+      const taskCode = extractFunctionCode(response.content, 'doTask');
 
-      if (!functionCode) {
+      if (!adhocTaskCode || !taskCode) {
         throw new Error(`Failed to parse function code: ${response.content}`);
       }
+
+      functionCode = `${adhocTaskCode}\n\n${taskCode}`;
 
       previousCode = functionCode;
 
@@ -278,7 +294,9 @@ async function generateAndExecuteAdhoc(userInput, streamWriter, maxRetries = 5) 
       const result = await captureAndProcessOutput(functionCode, [], streamWriter);
       
       if (!IS_LAMBDA) createAdhocLogFile(userInput, functionCode, result);
-      
+   
+//      logWorkingGeneratedCode(userInput, adhocTaskCode, taskCode, result);
+
       return result;
     } catch (e) {
       const errorMessage = e.message;
