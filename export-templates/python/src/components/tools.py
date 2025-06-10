@@ -20,13 +20,14 @@ from constants import ADHOC_PROMPT_TEXT, LIBS, FUNCTIONS, TASK_TOOL_CALL_DESCRIP
 TOOL_TIMEOUT = int(os.getenv('TOOL_TIMEOUT', 60000)) / 1000
 
 # todo: do we need to handle warn and error logs?
-async def capture_and_process_output(func, *args, streamWriter=None, **kwargs):
+async def capture_and_process_output(func, *args, faqtivGlobals=None, **kwargs):
     f = io.StringIO()
     try:
         async def execute():
             with redirect_stdout(f):
                 builtins_dict = sys.modules['builtins'].__dict__
-                builtins_dict['streamWriter'] = streamWriter
+                builtins_dict['streamWriter'] = faqtivGlobals['streamWriter']
+                builtins_dict['agentGateway'] = faqtivGlobals['agentGateway']
 
                 if asyncio.iscoroutinefunction(func):
                     return await func(*args, **kwargs)
@@ -52,7 +53,7 @@ async def capture_and_process_output(func, *args, streamWriter=None, **kwargs):
         raise
 
 # Capture stdout of tasks
-async def tool_wrapper(func, *args, streamWriter=None, **kwargs):
+async def tool_wrapper(func, *args, faqtivGlobals=None, **kwargs):
     # todo: make sure the args are in the correct positional order
     # this code extracts the args map from the object and passes them as individual value arguments
     arguments = args[0] if isinstance(args, tuple) and len(args) == 1 else args
@@ -60,7 +61,7 @@ async def tool_wrapper(func, *args, streamWriter=None, **kwargs):
     arguments_map = json.loads(arguments_json)
     positional_args = list(arguments_map.values())
             
-    return await capture_and_process_output(func, *positional_args, streamWriter=streamWriter, **kwargs)
+    return await capture_and_process_output(func, *positional_args, faqtivGlobals=faqtivGlobals, **kwargs)
 
 def create_tools_from_schemas(schemas: Dict[str, Dict[str, Any]]) -> List[StructuredTool]:
     tools = []
@@ -114,7 +115,7 @@ async def execute_generated_function(function_code):
     return result
 
 # Adhoc task execution
-async def generate_and_execute_adhoc(user_input: str, streamWriter=None, max_retries: int = 5):
+async def generate_and_execute_adhoc(user_input: str, faqtivGlobals=None, max_retries: int = 5):
     retry_count = 0
     errors = []
     previous_code = None
@@ -165,7 +166,7 @@ async def generate_and_execute_adhoc(user_input: str, streamWriter=None, max_ret
 
             print("Generated code:", function_code, flush=True)
 
-            result = await capture_and_process_output(execute_generated_function, function_code, streamWriter=streamWriter)
+            result = await capture_and_process_output(execute_generated_function, function_code, faqtivGlobals=faqtivGlobals)
             
             create_adhoc_log_file(user_input, function_code, result)
             
