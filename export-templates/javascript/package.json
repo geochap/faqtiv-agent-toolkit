@@ -5,11 +5,16 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node src/index.js --http",
-    "build": "esbuild src/index.js --bundle --outfile=dist/index.js --platform=node --target=node20",
-    "sst-dev": "npm run build && sst dev",
-    "deploy-dev": "npm run build && sst deploy --stage=dev",
-    "deploy-staging": "npm run build && sst deploy --stage=staging",
-    "deploy-prod": "npm run build && sst deploy --stage=production"
+    "deploy-bootstrap": "npx cdk bootstrap --region $AWS_REGION",
+    "deploy-diff:dev": "npx cdk -a 'node cdk/bin/app.js' diff",
+    "deploy-diff:qa": "npx cdk -a 'node cdk/bin/app.js' diff --context env=qa",
+    "deploy-diff:prod": "npx cdk -a 'node cdk/bin/app.js' diff --context env=prod",
+    "deploy:dev": "npx cdk -a 'node cdk/bin/app.js' deploy --all --require-approval never",
+    "deploy:qa": "npx cdk -a 'node cdk/bin/app.js' deploy --all --require-approval never --context env=qa",
+    "deploy:prod": "npx cdk -a 'node cdk/bin/app.js' deploy --all --require-approval never --context env=prod",
+    "destroy:dev": "npx cdk -a 'node cdk/bin/app.js' destroy --all",
+    "destroy:qa": "npx cdk -a 'node cdk/bin/app.js' destroy --all --context env=qa",
+    "destroy:prod": "npx cdk -a 'node cdk/bin/app.js' destroy --all --context env=prod"
   },
   "keywords": [],
   "author": "",
@@ -35,8 +40,11 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "sst": "3.6.19",
-    "typescript": "^5.3.3",
-    "esbuild": "^0.24.2"
+    "aws-cdk": "^2.1017.1",
+    "aws-cdk-lib": "^2.199.0",
+    "aws-sdk": "^2.1692.0",
+    "aws4": "^1.13.2",
+    "@aws-sdk/client-cloudformation": "^3.817.0",
+    "@aws-sdk/credential-provider-node": "^3.817.0"
   }
 }
