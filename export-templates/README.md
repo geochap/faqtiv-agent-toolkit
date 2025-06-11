@@ -49,11 +49,12 @@ For more detailed information on how to use these endpoints, refer to the origin
 
 ## Deploying to AWS (only for node runtime)
 
-Edit the `sst.config.ts` file to set the lambda configuration for your environment.
+```
+cd cdk
+npm run deploy:{env}
+```
 
-```
-npm run deploy-dev | npm run deploy-staging | npm run deploy-prod
-```
+For more details check [./cdk/README.md](./cdk/README.md)
 
 ## Note
 
