@@ -8,6 +8,7 @@ const { logErr, log } = require('./logger');
 const { generateCompletion, streamCompletion } = require('./completions');
 const agentGateway = require('./agent-gateway');
 const { TASK_NAME_TO_FUNCTION_NAME_MAP, TASKS, IS_LAMBDA } = require('../constants');
+const { initializeLambda } = require('./lambda-utils');
 
 function validateCompletionMessages(messages) {
   if (!messages || !Array.isArray(messages) || messages.length === 0) {
@@ -140,6 +141,15 @@ app.post('/completions', async (req, res) => {
     console.log("Completion request: ", messages.length > 0 ? messages[messages.length - 1].content : "");
 
     const isStreaming = stream === true || req.headers.accept?.includes('text/event-stream');
+    const faqtivGlobals = {
+      streamWriter: {
+        writeEvent: () => {},
+        writeRaw: () => {}
+      },
+      agentGateway: {
+        callAgent: createCallAgent(delegation_token)
+      }
+    };
     
     if (isStreaming) {
       res.setHeader('Content-Type', 'text/event-stream');
@@ -149,16 +159,10 @@ app.post('/completions', async (req, res) => {
       res.setHeader('X-Accel-Buffering', 'no');
       res.setHeader('Transfer-Encoding', 'chunked');
 
+      faqtivGlobals.streamWriter.writeEvent = createEventWriter(completionId, data => res.write(data));
+      faqtivGlobals.streamWriter.writeRaw = createRawWriter(completionId, data => res.write(data));
+
       try {
-        const faqtivGlobals = {
-          streamWriter: {
-            writeEvent: createEventWriter(completionId, data => res.write(data)),
-            writeRaw: createRawWriter(completionId, data => res.write(data)),
-          },
-          agentGateway: {
-            callAgent: createCallAgent(delegation_token)
-          }
-        };
 
         for await (const chunk of streamCompletion(completionId, messages, {includeToolMessages:include_tool_messages, maxTokens:max_tokens, temperature}, faqtivGlobals)) {
           const data = `data: ${JSON.stringify(chunk)}\n\n`;
@@ -177,7 +181,7 @@ app.post('/completions', async (req, res) => {
     }
 
     try {
-      const result = await generateCompletion(completionId, messages, {include_tool_messages, maxTokens:max_tokens, temperature});
+      const result = await generateCompletion(completionId, messages, {include_tool_messages, maxTokens:max_tokens, temperature}, faqtivGlobals);
       res.json(result);
       log('completions', 'done', { id: completionId, status: 'done' });
     } catch (error) {
@@ -236,6 +240,8 @@ function getLambdaBody(event) {
 
 const serverlessApp = serverless(app);
 const lambdaHandler = IS_LAMBDA ? awslambda.streamifyResponse(async (event, responseStream, context) => {
+  await initializeLambda();
+
   // Check if it's a streaming request
   const isCompletionsRequest = (event.path === '/completions' || event.rawPath === '/completions');
   const requestBody = getLambdaBody(event);

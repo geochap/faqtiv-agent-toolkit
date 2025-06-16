@@ -6,23 +6,12 @@ const z = require('zod');
 const { log, logErr } = require('./logger');
 const { createToolsFromSchemas, generateAndExecuteAdhoc, getToolCallDescription } = require('./tools');
 const { getMessagesWithinContextLimit } = require('./context-manager');
-const { TASK_TOOL_SCHEMAS, COMPLETION_PROMPT_TEXT } = require('../constants');
+const { TASK_TOOL_SCHEMAS, COMPLETION_PROMPT_TEXT, getOpenAIApiKey } = require('../constants');
 const { calculateCost } = require('./pricing');
 
 // Create tools from schemas
 const taskTools = createToolsFromSchemas(TASK_TOOL_SCHEMAS);
-
-// Read the API key and model from environment variables
-const apiKey = process.env.OPENAI_API_KEY;
 const model = process.env.OPENAI_MODEL;
-
-if (!apiKey) {
-  throw new Error("OPENAI_API_KEY environment variable is not set");
-}
-
-if (!model) {
-  throw new Error("OPENAI_MODEL environment variable is not set");
-}
 
 const completionTools = [
   new DynamicStructuredTool({
@@ -69,7 +58,7 @@ async function processToolCalls(toolCalls, faqtivGlobals) {
         const args = JSON.parse(toolCall.function.arguments);
         const toolCallDescription = getToolCallDescription(toolCall.function.name, args);
 
-        if (toolCallDescription && faqtivGlobals.streamWriter && faqtivGlobals.streamWriter.writeEvent) {
+        if (toolCallDescription && faqtivGlobals && faqtivGlobals.streamWriter && faqtivGlobals.streamWriter.writeEvent) {
           faqtivGlobals.streamWriter.writeEvent(toolCallDescription, model);
         }
 
@@ -174,14 +163,14 @@ function convertToolMessageToOpenAIFormat(toolMessage) {
   };
 }
 
-async function generateCompletion(completionId, messages, options) {
+async function generateCompletion(completionId, messages, options, faqtivGlobals) {
   let { includeToolMessages, ...completionOptions } = setOptionsFromEnv(options);
 
   includeToolMessages = !!includeToolMessages;
 
   const llm = new ChatOpenAI({
-    apiKey,
-    model,
+    apiKey: await getOpenAIApiKey(),
+    model: process.env.OPENAI_MODEL,
     __includeRawResponse: true,
     ...completionOptions,
     configuration: {
@@ -240,7 +229,7 @@ async function generateCompletion(completionId, messages, options) {
       const result = await processRequest({ conversation });
 
       if (result.additional_kwargs && result.additional_kwargs.tool_calls && result.additional_kwargs.tool_calls.length > 0) {
-        const toolMessages = await processToolCalls(result.additional_kwargs.tool_calls);
+        const toolMessages = await processToolCalls(result.additional_kwargs.tool_calls, faqtivGlobals);
         conversation = conversation.concat(toolMessages);
         toolResultsMessages.push(...toolMessages);
       } else {
@@ -318,7 +307,7 @@ async function* streamCompletion(completionId, messages, options, faqtivGlobals)
 
   
   const llm = new ChatOpenAI({
-    apiKey,
+    apiKey: await getOpenAIApiKey(),
     model,
     ...completionOptions,
     __includeRawResponse: true,

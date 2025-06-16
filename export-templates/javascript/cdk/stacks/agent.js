@@ -24,6 +24,23 @@ class AgentStack extends cdk.Stack {
       memorySize: 256,
       environment: {},
       logRetention: logs.RetentionDays.ONE_WEEK,
+      bundling: {
+        commandHooks: {
+          beforeBundling(inputDir, outputDir) {
+            return [
+              // Copy examples and data directories into the output bundle
+              `cp -r ${inputDir}/src/examples ${outputDir}/examples`,
+              `cp -r ${inputDir}/src/data ${outputDir}/data`
+            ];
+          },
+          afterBundling() {
+            return [];
+          },
+          beforeInstall() {
+            return [];
+          }
+        }
+      }
     });
 
     const fnUrl = agentLambda.addFunctionUrl({

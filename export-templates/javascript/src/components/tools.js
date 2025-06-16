@@ -4,7 +4,7 @@ const { ChatOpenAI } = require('@langchain/openai');
 const { getRelevantExamples } = require('./examples');
 const { createAdhocLogFile } = require('./logger');
 const { extractFunctionCode } = require('./parser');
-const { ADHOC_PROMPT_TEXT, LIBS, FUNCTIONS, IS_LAMBDA, TASK_TOOL_CALL_DESCRIPTION_TEMPLATES } = require('../constants');
+const { ADHOC_PROMPT_TEXT, LIBS, FUNCTIONS, IS_LAMBDA, TASK_TOOL_CALL_DESCRIPTION_TEMPLATES, getOpenAIApiKey } = require('../constants');
 
 const TOOL_TIMEOUT = parseInt(process.env.TOOL_TIMEOUT || '60000');
 
@@ -104,21 +104,18 @@ function createToolsFromSchemas(schemas) {
   return tools;
 }
 
-const apiKey = process.env.OPENAI_API_KEY;
-const model = process.env.OPENAI_MODEL;
-
-const adhocLLM = new ChatOpenAI({
-  apiKey,
-  model,
-  configuration: {
-    defaultHeaders: {
-      'Connection': 'keep-alive',
-      'Keep-Alive': 'timeout=900'
-    },
-  },
-});
-
 async function generateAndExecuteAdhoc(userInput, faqtivGlobals, maxRetries = 5) {
+  const adhocLLM = new ChatOpenAI({
+    apiKey: await getOpenAIApiKey(),
+    model: process.env.OPENAI_MODEL,
+    configuration: {
+      defaultHeaders: {
+        'Connection': 'keep-alive',
+        'Keep-Alive': 'timeout=900'
+      },
+    },
+  });
+
   let retryCount = 0;
   const errors = [];
   let previousCode = null;
