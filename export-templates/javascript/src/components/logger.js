@@ -16,9 +16,30 @@ log4js.addLayout('json', function(config) {
   }
 });
 
+if (IS_LAMBDA) {
+  log4js.addLayout('cloudwatch', function(config) {
+    return function(logEvent) {
+      // logEvent.data[0] is the object passed to logger.info/error
+      const data = logEvent.data && logEvent.data[0] ? logEvent.data[0] : {};
+      const output = {
+        timestamp: new Date(logEvent.startTime).toISOString(),
+        level: logEvent.level.levelStr.toLowerCase(),
+        message: data.message || data.event || '',
+        command: data.command || '',
+        event: data.event || '',
+        body: data.body || '',
+        error: data.error || undefined
+      };
+      // Remove undefined fields
+      Object.keys(output).forEach(key => output[key] === undefined && delete output[key]);
+      return JSON.stringify(output) + (config.separator || '\n');
+    };
+  });
+}
+
 const log4jsConfig = {
   appenders: IS_LAMBDA ? {
-    stdout: { type: 'stdout', layout: { type: 'json', separator: ',' } }
+    stdout: { type: 'stdout', layout: { type: 'cloudwatch', separator: '\n' } }
   } : {
     file: { 
       type: 'file',

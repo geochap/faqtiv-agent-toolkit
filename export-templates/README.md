@@ -20,6 +20,7 @@ This is a standalone version of a FAQtiv agent. It includes all the necessary co
 ### Other environment variables
 
 - `TOOL_TIMEOUT`: The timeout for tool execution in milliseconds. Defaults to 60000 (60 seconds).
+- `AWS_XRAY_ENABLED`: Enable AWSXRay.captureHTTPsGlobal for full tracing.
 
 ## Running the Agent
 
