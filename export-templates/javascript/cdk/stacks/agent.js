@@ -40,7 +40,8 @@ class AgentStack extends cdk.Stack {
             return [];
           }
         }
-      }
+      },
+      tracing: lambda.Tracing.ACTIVE,
     });
 
     const fnUrl = agentLambda.addFunctionUrl({
