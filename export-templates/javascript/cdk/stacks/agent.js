@@ -23,6 +23,9 @@ class AgentStack extends cdk.Stack {
       timeout: cdk.Duration.minutes(15),
       memorySize: 256,
       environment: {
+        OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+        OPENAI_MODEL: process.env.OPENAI_MODEL,
+        OPENAI_EMBEDDING_MODEL: process.env.OPENAI_EMBEDDING_MODEL,
         AWS_XRAY_ENABLED: process.env.AWS_XRAY_ENABLED || 'false'
       },
       logRetention: logs.RetentionDays.ONE_WEEK,
