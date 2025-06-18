@@ -23,6 +23,14 @@ class AgentStack extends cdk.Stack {
       secretStringValue: cdk.SecretValue.unsafePlainText(process.env.OPENAI_API_KEY || ''),
     });
 
+    let agentGatewayTokenSecret = null;
+    if (process.env.AGENT_GATEWAY_TOKEN) {
+      agentGatewayTokenSecret = new secretsmanager.Secret(this, 'AgentGatewayTokenSecret', {
+        secretName: `${agentId}-agent-gateway-token-${environment}`,
+        secretStringValue: cdk.SecretValue.unsafePlainText(process.env.AGENT_GATEWAY_TOKEN || ''),
+      });
+    }
+
     const agentLambda = new lambdaNode.NodejsFunction(this, `Agent-${agentId}`, {
       runtime: lambda.Runtime.NODEJS_20_X,
       entry: path.join(__dirname, '../../src/index.js'),
@@ -33,6 +41,8 @@ class AgentStack extends cdk.Stack {
         OPENAI_API_KEY_SECRET_NAME: openaiKeySecret.secretName,
         OPENAI_MODEL: process.env.OPENAI_MODEL,
         OPENAI_EMBEDDING_MODEL: process.env.OPENAI_EMBEDDING_MODEL,
+        AGENT_GATEWAY_URL: process.env.AGENT_GATEWAY_URL,
+        AGENT_GATEWAY_TOKEN_SECRET_NAME: agentGatewayTokenSecret ? agentGatewayTokenSecret.secretName : null,
         AWS_XRAY_ENABLED: process.env.AWS_XRAY_ENABLED || 'false'
       },
       logRetention: logs.RetentionDays.ONE_WEEK,

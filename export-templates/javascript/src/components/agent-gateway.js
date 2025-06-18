@@ -1,9 +1,11 @@
-const { AGENT_GATEWAY_URL, AGENT_GATEWAY_TOKEN } = require("../constants");
+const { AGENT_GATEWAY_URL, getAgentGatewayToken } = require("../constants");
 const { log, logErr } = require("./logger");
 
 async function getDelegationToken(targetAgentId, delegationToken) {
 
   log("agent-gateway", "getDelegationToken", { targetAgentId });
+
+  const AGENT_GATEWAY_TOKEN = await getAgentGatewayToken();
 
   if (!AGENT_GATEWAY_URL || !AGENT_GATEWAY_TOKEN) {
     throw new Error("Agent gateway is not configured");
@@ -37,6 +39,7 @@ async function getDelegationToken(targetAgentId, delegationToken) {
 
 async function callAgent({ messages, includeToolMessages, maxTokens, temperature, stream, agentId, delegationToken }) {
 
+  const AGENT_GATEWAY_TOKEN = await getAgentGatewayToken();
   const newDelegationToken = await getDelegationToken(agentId, delegationToken);
 
   log("agent-gateway", "callAgent", { agentId });
