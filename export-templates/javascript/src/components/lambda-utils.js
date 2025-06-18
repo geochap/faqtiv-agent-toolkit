@@ -1,4 +1,4 @@
-const { getOpenAIApiKey } = require('../constants');
+const { getOpenAIApiKey, IS_LAMBDA } = require('../constants');
 const { initializeExamples } = require('./examples');
 
 async function initializeLambda() {

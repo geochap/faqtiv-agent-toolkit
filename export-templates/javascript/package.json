@@ -37,7 +37,8 @@
     "mkdirp": "^3.0.1",
     "serverless-http": "^3.2.0",
     "uuid": "^10.0.0",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "aws-xray-sdk-core": "^3.10.3"
   },
   "devDependencies": {
     "aws-cdk": "^2.1017.1",

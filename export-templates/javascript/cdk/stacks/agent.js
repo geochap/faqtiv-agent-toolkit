@@ -22,7 +22,9 @@ class AgentStack extends cdk.Stack {
       handler: 'handler',
       timeout: cdk.Duration.minutes(15),
       memorySize: 256,
-      environment: {},
+      environment: {
+        AWS_XRAY_ENABLED: process.env.AWS_XRAY_ENABLED || 'false'
+      },
       logRetention: logs.RetentionDays.ONE_WEEK,
       bundling: {
         commandHooks: {
