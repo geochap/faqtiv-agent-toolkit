@@ -3,6 +3,7 @@ const lambdaNode = require('aws-cdk-lib/aws-lambda-nodejs');
 const logs = require('aws-cdk-lib/aws-logs');
 const lambda = require('aws-cdk-lib/aws-lambda');
 const path = require('path');
+const secretsmanager = require('aws-cdk-lib/aws-secretsmanager');
 
 class AgentStack extends cdk.Stack {
   constructor(scope, id, props) {
@@ -16,6 +17,12 @@ class AgentStack extends cdk.Stack {
       tags = {},
     } = props;
 
+    // NOTE: unsafePlainText should not be used in production, secrets should be created in the AWS console
+    const openaiKeySecret = new secretsmanager.Secret(this, 'OpenAIApiKeySecret', {
+      secretName: `${agentId}-openai-key-${environment}`,
+      secretStringValue: cdk.SecretValue.unsafePlainText(process.env.OPENAI_API_KEY || ''),
+    });
+
     const agentLambda = new lambdaNode.NodejsFunction(this, `Agent-${agentId}`, {
       runtime: lambda.Runtime.NODEJS_20_X,
       entry: path.join(__dirname, '../../src/index.js'),
@@ -23,7 +30,7 @@ class AgentStack extends cdk.Stack {
       timeout: cdk.Duration.minutes(15),
       memorySize: 256,
       environment: {
-        OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+        OPENAI_API_KEY_SECRET_NAME: openaiKeySecret.secretName,
         OPENAI_MODEL: process.env.OPENAI_MODEL,
         OPENAI_EMBEDDING_MODEL: process.env.OPENAI_EMBEDDING_MODEL,
         AWS_XRAY_ENABLED: process.env.AWS_XRAY_ENABLED || 'false'
