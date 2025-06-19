@@ -66,6 +66,9 @@ class AgentStack extends cdk.Stack {
       tracing: lambda.Tracing.ACTIVE,
     });
 
+    openaiKeySecret.grantRead(agentLambda);
+    if (agentGatewayTokenSecret) agentGatewayTokenSecret.grantRead(agentLambda);
+
     const fnUrl = agentLambda.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.AWS_IAM,
       invokeMode: lambda.InvokeMode.RESPONSE_STREAM,
