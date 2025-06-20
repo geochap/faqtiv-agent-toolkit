@@ -1,5 +1,6 @@
 const { lambdaHandler } = require('./components/http-server');
 const { ENV_VARS, getOpenAIApiKey } = require('./constants');
+const { initializeExamples } = require('./components/examples');
 
 // Set environment variables only if they're not already set by Lambda
 for (const [key, value] of Object.entries(ENV_VARS)) {

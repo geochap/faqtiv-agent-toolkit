@@ -1,6 +1,9 @@
 const log4js = require('log4js');
 const z = require('zod');
 const { logDir } = require('./components/logger');
+const dotenv = require('dotenv');
+
+dotenv.config();
 
 // Agent lib and functions dependencies
 {{ imports }}

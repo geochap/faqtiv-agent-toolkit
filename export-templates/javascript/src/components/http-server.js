@@ -24,7 +24,7 @@ function validateCompletionMessages(messages) {
 const app = express();
 
 // Open X-Ray segment for each incoming request (first middleware)
-app.use(XRayExpress.openSegment(process.env.AWS_LAMBDA_FUNCTION_NAME));
+app.use(XRayExpress.openSegment(process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.AGENT_ID || 'faqtiv-agent'));
 
 app.use(bodyParser.json({
   limit: '10mb'
