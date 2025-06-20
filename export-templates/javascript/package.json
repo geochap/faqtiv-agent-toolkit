@@ -29,6 +29,7 @@
     "@langchain/openai": "^0.3.17",
     "async-mutex": "^0.5.0",
     "body-parser": "^1.20.2",
+    "dotenv": "^16.4.7",
     "express": "^4.19.2",
     "figlet": "^1.7.0",
     "js-tiktoken": "^1.0.15",
