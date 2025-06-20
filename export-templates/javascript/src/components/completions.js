@@ -170,7 +170,7 @@ async function generateCompletion(completionId, messages, options, faqtivGlobals
 
   const llm = new ChatOpenAI({
     apiKey: await getOpenAIApiKey(),
-    model: process.env.OPENAI_MODEL,
+    model,
     __includeRawResponse: true,
     ...completionOptions,
     configuration: {
