@@ -51,9 +51,11 @@ class AgentStack extends cdk.Stack {
         commandHooks: {
           beforeBundling(inputDir, outputDir) {
             return [
-              // Copy examples and data directories into the output bundle
-              `cp -r ${inputDir}/src/examples ${outputDir}/examples`,
-              `cp -r ${inputDir}/src/data ${outputDir}/data`
+              `mkdir -p ${outputDir}/examples ${outputDir}/data`,
+              `touch ${outputDir}/examples/.keep`,
+              `touch ${outputDir}/data/.keep`,
+              `if [ -d "${inputDir}/src/examples" ]; then cp -r ${inputDir}/src/examples/. ${outputDir}/examples; fi`,
+              `if [ -d "${inputDir}/src/data" ]; then cp -r ${inputDir}/src/data/. ${outputDir}/data; fi`
             ];
           },
           afterBundling() {
