@@ -36,14 +36,15 @@ class AgentStack extends cdk.Stack {
       entry: path.join(__dirname, '../../src/index.js'),
       handler: 'handler',
       timeout: cdk.Duration.minutes(15),
-      memorySize: 256,
+      memorySize: 512,
       environment: {
         OPENAI_API_KEY_SECRET_NAME: openaiKeySecret.secretName,
         OPENAI_MODEL: process.env.OPENAI_MODEL,
         OPENAI_EMBEDDING_MODEL: process.env.OPENAI_EMBEDDING_MODEL,
         AGENT_GATEWAY_URL: process.env.AGENT_GATEWAY_URL,
         AGENT_GATEWAY_TOKEN_SECRET_NAME: agentGatewayTokenSecret ? agentGatewayTokenSecret.secretName : null,
-        AWS_XRAY_ENABLED: process.env.AWS_XRAY_ENABLED || 'false'
+        AWS_XRAY_ENABLED: process.env.AWS_XRAY_ENABLED || 'false',
+        AGENT_ID: agentId
       },
       logRetention: logs.RetentionDays.ONE_WEEK,
       bundling: {

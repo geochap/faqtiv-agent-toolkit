@@ -3,6 +3,7 @@ const bodyParser = require('body-parser');
 const { v4: uuidv4 } = require('uuid');
 const http = require('http');
 const serverless = require('serverless-http');
+const XRayExpress = require('aws-xray-sdk-express');
 const { generateAndExecuteAdhoc, captureAndProcessOutput } = require('./tools');
 const { logErr, log } = require('./logger');
 const { generateCompletion, streamCompletion } = require('./completions');
@@ -21,6 +22,10 @@ function validateCompletionMessages(messages) {
 }
 
 const app = express();
+
+// Open X-Ray segment for each incoming request (first middleware)
+app.use(XRayExpress.openSegment(process.env.AWS_LAMBDA_FUNCTION_NAME));
+
 app.use(bodyParser.json({
   limit: '10mb'
 }));
@@ -102,9 +107,9 @@ function createRawWriter(completionId, responseWriter) {
   };
 }
 
-function createCallAgent(delegationToken) {
+function createCallAgent(delegationToken, requestId) {
   return async function callAgent({ messages, includeToolMessages, maxTokens, temperature, stream, agentId }) {
-    return agentGateway.callAgent({ messages, includeToolMessages, maxTokens, temperature, stream, agentId, delegationToken });
+    return agentGateway.callAgent({ messages, includeToolMessages, maxTokens, temperature, stream, agentId, delegationToken, requestId });
   };
 }
 
@@ -118,6 +123,8 @@ app.post('/completions', async (req, res) => {
       stream,
       delegation_token
     } = req.body;
+
+    const inboundRequestId = req.get('X-Request-ID') || uuidv4();
 
     const validation = validateCompletionMessages(messages);
     if (!validation.isValid) {
@@ -147,7 +154,7 @@ app.post('/completions', async (req, res) => {
         writeRaw: () => {}
       },
       agentGateway: {
-        callAgent: createCallAgent(delegation_token)
+        callAgent: createCallAgent(delegation_token, inboundRequestId)
       }
     };
     
@@ -268,6 +275,8 @@ const lambdaHandler = IS_LAMBDA ? awslambda.streamifyResponse(async (event, resp
     try {
       const { messages, include_tool_messages, max_tokens, temperature, delegation_token } = requestBody;
 
+      const inboundRequestId = event.headers['x-request-id'] || event.headers['X-Request-ID'] || event.headers['x-amzn-trace-id'] || uuidv4();
+
       const validation = validateCompletionMessages(messages);
       if (!validation.isValid) {
         responseStream.write(JSON.stringify({ error: validation.error }));
@@ -293,7 +302,7 @@ const lambdaHandler = IS_LAMBDA ? awslambda.streamifyResponse(async (event, resp
           writeRaw: createRawWriter(completionId, data => responseStream.write(data)),
         },
         agentGateway: {
-          callAgent: createCallAgent(delegation_token)
+          callAgent: createCallAgent(delegation_token, inboundRequestId)
         }
       };
 
@@ -359,6 +368,9 @@ const lambdaHandler = IS_LAMBDA ? awslambda.streamifyResponse(async (event, resp
     };
   }
 }) : null;
+
+// Close X-Ray segment after routes are processed
+app.use(XRayExpress.closeSegment());
 
 module.exports = {
   startHttpServer,

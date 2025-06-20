@@ -365,7 +365,7 @@ async function* streamCompletion(completionId, messages, options, faqtivGlobals)
     while (true) {
       let hasToolCalls = false;
       for await (const event of processRequest({ conversation })) {
-        log('completions', 'stream-event', { event });
+        // log('completions', 'stream-event', { event });
         if (insertNewline) {
           // Insert a newline before processing new tokens
           const newlineChunk = {
