@@ -79,6 +79,8 @@ async function getAgentGatewayToken() {
   return token;
 }
 
+const LOG_LEVEL = process.env.LOG_LEVEL || 'info';
+
 module.exports = {
   TASKS,
   TASK_TOOL_SCHEMAS,
@@ -90,6 +92,7 @@ module.exports = {
   FUNCTIONS,
   ENV_VARS,
   IS_LAMBDA,
+  LOG_LEVEL,
   AGENT_GATEWAY_URL,
   getAgentGatewayToken,
   getOpenAIApiKey

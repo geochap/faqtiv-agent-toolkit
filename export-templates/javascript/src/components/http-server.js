@@ -5,7 +5,7 @@ const http = require('http');
 const serverless = require('serverless-http');
 const XRayExpress = require('aws-xray-sdk-express');
 const { generateAndExecuteAdhoc, captureAndProcessOutput } = require('./tools');
-const { logErr, log } = require('./logger');
+const { logErr, log, setRequestContext } = require('./logger');
 const { generateCompletion, streamCompletion } = require('./completions');
 const agentGateway = require('./agent-gateway');
 const { TASK_NAME_TO_FUNCTION_NAME_MAP, TASKS, IS_LAMBDA } = require('../constants');
@@ -29,6 +29,13 @@ app.use(XRayExpress.openSegment(process.env.AWS_LAMBDA_FUNCTION_NAME || process.
 app.use(bodyParser.json({
   limit: '10mb'
 }));
+
+// Middleware to set up AsyncLocalStorage context with requestId
+app.use((req, res, next) => {
+  const requestId = req.get('X-Request-ID') || uuidv4();
+  setRequestContext({ requestId });
+  next();
+});
 
 // Enable CORS
 app.use((req, res, next) => {
@@ -144,8 +151,7 @@ app.post('/completions', async (req, res) => {
       delegation_token: delegation_token ? true : false
     };
     log('completions', 'request', logBody);
-
-    console.log("Completion request: ", messages.length > 0 ? messages[messages.length - 1].content : "");
+    log("Completion request: ", messages.length > 0 ? messages[messages.length - 1].content : "");
 
     const isStreaming = stream === true || req.headers.accept?.includes('text/event-stream');
     const faqtivGlobals = {
@@ -204,8 +210,8 @@ app.post('/completions', async (req, res) => {
 function shutdownServer(server) {
   return new Promise((resolve) => {
     server.close(() => {
-      console.log('Server shut down gracefully');
-      resolve();
+      log('Server shut down gracefully');
+      resolve();  
     });
   });
 }
@@ -220,7 +226,7 @@ function startHttpServer() {
     app.post('/shutdown', (req, res) => {
       const { key } = req.body;
 
-      console.log('Received shutdown request');
+      log('Received shutdown request');
 
       if (key === shutdownKey) {
         res.status(200).send('Shutting down server');
@@ -234,7 +240,7 @@ function startHttpServer() {
   }
 
   server.listen(port, () => {
-    console.log(`HTTP server running on port ${port}`);
+    log(`HTTP server running on port ${port}`);
   });
 }
 
@@ -247,6 +253,9 @@ function getLambdaBody(event) {
 
 const serverlessApp = serverless(app);
 const lambdaHandler = IS_LAMBDA ? awslambda.streamifyResponse(async (event, responseStream, context) => {
+  const requestId = event.headers?.['x-request-id'] || event.headers?.['X-Request-ID'] || event.headers?.['x-amzn-trace-id'] || (context && context.awsRequestId) || uuidv4();
+  setRequestContext({ requestId });
+  
   await initializeLambda();
 
   // Check if it's a streaming request

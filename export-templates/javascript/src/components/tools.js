@@ -2,7 +2,7 @@ const { DynamicStructuredTool } = require('@langchain/core/tools');
 const { AIMessage, HumanMessage, SystemMessage } = require('@langchain/core/messages');
 const { ChatOpenAI } = require('@langchain/openai');
 const { getRelevantExamples } = require('./examples');
-const { createAdhocLogFile } = require('./logger');
+const { createAdhocLogFile, log, logWarning, logErr } = require('./logger');
 const { extractFunctionCode } = require('./parser');
 const { ADHOC_PROMPT_TEXT, LIBS, FUNCTIONS, IS_LAMBDA, TASK_TOOL_CALL_DESCRIPTION_TEMPLATES, getOpenAIApiKey } = require('../constants');
 
@@ -32,7 +32,7 @@ function captureAndProcessOutput(func, args = [], faqtivGlobals) {
     // Create a context object with all the necessary functions and variables
     const context = {
       require,
-      console: { log: customLog, warn: console.warn, error: console.error  },
+      console: { log: customLog, warn: logWarning, error: logErr  },
       // Add all the functions and variables from the local scope that the function might need
       faqtivGlobals,
       ...LIBS,
@@ -79,7 +79,7 @@ async function toolWrapper(func, args, faqtivGlobals) {
     // Ensure the result is a string
     return (typeof result === 'object' ? JSON.stringify(result) : String(result));
   } catch (error) {
-    console.error(`Error in toolWrapper: ${error.message}`);
+    logErr(`Error in toolWrapper: ${error.message}`);
     return `Error: ${error.message}`;
   }
 }
@@ -169,7 +169,7 @@ async function generateAndExecuteAdhoc(userInput, faqtivGlobals, maxRetries = 5)
 
       previousCode = functionCode;
 
-      console.log("Generated code:", functionCode);
+      logDebug("Generated code:", functionCode);
 
       const result = await captureAndProcessOutput(functionCode, [], faqtivGlobals);
       
@@ -178,19 +178,19 @@ async function generateAndExecuteAdhoc(userInput, faqtivGlobals, maxRetries = 5)
       return result;
     } catch (e) {
       const errorMessage = e.message;
-      console.error(`Error during execution (attempt ${retryCount + 1}): ${errorMessage}`);
+      logErr(`Error during execution (attempt ${retryCount + 1}): ${errorMessage}`);
       errors.push(errorMessage);
       retryCount++;
 
       if (retryCount === maxRetries) {
-        console.error(`Max retries (${maxRetries}) reached. Aborting.`);
+        logErr(`Max retries (${maxRetries}) reached. Aborting.`);
         if (!IS_LAMBDA) createAdhocLogFile(userInput, previousCode, '', new Error(`Max retries reached. Last error: ${errorMessage}`));
         throw new Error(`Max retries reached. Last error: ${errorMessage}`);
       }
 
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      console.log(`Retrying... (attempt ${retryCount} of ${maxRetries})`);
+      log(`Retrying... (attempt ${retryCount} of ${maxRetries})`);
     }
   }
 
