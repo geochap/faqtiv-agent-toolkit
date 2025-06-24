@@ -2,7 +2,7 @@ const { DynamicStructuredTool } = require('@langchain/core/tools');
 const { AIMessage, HumanMessage, SystemMessage } = require('@langchain/core/messages');
 const { ChatOpenAI } = require('@langchain/openai');
 const { getRelevantExamples } = require('./examples');
-const { createAdhocLogFile, log, logWarning, logErr } = require('./logger');
+const { createAdhocLogFile, log, logWarning, logErr, logDebug } = require('./logger');
 const { extractFunctionCode } = require('./parser');
 const { ADHOC_PROMPT_TEXT, LIBS, FUNCTIONS, IS_LAMBDA, TASK_TOOL_CALL_DESCRIPTION_TEMPLATES, getOpenAIApiKey } = require('../constants');
 

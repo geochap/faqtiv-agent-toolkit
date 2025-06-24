@@ -105,7 +105,7 @@ function logErr(message, ...args) {
 }
 
 function logDebug(message, ...args) {
-  if (config.logging.LOG_LEVEL === 'debug') {
+  if (LOG_LEVEL === 'debug') {
     appLogger.debug(message, ...args);
   }
 }
