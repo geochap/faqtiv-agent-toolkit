@@ -381,6 +381,26 @@ const lambdaHandler = IS_LAMBDA ? awslambda.streamifyResponse(async (event, resp
 // Close X-Ray segment after routes are processed
 app.use(XRayExpress.closeSegment());
 
+// -----------------------------------------------------
+// Global fatal error handlers (agent express service)
+// -----------------------------------------------------
+process.on('uncaughtException', (err) => {
+  logErr('process', 'uncaughtException', {}, err);
+  // In local / container execution we terminate to avoid undefined state
+  if (!IS_LAMBDA) {
+    console.error('Uncaught Exception – terminating process');
+    setTimeout(() => process.exit(1), 100);
+  }
+});
+
+process.on('unhandledRejection', (reason) => {
+  logErr('process', 'unhandledRejection', {}, reason instanceof Error ? reason : new Error(String(reason)));
+  if (!IS_LAMBDA) {
+    console.error('Unhandled Rejection – terminating process');
+    setTimeout(() => process.exit(1), 100);
+  }
+});
+
 module.exports = {
   startHttpServer,
   lambdaHandler
