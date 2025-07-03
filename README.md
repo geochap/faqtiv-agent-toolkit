@@ -549,9 +549,34 @@ For help with any command, use the `--help` flag:
 faqtiv <command> --help
 ```
 
-## Example
-Here is an example of initializing a new project:
+### Evaluating Agent Responses
+
+To evaluate agent responses using OpenEvals, use the `eval-agent` command:
 
 ```bash
-faqtiv init my_project --runtime python
+faqtiv eval-agent <conversation-file>
 ```
+
+- `<conversation-file>`: Path to the conversation file in JSON format
+- `-u, --url <url>`: URL of an existing server to use instead of starting a new one
+
+This command evaluates agent responses against various metrics and compares them with reference outputs. See the [Eval-Agent Guide](docs/eval-agent-guide.md) for detailed usage.
+
+### Evaluating Task Executions
+
+To evaluate task executions by comparing new outputs with previously validated outputs, use the `eval-task` command:
+
+```bash
+# Evaluate a specific task
+faqtiv eval-task <taskName>
+
+# Evaluate all tasks with validation data
+faqtiv eval-task --all
+```
+
+Options:
+- `--all`: Evaluate all tasks that have validation data
+- `--verbose`: Show detailed output from task execution
+- `--concurrency <number>`: Number of concurrent executions to run (default: 10)
+
+This command helps ensure the consistency and quality of task executions over time. See the [Eval-Task Guide](docs/eval-task-guide.md) for detailed usage.

@@ -71,12 +71,14 @@ export function loadConfig() {
       auto_add_examples: true,
       metadataDir: path.join(projectWorkdir, 'code'),
       tasksDir: path.join(process.cwd(), 'tasks'),
+      evalsDir: path.join(process.cwd(), 'evals'),
       codeDir: path.join(process.cwd(), 'code'),
       functionsDir: path.join(process.cwd(), 'functions'),
       headerPath: path.join(projectWorkdir, 'functions-header.yml'),
       tmpDir: path.join(projectWorkdir, 'tmp'),
       logsDir: path.join(process.cwd(), 'logs'),
-      dataFilesDir: path.join(process.cwd(), 'data')
+      dataFilesDir: path.join(process.cwd(), 'data'),
+      customMetricsDir: path.join(process.cwd(), 'agent-evals', 'metrics')
     };
   } else {
     if (!isInProjectDir) {
@@ -103,7 +105,7 @@ export function loadConfig() {
   
       try {
         if (!fs.existsSync(functionsDir)) {
-          console.error('Functions directory not found.');
+          console.error(`${functionsDir} directory not found. Please create it and add functions to it.`);
           process.exit(1);
         }
   
@@ -165,13 +167,15 @@ export function loadConfig() {
       rootDir: process.cwd(),
       metadataDir: path.join(projectWorkdir, 'code'),
       tasksDir: path.join(process.cwd(), 'tasks'),
+      evalsDir: path.join(process.cwd(), 'evals'),
       codeDir: path.join(process.cwd(), 'code'),
       functionsDir: path.join(process.cwd(), 'functions'),
       libsDir: path.join(process.cwd(), 'libs'),
       headerPath: path.join(projectWorkdir, 'functions-header.yml'),
       tmpDir: path.join(projectWorkdir, 'tmp'),
       logsDir: path.join(process.cwd(), 'logs'),
-      dataFilesDir: path.join(process.cwd(), 'data')
+      dataFilesDir: path.join(process.cwd(), 'data'),
+      customMetricsDir: path.join(process.cwd(), 'agent-evals', 'metrics')
     };
   }
 }
