@@ -61,6 +61,18 @@ const appenders = IS_LAMBDA
   ? {
       out: { type: 'stdout', layout: { type: 'structuredJson', separator: '\n' } },
       err: { type: 'stderr', layout: { type: 'structuredJson', separator: '\n' } },
+      // Filtered appenders for proper log level routing
+      infoLogger: {
+        type: 'logLevelFilter',
+        appender: 'out',
+        level: 'trace',
+        maxLevel: 'warn'
+      },
+      errorLogger: {
+        type: 'logLevelFilter', 
+        appender: 'err',
+        level: 'error'
+      }
     }
   : {
       out: { type: 'stdout', layout: { type: 'structuredJson', separator: '\n' } },
@@ -75,16 +87,28 @@ const appenders = IS_LAMBDA
         filename: errorLogsFilePath,
         layout: { type: 'structuredJson', separator: ',' },
       },
+      // Filtered appenders for proper log level routing
+      infoLogger: {
+        type: 'logLevelFilter',
+        appender: 'out',
+        level: 'trace',
+        maxLevel: 'warn'
+      },
+      errorLogger: {
+        type: 'logLevelFilter', 
+        appender: 'err',
+        level: 'error'
+      }
     };
 
 const categories = IS_LAMBDA
   ? {
-      default: { appenders: ['out', 'err'], level: 'info' },
-      error: { appenders: ['err'], level: 'error' },
+      default: { appenders: ['infoLogger', 'errorLogger'], level: 'info' },
+      error: { appenders: ['errorLogger'], level: 'error' },
     }
   : {
-      default: { appenders: ['out', 'err', 'file'], level: 'info' },
-      error: { appenders: ['err', 'errorFile'], level: 'error' },
+      default: { appenders: ['infoLogger', 'errorLogger', 'file'], level: 'info' },
+      error: { appenders: ['errorLogger', 'errorFile'], level: 'error' },
     };
 
 log4js.configure({ appenders, categories });

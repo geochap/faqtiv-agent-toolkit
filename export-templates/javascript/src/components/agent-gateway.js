@@ -41,8 +41,9 @@ async function getDelegationToken(targetAgentId, delegationToken, requestId) {
     });
 
     if (!response.ok) {
-      logErr("agent-gateway", "getDelegationToken", { targetAgentId, response: await response.text() });
-      throw new Error(`Agent gateway: Failed to get delegation token: ${response.statusText}`);
+      const responseText = await response.text();
+      logErr("agent-gateway", "getDelegationToken", { targetAgentId, response: responseText });
+      throw new Error(`Agent gateway: Failed to get delegation token (${response.statusText}): ${responseText}`);
     }
 
     const result = await response.json();
@@ -89,8 +90,9 @@ async function callAgent({ messages, includeToolMessages, maxTokens, temperature
     });
 
     if (!response.ok) {
-      logErr("agent-gateway", "callAgent", { agentId, response: await response.text() });
-      throw new Error(`Agent gateway: Failed to call agent: ${response.statusText}`);
+      const responseText = await response.text();
+      logErr("agent-gateway", "callAgent", { agentId, response: responseText });
+      throw new Error(`Agent gateway: Failed to call agent (${response.statusText}): ${responseText}`);
     }
 
     const data = await response.json();
