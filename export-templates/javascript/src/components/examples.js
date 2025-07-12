@@ -19,7 +19,7 @@ async function initializeExamples() {
   const apiKey = await getOpenAIApiKey();
 
   embeddings = new OpenAIEmbeddings({
-    model: process.env.OPENAI_EMBEDDING_MODEL,
+    model: process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small',
     apiKey: apiKey
   });
 
