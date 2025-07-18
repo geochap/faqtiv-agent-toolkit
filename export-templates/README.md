@@ -20,6 +20,7 @@ This is a standalone version of a FAQtiv agent. It includes all the necessary co
 ### Other environment variables
 
 - `TOOL_TIMEOUT`: The timeout for tool execution in milliseconds. Defaults to 60000 (60 seconds).
+- `AWS_XRAY_ENABLED`: Enable AWSXRay.captureHTTPsGlobal for full tracing.
 
 ## Running the Agent
 
@@ -49,11 +50,12 @@ For more detailed information on how to use these endpoints, refer to the origin
 
 ## Deploying to AWS (only for node runtime)
 
-Edit the `sst.config.ts` file to set the lambda configuration for your environment.
+```
+cd cdk
+npm run deploy:{env}
+```
 
-```
-npm run deploy-dev | npm run deploy-staging | npm run deploy-prod
-```
+For more details check [./cdk/README.md](./cdk/README.md)
 
 ## Note
 

@@ -3,26 +3,15 @@ const { ChatPromptTemplate, MessagesPlaceholder } = require('@langchain/core/pro
 const { ChatOpenAI } = require('@langchain/openai');
 const { AIMessage, HumanMessage, SystemMessage, ToolMessage } = require('@langchain/core/messages');
 const z = require('zod');
-const { log, logErr } = require('./logger');
+const { log, logErr, logWarning } = require('./logger');
 const { createToolsFromSchemas, generateAndExecuteAdhoc, getToolCallDescription } = require('./tools');
 const { getMessagesWithinContextLimit } = require('./context-manager');
-const { TASK_TOOL_SCHEMAS, COMPLETION_PROMPT_TEXT } = require('../constants');
+const { TASK_TOOL_SCHEMAS, COMPLETION_PROMPT_TEXT, getOpenAIApiKey } = require('../constants');
 const { calculateCost } = require('./pricing');
 
 // Create tools from schemas
 const taskTools = createToolsFromSchemas(TASK_TOOL_SCHEMAS);
-
-// Read the API key and model from environment variables
-const apiKey = process.env.OPENAI_API_KEY;
 const model = process.env.OPENAI_MODEL;
-
-if (!apiKey) {
-  throw new Error("OPENAI_API_KEY environment variable is not set");
-}
-
-if (!model) {
-  throw new Error("OPENAI_MODEL environment variable is not set");
-}
 
 const completionTools = [
   new DynamicStructuredTool({
@@ -62,20 +51,20 @@ async function processToolCalls(toolCalls, faqtivGlobals) {
   for (const toolCall of toolCalls) {
     const tool = completionTools.find(t => t.name === toolCall.function.name);
 
-    console.warn("Calling tool:", toolCall.function.name, toolCall.function.arguments);
+    logWarning("Calling tool:", toolCall.function.name, toolCall.function.arguments);
 
     if (tool) {
       try {
         const args = JSON.parse(toolCall.function.arguments);
         const toolCallDescription = getToolCallDescription(toolCall.function.name, args);
 
-        if (toolCallDescription && faqtivGlobals.streamWriter && faqtivGlobals.streamWriter.writeEvent) {
+        if (toolCallDescription && faqtivGlobals && faqtivGlobals.streamWriter && faqtivGlobals.streamWriter.writeEvent) {
           faqtivGlobals.streamWriter.writeEvent(toolCallDescription, model);
         }
 
         const toolResult = await tool.func(args, faqtivGlobals);
 
-        console.warn("Tool result:", toolResult);
+        logWarning("Tool result:", toolResult);
         toolMessages.push(new ToolMessage({
           content: JSON.stringify({
             type: "tool_result",
@@ -86,7 +75,7 @@ async function processToolCalls(toolCalls, faqtivGlobals) {
         }));
       } catch (error) {
         const errorMessage = `Error in tool '${toolCall.function.name}': ${error.message}`;
-        console.warn("Error in tool:", errorMessage);
+        logWarning("Error in tool:", errorMessage);
         toolMessages.push(new ToolMessage({
           content: JSON.stringify({
             type: "tool_result",
@@ -97,7 +86,7 @@ async function processToolCalls(toolCalls, faqtivGlobals) {
         }));
       }
     } else {
-      console.warn("Tool not found:", toolCall.function.name);
+      logWarning("Tool not found:", toolCall.function.name);
       toolMessages.push(new ToolMessage({
         content: JSON.stringify({
           type: "tool_result",
@@ -174,13 +163,13 @@ function convertToolMessageToOpenAIFormat(toolMessage) {
   };
 }
 
-async function generateCompletion(completionId, messages, options) {
+async function generateCompletion(completionId, messages, options, faqtivGlobals) {
   let { includeToolMessages, ...completionOptions } = setOptionsFromEnv(options);
 
   includeToolMessages = !!includeToolMessages;
 
   const llm = new ChatOpenAI({
-    apiKey,
+    apiKey: await getOpenAIApiKey(),
     model,
     __includeRawResponse: true,
     ...completionOptions,
@@ -240,14 +229,14 @@ async function generateCompletion(completionId, messages, options) {
       const result = await processRequest({ conversation });
 
       if (result.additional_kwargs && result.additional_kwargs.tool_calls && result.additional_kwargs.tool_calls.length > 0) {
-        const toolMessages = await processToolCalls(result.additional_kwargs.tool_calls);
+        const toolMessages = await processToolCalls(result.additional_kwargs.tool_calls, faqtivGlobals);
         conversation = conversation.concat(toolMessages);
         toolResultsMessages.push(...toolMessages);
       } else {
         finalContent = result.content;
       }
     } catch (error) {
-      console.error(`Error during completion: ${error}`);
+      logErr(`Error during completion: ${error}`);
       throw error;
     }
   }
@@ -318,7 +307,7 @@ async function* streamCompletion(completionId, messages, options, faqtivGlobals)
 
   
   const llm = new ChatOpenAI({
-    apiKey,
+    apiKey: await getOpenAIApiKey(),
     model,
     ...completionOptions,
     __includeRawResponse: true,
@@ -376,7 +365,7 @@ async function* streamCompletion(completionId, messages, options, faqtivGlobals)
     while (true) {
       let hasToolCalls = false;
       for await (const event of processRequest({ conversation })) {
-        log('completions', 'stream-event', { event });
+        // log('completions', 'stream-event', { event });
         if (insertNewline) {
           // Insert a newline before processing new tokens
           const newlineChunk = {
@@ -469,7 +458,7 @@ async function* streamCompletion(completionId, messages, options, faqtivGlobals)
       if (!hasToolCalls) break;
     }
   } catch (error) {
-    console.error(`Error during streaming: ${error}`);
+    logErr(`Error during streaming: ${error}`);
     logErr('completions', 'completions', { id: completionId }, error);
     const errorChunk = {
       id: completionId,

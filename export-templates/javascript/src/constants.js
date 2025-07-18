@@ -1,6 +1,9 @@
 const log4js = require('log4js');
 const z = require('zod');
 const { logDir } = require('./components/logger');
+const dotenv = require('dotenv');
+
+dotenv.config();
 
 // Agent lib and functions dependencies
 {{ imports }}
@@ -34,11 +37,49 @@ const IS_LAMBDA = !!process.env.AWS_LAMBDA_FUNCTION_NAME;
 
 const AGENT_GATEWAY_URL = process.env.AGENT_GATEWAY_URL;
 
-const AGENT_GATEWAY_TOKEN = process.env.AGENT_GATEWAY_TOKEN;
-
 const ENV_VARS = {
   DATA_FILES: IS_LAMBDA ? "./data" : "./src/data"
 };
+
+async function getOpenAIApiKey() {
+  if (process.env.OPENAI_API_KEY) return process.env.OPENAI_API_KEY;
+
+  const AWS = require('aws-sdk');
+  const secretsManager = new AWS.SecretsManager();
+  const secretName = process.env.OPENAI_API_KEY_SECRET_NAME;
+
+  if (!secretName) throw new Error('OPENAI_API_KEY or OPENAI_API_KEY_SECRET_NAME env var not set');
+
+  const data = await secretsManager.getSecretValue({ SecretId: secretName }).promise();
+  const apiKey = data.SecretString;
+
+  if (!apiKey || apiKey === '') throw new Error('OPENAI_API_KEY not found in secret or env var');
+
+  process.env.OPENAI_API_KEY = apiKey;
+
+  return apiKey;
+}
+
+async function getAgentGatewayToken() {
+  if (process.env.AGENT_GATEWAY_TOKEN) return process.env.AGENT_GATEWAY_TOKEN;
+
+  const AWS = require('aws-sdk');
+  const secretsManager = new AWS.SecretsManager();
+  const secretName = process.env.AGENT_GATEWAY_TOKEN_SECRET_NAME;
+
+  if (!secretName) throw new Error('AGENT_GATEWAY_TOKEN or AGENT_GATEWAY_TOKEN_SECRET_NAME env var not set');
+
+  const data = await secretsManager.getSecretValue({ SecretId: secretName }).promise();
+  const token = data.SecretString;
+
+  if (!token || token === '') throw new Error('AGENT_GATEWAY_TOKEN not found in secret or env var');
+
+  process.env.AGENT_GATEWAY_TOKEN = token;
+
+  return token;
+}
+
+const LOG_LEVEL = process.env.LOG_LEVEL || 'info';
 
 module.exports = {
   TASKS,
@@ -51,6 +92,8 @@ module.exports = {
   FUNCTIONS,
   ENV_VARS,
   IS_LAMBDA,
+  LOG_LEVEL,
   AGENT_GATEWAY_URL,
-  AGENT_GATEWAY_TOKEN
+  getAgentGatewayToken,
+  getOpenAIApiKey
 };

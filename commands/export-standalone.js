@@ -275,6 +275,11 @@ export default async function exportStandalone(outputDir = process.cwd(), option
     // If either src or package.json don't exist, do full export
     copyDir(templateDir, outputDir);
     fs.copyFileSync(gitignorePath, path.join(outputDir, '.gitignore'));
+    // Copy .env.example if it exists in the template dir
+    const envExamplePath = path.join(templateDir, '.env.example');
+    if (fs.existsSync(envExamplePath)) {
+      fs.copyFileSync(envExamplePath, path.join(outputDir, '.env.example'));
+    }
   } else {
     // If both exist, only update src and package.json
     const srcDir = path.join(templateDir, 'src');
@@ -288,6 +293,11 @@ export default async function exportStandalone(outputDir = process.cwd(), option
     
     // Copy package.json
     fs.copyFileSync(packageJsonPath, targetPackageJsonPath);
+    // Copy .env.example if it exists in the template dir
+    const envExamplePath = path.join(templateDir, '.env.example');
+    if (fs.existsSync(envExamplePath)) {
+      fs.copyFileSync(envExamplePath, path.join(outputDir, '.env.example'));
+    }
   }
 
   // Write generated files

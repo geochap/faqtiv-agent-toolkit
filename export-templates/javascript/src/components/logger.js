@@ -2,85 +2,142 @@ const fs = require('fs');
 const path = require('path');
 const { mkdirpSync } = require('mkdirp');
 const log4js = require('log4js');
+const { AsyncLocalStorage } = require('async_hooks');
 const logDir = path.join(process.cwd(), 'logs');
 const logsFilePath = `${logDir}/app.log`;
 const errorLogsFilePath = `${logDir}/err.log`;
-
+const { LOG_LEVEL } = require('../constants');
 const IS_LAMBDA = !!process.env.AWS_LAMBDA_FUNCTION_NAME;
 
 if (!IS_LAMBDA) mkdirpSync(logDir);
 
-log4js.addLayout('json', function(config) {
-  return function(logEvent) { 
-    return JSON.stringify(logEvent) + config.separator; 
-  }
-});
+// Create AsyncLocalStorage for request context
+const asyncLocalStorage = new AsyncLocalStorage();
 
-const log4jsConfig = {
-  appenders: IS_LAMBDA ? {
-    stdout: { type: 'stdout', layout: { type: 'json', separator: ',' } }
-  } : {
-    file: { 
-      type: 'file',
-      filename: logsFilePath,
-      layout: { type: 'json', separator: ',' }
-    },
-    errorFile: {
-      type: 'file',
-      filename: errorLogsFilePath,
-      layout: { type: 'json', separator: ',' }
-    }
-  },
-  categories: IS_LAMBDA ? {
-    default: { 
-      appenders: ['stdout'], 
-      level: 'info' 
-    },
-    error: {
-      appenders: ['stdout'],
-      level: 'error'
-    }
-  } : {
-    default: { 
-      appenders: ['file'], 
-      level: 'info' 
-    },
-    error: {
-      appenders: ['errorFile'],
-      level: 'error'
-    }
-  }
-};
-log4js.configure(log4jsConfig);
-
-const appLogger = log4js.getLogger('default');
-
-function log(command, event, body) {
-  appLogger.info({
-    command,
-    event,
-    body
-  });
+function setRequestContext(context) {
+  asyncLocalStorage.enterWith(context);
 }
 
-function logErr(command, event, body, error) {
-  const logError = error ? (error.stack || error.toString()) : null;
-  const errorLogger = log4js.getLogger('error');
+// Custom JSON layout for structured logs
+log4js.addLayout('structuredJson', function (config) {
+  return function (logEvent) {
+    const context = asyncLocalStorage.getStore() || {};
+    const [first, ...rest] = logEvent.data || [];
+    let message = '';
+    let data = undefined;
+    if (typeof first === 'string') {
+      message = first;
+      if (rest.length) {
+        data = rest.length === 1 ? rest[0] : rest;
+      }
+    } else if (first !== undefined) {
+      message = 'No message provided';
+      data = [first, ...rest].length === 1 ? first : [first, ...rest];
+    }
+    // Remove requestId from data if present
+    if (data && typeof data === 'object' && data.requestId) {
+      data = { ...data };
+      delete data.requestId;
+    }
+    const logObject = {
+      timestamp: new Date(logEvent.startTime).toISOString(),
+      level: logEvent.level.levelStr.toUpperCase(),
+      category: logEvent.categoryName,
+      message,
+      requestId: context.requestId,
+      data,
+    };
+    // Remove undefined fields
+    Object.keys(logObject).forEach((key) => {
+      if (logObject[key] === undefined) {
+        delete logObject[key];
+      }
+    });
+    return JSON.stringify(logObject) + (config.separator || '\n');
+  };
+});
 
-  errorLogger.error({
-    command,
-    event,
-    body,
-    error: logError
-  });
+const appenders = IS_LAMBDA
+  ? {
+      out: { type: 'stdout', layout: { type: 'structuredJson', separator: '\n' } },
+      err: { type: 'stderr', layout: { type: 'structuredJson', separator: '\n' } },
+      // Filtered appenders for proper log level routing
+      infoLogger: {
+        type: 'logLevelFilter',
+        appender: 'out',
+        level: 'trace',
+        maxLevel: 'warn'
+      },
+      errorLogger: {
+        type: 'logLevelFilter', 
+        appender: 'err',
+        level: 'error'
+      }
+    }
+  : {
+      out: { type: 'stdout', layout: { type: 'structuredJson', separator: '\n' } },
+      err: { type: 'stderr', layout: { type: 'structuredJson', separator: '\n' } },
+      file: {
+        type: 'file',
+        filename: logsFilePath,
+        layout: { type: 'structuredJson', separator: ',' },
+      },
+      errorFile: {
+        type: 'file',
+        filename: errorLogsFilePath,
+        layout: { type: 'structuredJson', separator: ',' },
+      },
+      // Filtered appenders for proper log level routing
+      infoLogger: {
+        type: 'logLevelFilter',
+        appender: 'out',
+        level: 'trace',
+        maxLevel: 'warn'
+      },
+      errorLogger: {
+        type: 'logLevelFilter', 
+        appender: 'err',
+        level: 'error'
+      }
+    };
+
+const categories = IS_LAMBDA
+  ? {
+      default: { appenders: ['infoLogger', 'errorLogger'], level: 'info' },
+      error: { appenders: ['errorLogger'], level: 'error' },
+    }
+  : {
+      default: { appenders: ['infoLogger', 'errorLogger', 'file'], level: 'info' },
+      error: { appenders: ['errorLogger', 'errorFile'], level: 'error' },
+    };
+
+log4js.configure({ appenders, categories });
+
+const appLogger = log4js.getLogger();
+const errorLogger = log4js.getLogger('error');
+
+function log(message, ...args) {
+  appLogger.info(message, ...args);
+}
+
+function logWarning(message, ...args) {
+  appLogger.warn(message, ...args);
+}
+
+function logErr(message, ...args) {
+  errorLogger.error(message, ...args);
+}
+
+function logDebug(message, ...args) {
+  if (LOG_LEVEL === 'debug') {
+    appLogger.debug(message, ...args);
+  }
 }
 
 function createAdhocLogFile(description, code, result, error = null) {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const logFileName = path.join(logDir, `adhoc-${timestamp}${error ? '-error' : ''}.log`);
-  
   const delimiter = '\n\n---\n\n';
-
   let prettyResult;
   try {
     const parsedResult = JSON.parse(result);
@@ -88,21 +145,22 @@ function createAdhocLogFile(description, code, result, error = null) {
   } catch (e) {
     prettyResult = result;
   }
-
   const logContent = [
     `Description: \n\n ${description}`,
     delimiter,
     `Code: \n\n ${code}`,
     delimiter,
     `Result: \n\n ${prettyResult}`,
-    error ? `${delimiter}Error: ${error.stack}` : ''
+    error ? `${delimiter}Error: ${error.stack}` : '',
   ].join('');
-
   fs.writeFileSync(logFileName, logContent);
 }
 
 module.exports = {
   log,
+  logWarning,
   logErr,
-  createAdhocLogFile
+  logDebug,
+  createAdhocLogFile,
+  setRequestContext,
 };
