@@ -79,6 +79,63 @@ async function getAgentGatewayToken() {
   return token;
 }
 
+async function getAgentGatewayRefreshToken() {
+  if (process.env.AGENT_GATEWAY_REFRESH_TOKEN) return process.env.AGENT_GATEWAY_REFRESH_TOKEN;
+
+  const AWS = require('aws-sdk');
+  const secretsManager = new AWS.SecretsManager();
+  const secretName = process.env.AGENT_GATEWAY_REFRESH_TOKEN_SECRET_NAME;
+
+  if (!secretName) throw new Error('AGENT_GATEWAY_REFRESH_TOKEN or AGENT_GATEWAY_REFRESH_TOKEN_SECRET_NAME env var not set');
+
+  const data = await secretsManager.getSecretValue({ SecretId: secretName }).promise();
+  const refreshToken = data.SecretString;
+
+  if (!refreshToken || refreshToken === '') throw new Error('AGENT_GATEWAY_REFRESH_TOKEN not found in secret or env var');
+
+  process.env.AGENT_GATEWAY_REFRESH_TOKEN = refreshToken;
+
+  return refreshToken;
+}
+
+async function getAgentGatewayTokenId() {
+  if (process.env.AGENT_GATEWAY_TOKEN_ID) return process.env.AGENT_GATEWAY_TOKEN_ID;
+
+  const AWS = require('aws-sdk');
+  const secretsManager = new AWS.SecretsManager();
+  const secretName = process.env.AGENT_GATEWAY_TOKEN_ID_SECRET_NAME;
+
+  if (!secretName) throw new Error('AGENT_GATEWAY_TOKEN_ID or AGENT_GATEWAY_TOKEN_ID_SECRET_NAME env var not set');
+
+  const data = await secretsManager.getSecretValue({ SecretId: secretName }).promise();
+  const tokenId = data.SecretString;
+
+  if (!tokenId || tokenId === '') throw new Error('AGENT_GATEWAY_TOKEN_ID not found in secret or env var');
+
+  process.env.AGENT_GATEWAY_TOKEN_ID = tokenId;
+
+  return tokenId;
+}
+
+async function getAgentGatewaySourceAgentId() {
+  if (process.env.AGENT_GATEWAY_SOURCE_AGENT_ID) return process.env.AGENT_GATEWAY_SOURCE_AGENT_ID;
+
+  const AWS = require('aws-sdk');
+  const secretsManager = new AWS.SecretsManager();
+  const secretName = process.env.AGENT_GATEWAY_SOURCE_AGENT_ID_SECRET_NAME;
+
+  if (!secretName) throw new Error('AGENT_GATEWAY_SOURCE_AGENT_ID or AGENT_GATEWAY_SOURCE_AGENT_ID_SECRET_NAME env var not set');
+
+  const data = await secretsManager.getSecretValue({ SecretId: secretName }).promise();
+  const sourceAgentId = data.SecretString;
+
+  if (!sourceAgentId || sourceAgentId === '') throw new Error('AGENT_GATEWAY_SOURCE_AGENT_ID not found in secret or env var');
+
+  process.env.AGENT_GATEWAY_SOURCE_AGENT_ID = sourceAgentId;
+
+  return sourceAgentId;
+}
+
 const LOG_LEVEL = process.env.LOG_LEVEL || 'info';
 
 module.exports = {
@@ -95,5 +152,8 @@ module.exports = {
   LOG_LEVEL,
   AGENT_GATEWAY_URL,
   getAgentGatewayToken,
+  getAgentGatewayRefreshToken,
+  getAgentGatewayTokenId,
+  getAgentGatewaySourceAgentId,
   getOpenAIApiKey
 };
